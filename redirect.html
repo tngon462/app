@@ -1,0 +1,23 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Đang chuyển hướng...</title>
+</head>
+<body>
+  <p>Đang chuyển hướng...</p>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const ban = params.get('ban');
+    fetch('links.json')
+      .then(r => r.json())
+      .then(data => {
+        const url = data[ban];
+        if (url) window.location.href = url;
+        else alert('Không tìm thấy link cho bàn ' + ban);
+      })
+      .catch(err => alert('Lỗi tải dữ liệu: ' + err));
+  </script>
+</body>
+</html>
