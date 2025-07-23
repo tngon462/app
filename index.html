@@ -1,0 +1,39 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Quản lý QR Redirect</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+    input { width: 100%; margin-bottom: 10px; padding: 8px; }
+    button { padding: 10px 20px; }
+  </style>
+</head>
+<body>
+  <h2>Cập nhật link QR cho từng bàn</h2>
+  <form id="form">
+    <!-- Ô nhập link cho 10 bàn -->
+  </form>
+  <button onclick="save()">💾 Lưu lại (commit thủ công)</button>
+  <p>Chỉnh sửa file <code>links.json</code> nếu bạn host trên GitHub Pages.</p>
+</body>
+<script>
+  const form = document.getElementById('form');
+  for (let i = 1; i <= 10; i++) {
+    form.innerHTML += `<label>Bàn ${i}</label><input id="b${i}" type="text" placeholder="https://...">`;
+  }
+  function save() {
+    let data = {};
+    for (let i = 1; i <= 10; i++) {
+      data[i] = document.getElementById(`b${i}`).value;
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'links.json';
+    a.click();
+  }
+</script>
+</html>
