@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -21,10 +20,8 @@
 </head>
 <body>
   <h2>T-NGON</h2>
-  <p>Nhấn nút bên dưới để bắt đầu đặt món
-</p>
- <p>
-</p>
+  <p>Nhấn nút bên dưới để bắt đầu đặt món</p>
+  <p></p>
   <button onclick="go()">🍽️START</button>
 
   <script>
@@ -36,8 +33,12 @@
         .then(r => r.json())
         .then(data => {
           const url = data[ban];
-          if (url) window.location.href = url;
-          else alert('Không tìm thấy link cho bàn ' + ban);
+          if (url) {
+            // Sửa chỗ này
+            window.location.replace(url);
+          } else {
+            alert('Không tìm thấy link cho bàn ' + ban);
+          }
         })
         .catch(err => alert('Lỗi tải dữ liệu: ' + err));
     }
