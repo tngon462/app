@@ -10,9 +10,11 @@
     body {
       font-family: 'Inter', sans-serif;
       text-align: center;
-      background-color: #f3f4f6; /* Màu nền xám nhạt */
+      background-color: #f3f4f6;
+      margin: 0;
+      padding: 0;
     }
-    .container {
+    .main-container {
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -20,8 +22,37 @@
       height: 100vh;
       padding: 1rem;
     }
-    .button-container {
+    .screen {
+        display: none;
+        width: 100%;
+        height: 100%;
+    }
+    #table-selection-screen {
+        display: block;
+    }
+    .button-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      max-width: 600px;
       margin-top: 2rem;
+    }
+    .table-button {
+      font-size: 2rem;
+      font-weight: bold;
+      padding: 2rem 1rem;
+      background-color: #ffffff;
+      color: #1f2937;
+      border: 2px solid #e5e7eb;
+      border-radius: 0.75rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .table-button:hover {
+      background-color: #f3f4f6;
+      border-color: #007aff;
+      transform: translateY(-2px);
     }
     .start-button {
       font-size: 2.5rem;
@@ -58,48 +89,83 @@
         font-size: 1.2rem;
         margin-top: 1rem;
     }
+    @media (max-width: 640px) {
+      .button-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+      }
+      .table-button {
+        font-size: 1.5rem;
+        padding: 1.5rem 0.5rem;
+      }
+      .start-button {
+        font-size: 2rem;
+        padding: 1rem 2rem;
+      }
+    }
   </style>
 </head>
 <body class="bg-gray-100">
-  <div class="container" id="main-container">
-    <div class="space-y-4 text-gray-800" id="start-screen">
-      <h2 class="text-5xl font-bold">T-NGON</h2>
-      <p class="text-lg">Nhấn nút bên dưới để bắt đầu đặt món</p>
-      <div class="button-container">
-        <button class="start-button" onclick="startOrder()">🍽️ BẮT ĐẦU</button>
+  <div class="main-container" id="main-container">
+    <!-- Màn hình chọn bàn -->
+    <div class="screen" id="table-selection-screen">
+      <h2 class="text-5xl font-bold text-gray-800">T-NGON</h2>
+      <p class="text-lg text-gray-600 mt-2">Vui lòng chọn bàn của bạn</p>
+      <div class="button-grid">
+        <script>
+            // Tạo 15 nút bàn tự động
+            for (let i = 1; i <= 15; i++) {
+                document.write(`<button class="table-button" onclick="selectTable(${i})">Bàn ${i}</button>`);
+            }
+        </script>
       </div>
-      <p id="table-info" class="text-sm text-gray-500 mt-4"></p>
+    </div>
+    
+    <!-- Màn hình bắt đầu cho từng bàn -->
+    <div class="screen" id="start-screen">
+      <div class="space-y-4 text-gray-800">
+        <h2 class="text-5xl font-bold">T-NGON</h2>
+        <p class="text-lg">Nhấn nút bên dưới để bắt đầu đặt món</p>
+        <div class="button-container">
+          <button class="start-button" onclick="startOrder()">🍽️ BẮT ĐẦU</button>
+        </div>
+        <p id="table-info" class="text-sm text-gray-500 mt-4"></p>
+        <button onclick="clearPage(true)" class="text-sm text-blue-500 underline mt-4">Quay lại màn hình chọn bàn</button>
+      </div>
     </div>
   </div>
 
   <script>
-    // Lấy tham số 'ban' từ URL
-    const params = new URLSearchParams(window.location.search);
-    const ban = params.get('ban');
+    let selectedBan = null;
+    let checkInterval = null;
 
-    // Hiển thị số bàn đang hoạt động
-    const tableInfo = document.getElementById('table-info');
-    if (ban) {
-      tableInfo.textContent = `Bạn đang ở Bàn ${ban}`;
+    function showScreen(screenId) {
+      document.querySelectorAll('.screen').forEach(screen => {
+        screen.style.display = 'none';
+      });
+      document.getElementById(screenId).style.display = 'flex';
     }
 
-    let checkInterval; // Biến lưu trữ ID của interval
+    function selectTable(banNumber) {
+      selectedBan = banNumber;
+      document.getElementById('table-info').textContent = `Bạn đang ở Bàn ${selectedBan}`;
+      showScreen('start-screen');
+    }
 
     function startOrder() {
-      if (!ban) {
-        alert('Không tìm thấy thông tin bàn. Vui lòng thử lại với URL có chứa "?ban=..."');
+      if (!selectedBan) {
+        showError('Không tìm thấy thông tin bàn. Vui lòng chọn lại.');
         return;
       }
 
       // Ẩn màn hình bắt đầu và hiển thị loading
       const startScreen = document.getElementById('start-screen');
-      const mainContainer = document.getElementById('main-container');
       startScreen.style.display = 'none';
-
+      
       const loadingMessage = document.createElement('div');
       loadingMessage.className = 'loading-indicator';
       loadingMessage.textContent = 'Đang tải trang gọi món...';
-      mainContainer.appendChild(loadingMessage);
+      document.getElementById('main-container').appendChild(loadingMessage);
 
       // Tải links.json và tạo iframe
       fetch('links.json')
@@ -108,20 +174,20 @@
           return r.json();
         })
         .then(data => {
-          const url = data[ban];
+          const url = data[selectedBan];
           if (url) {
             loadingMessage.remove(); // Xóa loading message
             createIframe(url);
           } else {
             loadingMessage.remove();
-            showError('Không tìm thấy link cho bàn ' + ban);
-            startScreen.style.display = 'block';
+            showError('Không tìm thấy link cho bàn ' + selectedBan);
+            showScreen('start-screen'); // Quay lại màn hình bắt đầu của bàn
           }
         })
         .catch(err => {
           loadingMessage.remove();
           showError('Lỗi tải file links.json: ' + err.message);
-          startScreen.style.display = 'block';
+          showScreen('start-screen'); // Quay lại màn hình bắt đầu của bàn
         });
     }
 
@@ -140,7 +206,7 @@
     
     function checkIframeContent(iframe) {
         try {
-            // Lấy nội dung của iframe. Cần cẩn thận với lỗi Cross-Origin.
+            // Lấy nội dung của iframe. Cẩn thận với lỗi Cross-Origin.
             const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
             if (iframeDoc) {
                 const bodyText = iframeDoc.body.textContent.toLowerCase();
@@ -148,17 +214,16 @@
                 // Kiểm tra các từ khóa hết hạn trong nội dung trang
                 if (bodyText.includes('hết hạn') || bodyText.includes('hết hiệu lực') || bodyText.includes('lỗi')) {
                     console.log('Phát hiện trang hết hạn. Quay lại màn hình bắt đầu.');
-                    clearPage();
+                    clearPage(false); // Quay lại màn hình bắt đầu của bàn
                 }
             }
         } catch (e) {
             // Lỗi Cross-Origin. Nếu không thể truy cập nội dung, ta không thể kiểm tra.
-            // Trong trường hợp này, ta giả định iframe vẫn đang hoạt động bình thường.
-            console.log('Không thể truy cập nội dung iframe do lỗi Cross-Origin. Không thể kiểm tra trạng thái.');
+            console.log('Không thể truy cập nội dung iframe do lỗi Cross-Origin.');
         }
     }
 
-    function clearPage() {
+    function clearPage(goToTableSelection) {
       // Dừng vòng lặp kiểm tra
       if (checkInterval) {
         clearInterval(checkInterval);
@@ -170,16 +235,24 @@
         iframe.remove();
       }
 
-      // Hiển thị lại màn hình bắt đầu
-      const startScreen = document.getElementById('start-screen');
-      startScreen.style.display = 'block';
+      // Hiển thị lại màn hình phù hợp
+      if (goToTableSelection) {
+        selectedBan = null;
+        showScreen('table-selection-screen');
+      } else {
+        showScreen('start-screen');
+      }
     }
 
     function showError(message) {
+      const existingError = document.querySelector('.error-message');
+      if (existingError) existingError.remove();
+      
       const errorMessage = document.createElement('div');
       errorMessage.className = 'error-message';
       errorMessage.textContent = message;
       document.getElementById('main-container').appendChild(errorMessage);
+      setTimeout(() => errorMessage.remove(), 5000);
     }
   </script>
 </body>
