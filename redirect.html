@@ -1,35 +1,78 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Gọi Món Full Màn Hình</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            overflow: hidden; /* Ngăn cuộn trang chính */
-        }
-        iframe {
-            border: none;
-            width: 100%;
-            height: 100%;
-            display: block;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Bấm để gọi món</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <style>
+    body, html {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden; /* Ngăn cuộn trang chính */
+    }
+    #welcome-screen {
+        font-family: sans-serif;
+        text-align: center;
+        padding-top: 80px;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        box-sizing: border-box;
+        background: white; /* Đảm bảo màn hình chào mừng che phủ hoàn toàn */
+    }
+    button {
+      font-size: 45px;
+      padding: 20px 40px;
+      background-color: #007aff;
+      color: white;
+      border: none;
+      border-radius: 10px;
+    }
+    #order-iframe {
+        border: none;
+        width: 100%;
+        height: 100%;
+        display: none; /* Ban đầu ẩn iframe đi */
+    }
+  </style>
 </head>
 <body>
-    <iframe id="orderFrame" src=""></iframe>
-    <script>
-        // Lấy tham số 'ban' từ URL
-        const params = new URLSearchParams(window.location.search);
-        const ban = params.get('ban');
+  <div id="welcome-screen">
+      <h2>T-NGON</h2>
+      <p>Nhấn nút bên dưới để bắt đầu đặt món</p>
+      <p></p>
+      <button onclick="go()">🍽️START</button>
+  </div>
+  
+  <iframe id="order-iframe" src=""></iframe>
 
-        // Tạo URL đầy đủ của trang gọi món
-        const orderUrl = "https://order.atpos.net/order/public/checking/9ee9703b-220f-4429-b15c-4115f23712b1/43b41ad1-9555-42c0-a7e3-dd175e31fc79/43567579?ban=" + ban;
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const ban = params.get('ban');
 
-        // Gán URL vào iframe
-        document.getElementById('orderFrame').src = orderUrl;
-    </script>
+    function go() {
+      fetch('links.json')
+        .then(r => r.json())
+        .then(data => {
+          const url = data[ban];
+          if (url) {
+            // Hiển thị iframe và ẩn màn hình chào mừng
+            document.getElementById('welcome-screen').style.display = 'none';
+            document.getElementById('order-iframe').style.display = 'block';
+            
+            // Gán URL vào iframe thay vì chuyển hướng
+            document.getElementById('order-iframe').src = url;
+          } else {
+            alert('Không tìm thấy link cho bàn ' + ban);
+          }
+        })
+        .catch(err => alert('Lỗi tải dữ liệu: ' + err));
+    }
+  </script>
 </body>
 </html>
