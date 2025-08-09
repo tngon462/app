@@ -4,6 +4,14 @@
   <meta charset="UTF-8">
   <title>T-NGON</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <!-- PWA meta tags for shortcut functionality -->
+  <link rel="icon" href="https://placehold.co/192x192/da251d/fff?text=TN"/>
+  <link rel="apple-touch-icon" href="https://placehold.co/192x192/da251d/fff?text=TN"/>
+  <meta name="apple-mobile-web-app-title" content="T-NGON"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="theme-color" content="#da251d">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     /* Sử dụng font Inter cho toàn bộ trang */
@@ -111,20 +119,13 @@
       position: absolute;
       bottom: 10px; /* Sát góc dưới */
       left: 10px; /* Sát góc trái */
-      width: 50px; /* Kích thước nhỏ */
-      height: 50px;
-      padding: 0; /* Bỏ padding */
-      background-color: rgba(255, 255, 255, 0.1); /* Nền trong suốt */
-      color: transparent; /* Chữ trong suốt */
-      border: 1px solid transparent; /* Viền trong suốt */
-      border-radius: 0.5rem;
+      width: 20px; /* Kích thước nhỏ */
+      height: 20px;
+      padding: 0;
+      background-color: transparent; /* Nền trong suốt */
+      border: none; /* Bỏ viền */
       cursor: pointer;
       z-index: 100;
-      transition: all 0.3s ease;
-      backdrop-filter: blur(5px);
-    }
-    .return-button:hover {
-      background-color: rgba(255, 255, 255, 0.3); /* Nền sẽ rõ hơn khi di chuột */
     }
   </style>
 </head>
@@ -158,7 +159,7 @@
 
     <!-- Màn hình gọi món (iframe) -->
     <div class="screen" id="iframe-screen">
-      <!-- Nút quay lại thủ công. Kích thước nhỏ, trong suốt, đặt ở góc dưới cùng bên trái -->
+      <!-- Nút quay lại. Hoàn toàn trong suốt, kích thước nhỏ, đặt ở góc dưới cùng bên trái. -->
       <button class="return-button" onclick="clearPage()"></button>
       <!-- iframe sẽ được tạo và chèn vào đây -->
     </div>
@@ -221,7 +222,7 @@
 
     function createIframe(url) {
       const iframeScreen = document.getElementById('iframe-screen');
-      const returnButton = '<button class="return-button" onclick="clearPage()"></button>';
+      const returnButton = `<button class="return-button" onclick="clearPage()"></button>`;
       iframeScreen.innerHTML = returnButton;
       const iframe = document.createElement('iframe');
       iframe.id = 'pos-iframe';
