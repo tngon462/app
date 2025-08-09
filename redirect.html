@@ -6,38 +6,47 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-
+  
+  <!-- Các thẻ biểu tượng Apple (Đã thêm lại) -->
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-icon-180x180.png">
+  <link rel="apple-touch-icon" sizes="167x167" href="apple-icon-167x167.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="apple-icon-152x152.png">
+  <link rel="apple-touch-icon" sizes="120x120" href="apple-icon-120x120.png">
+  <link rel="apple-touch-icon" sizes="76x76" href="apple-icon-76x76.png">
+  
+  <!-- Thẻ manifest cho Android -->
   <link rel="manifest" href="manifest.json">
+
   <style>
     body, html {
-        margin: 0;
-        padding: 0;
-        height: 100%;
-        overflow: hidden;
-        font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      font-family: sans-serif;
     }
     .screen {
-        text-align: center;
-        padding-top: 20px;
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        box-sizing: border-box;
-        background: white;
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-start;
-        align-items: center;
-        gap: 20px;
+      text-align: center;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      box-sizing: border-box;
+      background: white;
+      display: flex;
+      flex-direction: column;
+      justify-content: center; /* Cải thiện: căn giữa theo chiều dọc */
+      align-items: center;
+      gap: 20px;
+    }
+    #select-table-screen {
+      justify-content: flex-start; /* Giữ màn hình chọn bàn ở trên */
+      padding-top: 20px;
     }
     #confirmation-screen {
-        display: none;
-        justify-content: center;
-        align-items: center;
-        flex-direction: column;
-        gap: 30px;
+      display: none;
+      gap: 30px;
     }
     .button-container {
       display: grid;
@@ -65,46 +74,46 @@
       border-radius: 10px;
     }
     #order-iframe {
-        border: none;
-        width: 100%;
-        height: 100%;
-        display: none;
+      border: none;
+      width: 100%;
+      height: 100%;
+      display: none;
     }
     #ban-display {
-        font-size: 50px;
-        font-weight: bold;
-        color: #333;
+      font-size: 50px;
+      font-weight: bold;
+      color: #333;
     }
   </style>
 </head>
 <body>
   <div id="select-table-screen" class="screen">
-      <h2>T-NGON</h2>
-      <p>Vui lòng chọn số bàn của bạn</p>
-      <div class="button-container">
-          <button class="table-button" onclick="showConfirmation(1)">1</button>
-          <button class="table-button" onclick="showConfirmation(2)">2</button>
-          <button class="table-button" onclick="showConfirmation(3)">3</button>
-          <button class="table-button" onclick="showConfirmation(4)">4</button>
-          <button class="table-button" onclick="showConfirmation(5)">5</button>
-          <button class="table-button" onclick="showConfirmation(6)">6</button>
-          <button class="table-button" onclick="showConfirmation(7)">7</button>
-          <button class="table-button" onclick="showConfirmation(8)">8</button>
-          <button class="table-button" onclick="showConfirmation(9)">9</button>
-          <button class="table-button" onclick="showConfirmation(10)">10</button>
-          <button class="table-button" onclick="showConfirmation(11)">11</button>
-          <button class="table-button" onclick="showConfirmation(12)">12</button>
-          <button class="table-button" onclick="showConfirmation(13)">13</button>
-          <button class="table-button" onclick="showConfirmation(14)">14</button>
-          <button class="table-button" onclick="showConfirmation(15)">15</button>
-      </div>
+    <h2>T-NGON</h2>
+    <p>Vui lòng chọn số bàn của bạn</p>
+    <div class="button-container">
+      <button class="table-button" onclick="showConfirmation(1)">1</button>
+      <button class="table-button" onclick="showConfirmation(2)">2</button>
+      <button class="table-button" onclick="showConfirmation(3)">3</button>
+      <button class="table-button" onclick="showConfirmation(4)">4</button>
+      <button class="table-button" onclick="showConfirmation(5)">5</button>
+      <button class="table-button" onclick="showConfirmation(6)">6</button>
+      <button class="table-button" onclick="showConfirmation(7)">7</button>
+      <button class="table-button" onclick="showConfirmation(8)">8</button>
+      <button class="table-button" onclick="showConfirmation(9)">9</button>
+      <button class="table-button" onclick="showConfirmation(10)">10</button>
+      <button class="table-button" onclick="showConfirmation(11)">11</button>
+      <button class="table-button" onclick="showConfirmation(12)">12</button>
+      <button class="table-button" onclick="showConfirmation(13)">13</button>
+      <button class="table-button" onclick="showConfirmation(14)">14</button>
+      <button class="table-button" onclick="showConfirmation(15)">15</button>
+    </div>
   </div>
 
   <div id="confirmation-screen" class="screen">
-     <h2 style="font-size: 80px;">T-NGON</h2>
-      <p>  </p>
-      <p id="ban-display"></p>
-      <button id="confirm-button">🍽️ START</button>
+    <h2>T-NGON</h2>
+    <p>Bạn đã chọn bàn:</p>
+    <p id="ban-display"></p>
+    <button id="confirm-button">🍽️ START</button>
   </div>
   
   <iframe id="order-iframe" src=""></iframe>
