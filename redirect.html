@@ -12,9 +12,9 @@
         padding: 0;
         height: 100%;
         overflow: hidden; /* Ngăn cuộn trang chính */
+        font-family: sans-serif;
     }
     #welcome-screen {
-        font-family: sans-serif;
         text-align: center;
         padding-top: 80px;
         position: absolute;
@@ -24,6 +24,19 @@
         height: 100%;
         box-sizing: border-box;
         background: white; /* Đảm bảo màn hình chào mừng che phủ hoàn toàn */
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+    input {
+      font-size: 35px;
+      padding: 10px 20px;
+      margin-bottom: 20px;
+      text-align: center;
+      border: 2px solid #007aff;
+      border-radius: 10px;
+      width: 200px;
     }
     button {
       font-size: 45px;
@@ -44,18 +57,23 @@
 <body>
   <div id="welcome-screen">
       <h2>T-NGON</h2>
-      <p>Nhấn nút bên dưới để bắt đầu đặt món</p>
-      <p></p>
-      <button onclick="go()">🍽️START</button>
+      <p>Nhập số bàn của bạn để bắt đầu</p>
+      <input type="number" id="banInput" placeholder="Số bàn">
+      <button onclick="go()">🍽️ START</button>
   </div>
   
   <iframe id="order-iframe" src=""></iframe>
 
   <script>
-    const params = new URLSearchParams(window.location.search);
-    const ban = params.get('ban');
-
     function go() {
+      const ban = document.getElementById('banInput').value;
+      
+      // Kiểm tra xem người dùng đã nhập số bàn chưa
+      if (!ban || isNaN(ban)) {
+        alert('Vui lòng nhập số bàn hợp lệ.');
+        return;
+      }
+
       fetch('links.json')
         .then(r => r.json())
         .then(data => {
@@ -65,7 +83,7 @@
             document.getElementById('welcome-screen').style.display = 'none';
             document.getElementById('order-iframe').style.display = 'block';
             
-            // Gán URL vào iframe thay vì chuyển hướng
+            // Gán URL vào iframe
             document.getElementById('order-iframe').src = url;
           } else {
             alert('Không tìm thấy link cho bàn ' + ban);
