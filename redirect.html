@@ -68,7 +68,6 @@
     function go() {
       const ban = document.getElementById('banInput').value;
       
-      // Kiểm tra xem người dùng đã nhập số bàn chưa
       if (!ban || isNaN(ban)) {
         alert('Vui lòng nhập số bàn hợp lệ.');
         return;
@@ -79,11 +78,8 @@
         .then(data => {
           const url = data[ban];
           if (url) {
-            // Hiển thị iframe và ẩn màn hình chào mừng
             document.getElementById('welcome-screen').style.display = 'none';
             document.getElementById('order-iframe').style.display = 'block';
-            
-            // Gán URL vào iframe
             document.getElementById('order-iframe').src = url;
           } else {
             alert('Không tìm thấy link cho bàn ' + ban);
@@ -92,10 +88,13 @@
         .catch(err => alert('Lỗi tải dữ liệu: ' + err));
     }
 
-    // Bổ sung: Đoạn mã này sẽ tự động đưa con trỏ vào ô nhập liệu khi trang tải xong
-    window.onload = function() {
-      document.getElementById('banInput').focus();
-    };
+    // Đoạn mã mới để tự động hiển thị bàn phím ảo
+    window.addEventListener('load', function() {
+      // Dùng setTimeout để đảm bảo trang đã load và các event khác đã hoàn tất
+      setTimeout(function() {
+        document.getElementById('banInput').focus();
+      }, 500); 
+    });
   </script>
 </body>
 </html>
