@@ -107,6 +107,25 @@
         padding: 1rem 2rem;
       }
     }
+    .return-button {
+      position: absolute;
+      bottom: 10px; /* Sát góc dưới */
+      left: 10px; /* Sát góc trái */
+      width: 50px; /* Kích thước nhỏ */
+      height: 50px;
+      padding: 0; /* Bỏ padding */
+      background-color: rgba(255, 255, 255, 0.1); /* Nền trong suốt */
+      color: transparent; /* Chữ trong suốt */
+      border: 1px solid transparent; /* Viền trong suốt */
+      border-radius: 0.5rem;
+      cursor: pointer;
+      z-index: 100;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(5px);
+    }
+    .return-button:hover {
+      background-color: rgba(255, 255, 255, 0.3); /* Nền sẽ rõ hơn khi di chuột */
+    }
   </style>
 </head>
 <body class="bg-gray-100">
@@ -134,12 +153,13 @@
           <button class="start-button" onclick="startOrder()">🍽️ BẮT ĐẦU</button>
         </div>
         <p id="table-info" class="text-sm text-gray-500 mt-4"></p>
-        <button onclick="clearPage(true)" class="text-sm text-blue-500 underline mt-4">Quay lại màn hình chọn bàn</button>
       </div>
     </div>
 
     <!-- Màn hình gọi món (iframe) -->
     <div class="screen" id="iframe-screen">
+      <!-- Nút quay lại thủ công. Kích thước nhỏ, trong suốt, đặt ở góc dưới cùng bên trái -->
+      <button class="return-button" onclick="clearPage()"></button>
       <!-- iframe sẽ được tạo và chèn vào đây -->
     </div>
   </div>
@@ -148,7 +168,6 @@
     const LINKS_JSON_URL = "https://raw.githubusercontent.com/tngon462/QR/refs/heads/main/links.json";
 
     let selectedBan = null;
-    let checkInterval = null;
 
     function showScreen(screenId) {
       document.querySelectorAll('.screen').forEach(screen => {
@@ -202,60 +221,22 @@
 
     function createIframe(url) {
       const iframeScreen = document.getElementById('iframe-screen');
-      iframeScreen.innerHTML = '';
+      const returnButton = '<button class="return-button" onclick="clearPage()"></button>';
+      iframeScreen.innerHTML = returnButton;
       const iframe = document.createElement('iframe');
       iframe.id = 'pos-iframe';
       iframe.className = 'iframe-container';
       iframe.src = url;
       iframeScreen.appendChild(iframe);
       showScreen('iframe-screen');
-
-      checkInterval = setInterval(() => {
-        checkIframeContent(iframe);
-      }, 5000);
-    }
-    
-    function checkIframeContent(iframe) {
-        try {
-            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-            if (iframeDoc) {
-                const bodyText = iframeDoc.body.textContent.toLowerCase();
-                
-                // ⚠️ Logic đã được cập nhật: Kiểm tra các từ khóa hết hạn bằng nhiều ngôn ngữ
-                const expiredKeywords = [
-                    'hết hạn', 'hết hiệu lực', 'lỗi', // Tiếng Việt
-                    'expired', // Tiếng Anh
-                    '有効期限', '切れました', // Tiếng Nhật
-                    '已过期', // Tiếng Trung
-                    '만료되었습니다' // Tiếng Hàn
-                ];
-
-                if (expiredKeywords.some(keyword => bodyText.includes(keyword.toLowerCase()))) {
-                    console.log('Phát hiện trang hết hạn. Quay lại màn hình bắt đầu.');
-                    clearPage(false);
-                }
-            }
-        } catch (e) {
-            console.log('Không thể truy cập nội dung iframe do lỗi Cross-Origin.');
-        }
     }
 
-    function clearPage(goToTableSelection) {
-      if (checkInterval) {
-        clearInterval(checkInterval);
-      }
-
+    function clearPage() {
       const iframeScreen = document.getElementById('iframe-screen');
       if (iframeScreen) {
         iframeScreen.innerHTML = '';
       }
-
-      if (goToTableSelection) {
-        selectedBan = null;
-        showScreen('table-selection-screen');
-      } else {
-        showScreen('start-screen');
-      }
+      showScreen('start-screen');
     }
 
     function showError(message) {
