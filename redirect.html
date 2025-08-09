@@ -145,6 +145,8 @@
   </div>
 
   <script>
+    const LINKS_JSON_URL = "https://raw.githubusercontent.com/tngon462/QR/refs/heads/main/links.json";
+
     let selectedBan = null;
     let checkInterval = null;
 
@@ -167,7 +169,6 @@
         return;
       }
 
-      // Ẩn màn hình bắt đầu và hiển thị loading
       const startScreen = document.getElementById('start-screen');
       startScreen.style.display = 'none';
       
@@ -176,8 +177,7 @@
       loadingMessage.textContent = 'Đang tải trang gọi món...';
       document.getElementById('main-container').appendChild(loadingMessage);
 
-      // Tải links.json và tạo iframe
-      fetch('links.json')
+      fetch(LINKS_JSON_URL)
         .then(r => {
           if (!r.ok) throw new Error('Không thể tải links.json');
           return r.json();
@@ -185,69 +185,71 @@
         .then(data => {
           const url = data[selectedBan];
           if (url) {
-            loadingMessage.remove(); // Xóa loading message
+            loadingMessage.remove();
             createIframe(url);
           } else {
             loadingMessage.remove();
             showError('Không tìm thấy link cho bàn ' + selectedBan);
-            showScreen('start-screen'); // Quay lại màn hình bắt đầu của bàn
+            showScreen('start-screen');
           }
         })
         .catch(err => {
           loadingMessage.remove();
           showError('Lỗi tải file links.json: ' + err.message);
-          showScreen('start-screen'); // Quay lại màn hình bắt đầu của bàn
+          showScreen('start-screen');
         });
     }
 
     function createIframe(url) {
       const iframeScreen = document.getElementById('iframe-screen');
-      iframeScreen.innerHTML = ''; // Xóa iframe cũ nếu có
+      iframeScreen.innerHTML = '';
       const iframe = document.createElement('iframe');
       iframe.id = 'pos-iframe';
       iframe.className = 'iframe-container';
       iframe.src = url;
       iframeScreen.appendChild(iframe);
-      showScreen('iframe-screen'); // Hiển thị màn hình iframe
+      showScreen('iframe-screen');
 
-      // Bắt đầu kiểm tra trạng thái hết hạn trong iframe
       checkInterval = setInterval(() => {
         checkIframeContent(iframe);
-      }, 5000); // Kiểm tra mỗi 5 giây
+      }, 5000);
     }
     
     function checkIframeContent(iframe) {
         try {
-            // Lấy nội dung của iframe. Cẩn thận với lỗi Cross-Origin.
             const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
             if (iframeDoc) {
                 const bodyText = iframeDoc.body.textContent.toLowerCase();
                 
-                // Kiểm tra các từ khóa hết hạn trong nội dung trang
-                if (bodyText.includes('hết hạn') || bodyText.includes('hết hiệu lực') || bodyText.includes('lỗi')) {
+                // ⚠️ Logic đã được cập nhật: Kiểm tra các từ khóa hết hạn bằng nhiều ngôn ngữ
+                const expiredKeywords = [
+                    'hết hạn', 'hết hiệu lực', 'lỗi', // Tiếng Việt
+                    'expired', // Tiếng Anh
+                    '有効期限', '切れました', // Tiếng Nhật
+                    '已过期', // Tiếng Trung
+                    '만료되었습니다' // Tiếng Hàn
+                ];
+
+                if (expiredKeywords.some(keyword => bodyText.includes(keyword.toLowerCase()))) {
                     console.log('Phát hiện trang hết hạn. Quay lại màn hình bắt đầu.');
-                    clearPage(false); // Quay lại màn hình bắt đầu của bàn
+                    clearPage(false);
                 }
             }
         } catch (e) {
-            // Lỗi Cross-Origin. Nếu không thể truy cập nội dung, ta không thể kiểm tra.
             console.log('Không thể truy cập nội dung iframe do lỗi Cross-Origin.');
         }
     }
 
     function clearPage(goToTableSelection) {
-      // Dừng vòng lặp kiểm tra
       if (checkInterval) {
         clearInterval(checkInterval);
       }
 
-      // Xóa iframe hiện tại
       const iframeScreen = document.getElementById('iframe-screen');
       if (iframeScreen) {
         iframeScreen.innerHTML = '';
       }
 
-      // Hiển thị lại màn hình phù hợp
       if (goToTableSelection) {
         selectedBan = null;
         showScreen('table-selection-screen');
