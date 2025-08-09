@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   
   <!-- Thẻ biểu tượng cho iOS -->
-  <link rel="apple-touch-icon" href="tngon.png">
+  <link rel="apple-touch-icon" href="180x180.png">
   
   <!-- Thẻ manifest cho Android -->
   <link rel="manifest" href="manifest.json">
@@ -37,7 +37,6 @@
       gap: 20px;
     }
     #select-table-screen {
-      /* Màn hình này sẽ hiển thị đầu tiên */
       display: flex;
       justify-content: flex-start;
       padding-top: 20px;
@@ -82,6 +81,25 @@
       font-weight: bold;
       color: #333;
     }
+    /* Thêm style cho nút làm mới */
+    #refresh-button-container {
+      position: absolute;
+      bottom: 20px;
+      left: 0;
+      width: 100%;
+      display: none; /* Ban đầu ẩn nút làm mới */
+      justify-content: center;
+    }
+    #refresh-button {
+      padding: 15px 30px;
+      font-size: 20px;
+      background-color: #32CD32;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
   </style>
 </head>
 <body>
@@ -116,8 +134,42 @@
   
   <iframe id="order-iframe" src=""></iframe>
 
+  <!-- Thêm nút làm mới ở đây -->
+  <div id="refresh-button-container">
+    <button id="refresh-button" onclick="window.location.reload()">Làm Mới Trang</button>
+  </div>
+
   <script>
     let selectedBan;
+    const iframe = document.getElementById('order-iframe');
+
+    // Hàm kiểm tra nội dung của iframe
+    function checkForExpiredMessage() {
+        if (iframe.style.display === 'block') { // Chỉ kiểm tra khi iframe hiển thị
+            try {
+                // Lấy nội dung của iframe
+                const iframeDocument = iframe.contentDocument || iframe.contentWindow.document;
+
+                // Kiểm tra sự tồn tại của phần tử có class '_heading_szkr4_24'
+                const expiredMessageElement = iframeDocument.querySelector('._heading_szkr4_24');
+                
+                if (expiredMessageElement) {
+                    console.log("Phát hiện thông báo hết hạn, chuyển về màn hình chọn bàn.");
+                    iframe.style.display = 'none';
+                    document.getElementById('refresh-button-container').style.display = 'none';
+                    document.getElementById('select-table-screen').style.display = 'flex';
+                }
+            } catch (e) {
+                // Lỗi này thường xảy ra do chính sách bảo mật (Same-Origin Policy),
+                // ngăn chặn việc truy cập nội dung iframe từ một miền khác.
+                // Nếu iframe và trang web của bạn không cùng miền, phương pháp này sẽ không hoạt động.
+                console.error("Không thể truy cập nội dung iframe do lỗi bảo mật:", e);
+            }
+        }
+    }
+
+    // Đặt hẹn giờ để kiểm tra mỗi 5 giây
+    setInterval(checkForExpiredMessage, 5000); 
 
     function showConfirmation(ban) {
       selectedBan = ban;
@@ -135,6 +187,8 @@
             document.getElementById('confirmation-screen').style.display = 'none';
             document.getElementById('order-iframe').style.display = 'block';
             document.getElementById('order-iframe').src = url;
+            // Hiển thị nút làm mới khi iframe được tải
+            document.getElementById('refresh-button-container').style.display = 'flex';
           } else {
             alert('Không tìm thấy link cho bàn ' + selectedBan);
           }
