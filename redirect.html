@@ -9,10 +9,9 @@
     /* Sử dụng font Inter cho toàn bộ trang */
     body {
       font-family: 'Inter', sans-serif;
-      text-align: center;
-      background-color: #f3f4f6;
       margin: 0;
       padding: 0;
+      background-color: #f3f4f6;
     }
     .main-container {
       display: flex;
@@ -20,38 +19,43 @@
       justify-content: center;
       align-items: center;
       height: 100vh;
+      width: 100vw;
       padding: 1rem;
+      box-sizing: border-box;
     }
     .screen {
         display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
         width: 100%;
         height: 100%;
     }
     #table-selection-screen {
-        display: block;
+        display: flex;
     }
     .button-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 1.5rem;
       max-width: 600px;
-      margin-top: 2rem;
+      margin: 2rem auto 0 auto; /* Căn giữa các nút */
     }
     .table-button {
       font-size: 2rem;
       font-weight: bold;
       padding: 2rem 1rem;
-      background-color: #ffffff;
-      color: #1f2937;
-      border: 2px solid #e5e7eb;
+      background-color: #007aff; /* Đổi màu nền nút */
+      color: white; /* Đổi màu chữ */
+      border: 2px solid #007aff;
       border-radius: 0.75rem;
       box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
       cursor: pointer;
       transition: all 0.3s ease;
     }
     .table-button:hover {
-      background-color: #f3f4f6;
-      border-color: #007aff;
+      background-color: #005fbc; /* Đổi màu nền khi hover */
+      border-color: #005fbc;
       transform: translateY(-2px);
     }
     .start-button {
@@ -75,7 +79,7 @@
     }
     .iframe-container {
       width: 100%;
-      height: 100vh;
+      height: 100%;
       border: none;
       overflow: hidden;
     }
@@ -123,7 +127,7 @@
     
     <!-- Màn hình bắt đầu cho từng bàn -->
     <div class="screen" id="start-screen">
-      <div class="space-y-4 text-gray-800">
+      <div class="space-y-4 text-gray-800 text-center">
         <h2 class="text-5xl font-bold">T-NGON</h2>
         <p class="text-lg">Nhấn nút bên dưới để bắt đầu đặt món</p>
         <div class="button-container">
@@ -132,6 +136,11 @@
         <p id="table-info" class="text-sm text-gray-500 mt-4"></p>
         <button onclick="clearPage(true)" class="text-sm text-blue-500 underline mt-4">Quay lại màn hình chọn bàn</button>
       </div>
+    </div>
+
+    <!-- Màn hình gọi món (iframe) -->
+    <div class="screen" id="iframe-screen">
+      <!-- iframe sẽ được tạo và chèn vào đây -->
     </div>
   </div>
 
@@ -192,11 +201,14 @@
     }
 
     function createIframe(url) {
+      const iframeScreen = document.getElementById('iframe-screen');
+      iframeScreen.innerHTML = ''; // Xóa iframe cũ nếu có
       const iframe = document.createElement('iframe');
       iframe.id = 'pos-iframe';
       iframe.className = 'iframe-container';
       iframe.src = url;
-      document.body.appendChild(iframe);
+      iframeScreen.appendChild(iframe);
+      showScreen('iframe-screen'); // Hiển thị màn hình iframe
 
       // Bắt đầu kiểm tra trạng thái hết hạn trong iframe
       checkInterval = setInterval(() => {
@@ -230,9 +242,9 @@
       }
 
       // Xóa iframe hiện tại
-      const iframe = document.getElementById('pos-iframe');
-      if (iframe) {
-        iframe.remove();
+      const iframeScreen = document.getElementById('iframe-screen');
+      if (iframeScreen) {
+        iframeScreen.innerHTML = '';
       }
 
       // Hiển thị lại màn hình phù hợp
