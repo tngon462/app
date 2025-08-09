@@ -2,17 +2,13 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Chọn Bàn Để Gọi Món</title>
+  <title>T-NGON</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   
-  <!-- Các thẻ biểu tượng Apple (Đã thêm lại) -->
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-icon-180x180.png">
-  <link rel="apple-touch-icon" sizes="167x167" href="apple-icon-167x167.png">
-  <link rel="apple-touch-icon" sizes="152x152" href="apple-icon-152x152.png">
-  <link rel="apple-touch-icon" sizes="120x120" href="apple-icon-120x120.png">
-  <link rel="apple-touch-icon" sizes="76x76" href="apple-icon-76x76.png">
+  <!-- Thẻ biểu tượng duy nhất cho iOS, cũng được Android sử dụng -->
+  <link rel="apple-touch-icon" href="180x180.png">
   
   <!-- Thẻ manifest cho Android -->
   <link rel="manifest" href="manifest.json">
@@ -36,12 +32,12 @@
       background: white;
       display: flex;
       flex-direction: column;
-      justify-content: center; /* Cải thiện: căn giữa theo chiều dọc */
+      justify-content: center;
       align-items: center;
       gap: 20px;
     }
     #select-table-screen {
-      justify-content: flex-start; /* Giữ màn hình chọn bàn ở trên */
+      justify-content: flex-start;
       padding-top: 20px;
     }
     #confirmation-screen {
