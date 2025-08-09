@@ -1,4 +1,4 @@
-
+<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -114,8 +114,40 @@
   
   <iframe id="order-iframe" src=""></iframe>
 
-  <script>
+  <!-- Firebase Scripts -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    
+    // ⚠️⚠️⚠️ THAY THẾ CHỖ NÀY BẰNG CẤU HÌNH CỦA DỰ ÁN FIREBASE CỦA BẠN ⚠️⚠️⚠️
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_AUTH_DOMAIN",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_STORAGE_BUCKET",
+      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
     let selectedBan;
+    const iframe = document.getElementById('order-iframe');
+    let unsubscribeFromFirestore = null; // Biến để lưu trữ hàm hủy lắng nghe Firestore
+
+    // Hàm để quay lại màn hình chọn bàn và hủy lắng nghe Firestore
+    function resetToSelectTableScreen() {
+      if (unsubscribeFromFirestore) {
+        unsubscribeFromFirestore();
+        unsubscribeFromFirestore = null; // Reset biến
+      }
+      iframe.style.display = 'none';
+      document.getElementById('select-table-screen').style.display = 'flex';
+      document.getElementById('confirmation-screen').style.display = 'none';
+    }
 
     function showConfirmation(ban) {
       selectedBan = ban;
@@ -124,15 +156,38 @@
       document.getElementById('confirmation-screen').style.display = 'flex';
     }
 
-    document.getElementById('confirm-button').onclick = function() {
+    document.getElementById('confirm-button').onclick = async function() {
+      // Đăng nhập ẩn danh để có quyền truy cập Firestore
+      try {
+        await signInAnonymously(auth);
+      } catch (error) {
+        console.error("Lỗi đăng nhập ẩn danh:", error);
+        alert('Có lỗi xảy ra, vui lòng thử lại.');
+        return;
+      }
+
       fetch('links.json')
         .then(r => r.json())
         .then(data => {
           const url = data[selectedBan];
           if (url) {
             document.getElementById('confirmation-screen').style.display = 'none';
-            document.getElementById('order-iframe').style.display = 'block';
-            document.getElementById('order-iframe').src = url;
+            iframe.style.display = 'block';
+            iframe.src = url;
+
+            // ⚠️⚠️⚠️ Bắt đầu lắng nghe Firestore cho bàn đã chọn ⚠️⚠️⚠️
+            const banDocRef = doc(db, 'table_status', `ban-${selectedBan}`);
+            // Hủy lắng nghe cũ nếu có
+            if (unsubscribeFromFirestore) {
+              unsubscribeFromFirestore();
+            }
+            unsubscribeFromFirestore = onSnapshot(banDocRef, (doc) => {
+              if (doc.exists() && doc.data().status === 'expired') {
+                console.log("Phát hiện trạng thái hết hạn từ Firestore, chuyển về màn hình chọn bàn.");
+                resetToSelectTableScreen();
+              }
+            });
+
           } else {
             alert('Không tìm thấy link cho bàn ' + selectedBan);
           }
