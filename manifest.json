@@ -1,7 +1,7 @@
 {
   "name": "T-NGON",
   "short_name": "T-NGON",
-  "start_url": "./redirect.html",
+  "start_url": "./redirect.html?v=1",
   "display": "standalone",
   "display_override": ["standalone"],
   "background_color": "#ffffff",
