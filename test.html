@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Bấm để gọi món</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 80px; }
+    button {
+      font-size: 45px;
+      padding: 20px 40px;
+      background-color: #007aff;
+      color: white;
+      border: none;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h2>T-NGON</h2>
+  <p>Nhấn nút bên dưới để bắt đầu đặt món</p>
+  <p></p>
+  <button onclick="go()">🍽️START</button>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const ban = params.get('ban');
+
+    function go() {
+      fetch('links.json')
+        .then(r => r.json())
+        .then(data => {
+          const url = data[ban];
+          if (url) {
+            // Sửa chỗ này
+            window.location.replace(url);
+          } else {
+            alert('Không tìm thấy link cho bàn ' + ban);
+          }
+        })
+        .catch(err => alert('Lỗi tải dữ liệu: ' + err));
+    }
+  </script>
+</body>
+</html>
