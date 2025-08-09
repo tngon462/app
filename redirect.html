@@ -4,196 +4,183 @@
   <meta charset="UTF-8">
   <title>T-NGON</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  
-  <!-- Thẻ biểu tượng cho iOS -->
-  <link rel="apple-touch-icon" href="180x180.png">
-  
-  <!-- Thẻ manifest cho Android -->
-  <link rel="manifest" href="manifest.json">
-
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      overflow: hidden;
-      font-family: sans-serif;
-    }
-    .screen {
+    /* Sử dụng font Inter cho toàn bộ trang */
+    body {
+      font-family: 'Inter', sans-serif;
       text-align: center;
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      box-sizing: border-box;
-      background: white;
+      background-color: #f3f4f6; /* Màu nền xám nhạt */
+    }
+    .container {
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
-      gap: 20px;
-    }
-    #select-table-screen {
-      justify-content: flex-start;
-      padding-top: 20px;
-    }
-    #confirmation-screen {
-      display: none;
-      gap: 30px;
+      height: 100vh;
+      padding: 1rem;
     }
     .button-container {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 15px;
-      padding: 0 20px;
-      width: 100%;
-      max-width: 600px;
+      margin-top: 2rem;
     }
-    .table-button {
-      font-size: 40px;
-      padding: 20px 0;
+    .start-button {
+      font-size: 2.5rem;
+      padding: 1.25rem 2.5rem;
       background-color: #007aff;
       color: white;
       border: none;
-      border-radius: 10px;
+      border-radius: 0.75rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
       cursor: pointer;
+      transition: all 0.3s ease;
     }
-    #confirm-button {
-      font-size: 45px;
-      padding: 20px 40px;
-      background-color: #007aff;
-      color: white;
-      border: none;
-      border-radius: 10px;
+    .start-button:hover {
+      background-color: #005fbc;
+      transform: translateY(-2px);
     }
-    #order-iframe {
-      border: none;
+    .start-button:active {
+      transform: translateY(0);
+      box-shadow: none;
+    }
+    .iframe-container {
       width: 100%;
-      height: 100%;
-      display: none;
+      height: 100vh;
+      border: none;
+      overflow: hidden;
     }
-    #ban-display {
-      font-size: 50px;
-      font-weight: bold;
-      color: #333;
+    .loading-indicator {
+        font-size: 1.5rem;
+        color: #6b7280;
+        margin-top: 1rem;
+    }
+    .error-message {
+        color: #ef4444;
+        font-size: 1.2rem;
+        margin-top: 1rem;
     }
   </style>
 </head>
-<body>
-  <div id="select-table-screen" class="screen">
-    <h2>T-NGON</h2>
-    <p>Vui lòng chọn số bàn của bạn</p>
-    <div class="button-container">
-      <button class="table-button" onclick="showConfirmation(1)">1</button>
-      <button class="table-button" onclick="showConfirmation(2)">2</button>
-      <button class="table-button" onclick="showConfirmation(3)">3</button>
-      <button class="table-button" onclick="showConfirmation(4)">4</button>
-      <button class="table-button" onclick="showConfirmation(5)">5</button>
-      <button class="table-button" onclick="showConfirmation(6)">6</button>
-      <button class="table-button" onclick="showConfirmation(7)">7</button>
-      <button class="table-button" onclick="showConfirmation(8)">8</button>
-      <button class="table-button" onclick="showConfirmation(9)">9</button>
-      <button class="table-button" onclick="showConfirmation(10)">10</button>
-      <button class="table-button" onclick="showConfirmation(11)">11</button>
-      <button class="table-button" onclick="showConfirmation(12)">12</button>
-      <button class="table-button" onclick="showConfirmation(13)">13</button>
-      <button class="table-button" onclick="showConfirmation(14)">14</button>
-      <button class="table-button" onclick="showConfirmation(15)">15</button>
+<body class="bg-gray-100">
+  <div class="container" id="main-container">
+    <div class="space-y-4 text-gray-800" id="start-screen">
+      <h2 class="text-5xl font-bold">T-NGON</h2>
+      <p class="text-lg">Nhấn nút bên dưới để bắt đầu đặt món</p>
+      <div class="button-container">
+        <button class="start-button" onclick="startOrder()">🍽️ BẮT ĐẦU</button>
+      </div>
+      <p id="table-info" class="text-sm text-gray-500 mt-4"></p>
     </div>
   </div>
 
-  <div id="confirmation-screen" class="screen">
-    <h2>T-NGON</h2>
-    <p>Bạn đã chọn bàn:</p>
-    <p id="ban-display"></p>
-    <button id="confirm-button">🍽️ START</button>
-  </div>
-  
-  <iframe id="order-iframe" src=""></iframe>
+  <script>
+    // Lấy tham số 'ban' từ URL
+    const params = new URLSearchParams(window.location.search);
+    const ban = params.get('ban');
 
-  <!-- Firebase Scripts -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    
-    // ⚠️⚠️⚠️ THAY THẾ CHỖ NÀY BẰNG CẤU HÌNH CỦA DỰ ÁN FIREBASE CỦA BẠN ⚠️⚠️⚠️
-    const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_AUTH_DOMAIN",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_STORAGE_BUCKET",
-      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-      appId: "YOUR_APP_ID"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const auth = getAuth(app);
-
-    let selectedBan;
-    const iframe = document.getElementById('order-iframe');
-    let unsubscribeFromFirestore = null; // Biến để lưu trữ hàm hủy lắng nghe Firestore
-
-    // Hàm để quay lại màn hình chọn bàn và hủy lắng nghe Firestore
-    function resetToSelectTableScreen() {
-      if (unsubscribeFromFirestore) {
-        unsubscribeFromFirestore();
-        unsubscribeFromFirestore = null; // Reset biến
-      }
-      iframe.style.display = 'none';
-      document.getElementById('select-table-screen').style.display = 'flex';
-      document.getElementById('confirmation-screen').style.display = 'none';
+    // Hiển thị số bàn đang hoạt động
+    const tableInfo = document.getElementById('table-info');
+    if (ban) {
+      tableInfo.textContent = `Bạn đang ở Bàn ${ban}`;
     }
 
-    function showConfirmation(ban) {
-      selectedBan = ban;
-      document.getElementById('ban-display').textContent = 'Bàn ' + ban;
-      document.getElementById('select-table-screen').style.display = 'none';
-      document.getElementById('confirmation-screen').style.display = 'flex';
-    }
+    let checkInterval; // Biến lưu trữ ID của interval
 
-    document.getElementById('confirm-button').onclick = async function() {
-      // Đăng nhập ẩn danh để có quyền truy cập Firestore
-      try {
-        await signInAnonymously(auth);
-      } catch (error) {
-        console.error("Lỗi đăng nhập ẩn danh:", error);
-        alert('Có lỗi xảy ra, vui lòng thử lại.');
+    function startOrder() {
+      if (!ban) {
+        alert('Không tìm thấy thông tin bàn. Vui lòng thử lại với URL có chứa "?ban=..."');
         return;
       }
 
+      // Ẩn màn hình bắt đầu và hiển thị loading
+      const startScreen = document.getElementById('start-screen');
+      const mainContainer = document.getElementById('main-container');
+      startScreen.style.display = 'none';
+
+      const loadingMessage = document.createElement('div');
+      loadingMessage.className = 'loading-indicator';
+      loadingMessage.textContent = 'Đang tải trang gọi món...';
+      mainContainer.appendChild(loadingMessage);
+
+      // Tải links.json và tạo iframe
       fetch('links.json')
-        .then(r => r.json())
+        .then(r => {
+          if (!r.ok) throw new Error('Không thể tải links.json');
+          return r.json();
+        })
         .then(data => {
-          const url = data[selectedBan];
+          const url = data[ban];
           if (url) {
-            document.getElementById('confirmation-screen').style.display = 'none';
-            iframe.style.display = 'block';
-            iframe.src = url;
-
-            // ⚠️⚠️⚠️ Bắt đầu lắng nghe Firestore cho bàn đã chọn ⚠️⚠️⚠️
-            const banDocRef = doc(db, 'table_status', `ban-${selectedBan}`);
-            // Hủy lắng nghe cũ nếu có
-            if (unsubscribeFromFirestore) {
-              unsubscribeFromFirestore();
-            }
-            unsubscribeFromFirestore = onSnapshot(banDocRef, (doc) => {
-              if (doc.exists() && doc.data().status === 'expired') {
-                console.log("Phát hiện trạng thái hết hạn từ Firestore, chuyển về màn hình chọn bàn.");
-                resetToSelectTableScreen();
-              }
-            });
-
+            loadingMessage.remove(); // Xóa loading message
+            createIframe(url);
           } else {
-            alert('Không tìm thấy link cho bàn ' + selectedBan);
+            loadingMessage.remove();
+            showError('Không tìm thấy link cho bàn ' + ban);
+            startScreen.style.display = 'block';
           }
         })
-        .catch(err => alert('Lỗi tải dữ liệu: ' + err));
-    };
+        .catch(err => {
+          loadingMessage.remove();
+          showError('Lỗi tải file links.json: ' + err.message);
+          startScreen.style.display = 'block';
+        });
+    }
+
+    function createIframe(url) {
+      const iframe = document.createElement('iframe');
+      iframe.id = 'pos-iframe';
+      iframe.className = 'iframe-container';
+      iframe.src = url;
+      document.body.appendChild(iframe);
+
+      // Bắt đầu kiểm tra trạng thái hết hạn trong iframe
+      checkInterval = setInterval(() => {
+        checkIframeContent(iframe);
+      }, 5000); // Kiểm tra mỗi 5 giây
+    }
+    
+    function checkIframeContent(iframe) {
+        try {
+            // Lấy nội dung của iframe. Cần cẩn thận với lỗi Cross-Origin.
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            if (iframeDoc) {
+                const bodyText = iframeDoc.body.textContent.toLowerCase();
+                
+                // Kiểm tra các từ khóa hết hạn trong nội dung trang
+                if (bodyText.includes('hết hạn') || bodyText.includes('hết hiệu lực') || bodyText.includes('lỗi')) {
+                    console.log('Phát hiện trang hết hạn. Quay lại màn hình bắt đầu.');
+                    clearPage();
+                }
+            }
+        } catch (e) {
+            // Lỗi Cross-Origin. Nếu không thể truy cập nội dung, ta không thể kiểm tra.
+            // Trong trường hợp này, ta giả định iframe vẫn đang hoạt động bình thường.
+            console.log('Không thể truy cập nội dung iframe do lỗi Cross-Origin. Không thể kiểm tra trạng thái.');
+        }
+    }
+
+    function clearPage() {
+      // Dừng vòng lặp kiểm tra
+      if (checkInterval) {
+        clearInterval(checkInterval);
+      }
+
+      // Xóa iframe hiện tại
+      const iframe = document.getElementById('pos-iframe');
+      if (iframe) {
+        iframe.remove();
+      }
+
+      // Hiển thị lại màn hình bắt đầu
+      const startScreen = document.getElementById('start-screen');
+      startScreen.style.display = 'block';
+    }
+
+    function showError(message) {
+      const errorMessage = document.createElement('div');
+      errorMessage.className = 'error-message';
+      errorMessage.textContent = message;
+      document.getElementById('main-container').appendChild(errorMessage);
+    }
   </script>
 </body>
 </html>
