@@ -91,6 +91,11 @@
         })
         .catch(err => alert('Lỗi tải dữ liệu: ' + err));
     }
+
+    // Bổ sung: Đoạn mã này sẽ tự động đưa con trỏ vào ô nhập liệu khi trang tải xong
+    window.onload = function() {
+      document.getElementById('banInput').focus();
+    };
   </script>
 </body>
 </html>
