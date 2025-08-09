@@ -14,7 +14,264 @@
   <meta name="theme-color" content="#da251d">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
+    /* Sử dụng font Inter cho toàn bộ tra<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>T-NGON</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <!-- PWA meta tags for shortcut functionality -->
+  <!-- Thẻ này liên kết file manifest.json với trang web -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="https://placehold.co/192x192/da251d/fff?text=TN"/>
+  <link rel="apple-touch-icon" href="https://placehold.co/192x192/da251d/fff?text=TN"/>
+  <meta name="apple-mobile-web-app-title" content="T-NGON"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="theme-color" content="#da251d">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
     /* Sử dụng font Inter cho toàn bộ trang */
+    body {
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f3f4f6;
+    }
+    .main-container {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      width: 100vw;
+      padding: 1rem;
+      box-sizing: border-box;
+    }
+    .screen {
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        height: 100%;
+    }
+    #table-selection-screen {
+        display: flex;
+    }
+    .button-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      max-width: 600px;
+      margin: 2rem auto 0 auto; /* Căn giữa các nút */
+    }
+    .table-button {
+      font-size: 2rem;
+      font-weight: bold;
+      padding: 2rem 1rem;
+      background-color: #007aff; /* Đổi màu nền nút */
+      color: white; /* Đổi màu chữ */
+      border: 2px solid #007aff;
+      border-radius: 0.75rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .table-button:hover {
+      background-color: #005fbc; /* Đổi màu nền khi hover */
+      border-color: #005fbc;
+      transform: translateY(-2px);
+    }
+    .start-button {
+      font-size: 2.5rem;
+      padding: 1.25rem 2.5rem;
+      background-color: #007aff;
+      color: white;
+      border: none;
+      border-radius: 0.75rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .start-button:hover {
+      background-color: #005fbc;
+      transform: translateY(-2px);
+    }
+    .start-button:active {
+      transform: translateY(0);
+      box-shadow: none;
+    }
+    .iframe-container {
+      width: 100%;
+      height: 100%;
+      border: none;
+      overflow: hidden;
+    }
+    .loading-indicator {
+        font-size: 1.5rem;
+        color: #6b7280;
+        margin-top: 1rem;
+    }
+    .error-message {
+        color: #ef4444;
+        font-size: 1.2rem;
+        margin-top: 1rem;
+    }
+    @media (max-width: 640px) {
+      .button-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+      }
+      .table-button {
+        font-size: 1.5rem;
+        padding: 1.5rem 0.5rem;
+      }
+      .start-button {
+        font-size: 2rem;
+        padding: 1rem 2rem;
+      }
+    }
+    .return-button {
+      position: absolute;
+      bottom: 10px; /* Sát góc dưới */
+      left: 10px; /* Sát góc trái */
+      width: 20px; /* Kích thước nhỏ */
+      height: 20px;
+      padding: 0;
+      background-color: transparent; /* Nền trong suốt */
+      border: none; /* Bỏ viền */
+      cursor: pointer;
+      z-index: 100;
+    }
+  </style>
+</head>
+<body class="bg-gray-100">
+  <div class="main-container" id="main-container">
+    <!-- Màn hình chọn bàn -->
+    <div class="screen" id="table-selection-screen">
+      <h2 class="text-5xl font-bold text-gray-800">T-NGON</h2>
+      <p class="text-lg text-gray-600 mt-2">Vui lòng chọn bàn của bạn</p>
+      <div class="button-grid">
+        <script>
+            // Tạo 15 nút bàn tự động
+            for (let i = 1; i <= 15; i++) {
+                document.write(`<button class="table-button" onclick="selectTable(${i})">Bàn ${i}</button>`);
+            }
+        </script>
+      </div>
+    </div>
+    
+    <!-- Màn hình bắt đầu cho từng bàn -->
+    <div class="screen" id="start-screen">
+      <div class="space-y-4 text-gray-800 text-center">
+        <h2 class="text-5xl font-bold">T-NGON</h2>
+        <p class="text-lg">Nhấn nút bên dưới để bắt đầu đặt món</p>
+        <div class="button-container">
+          <button class="start-button" onclick="startOrder()">🍽️ BẮT ĐẦU</button>
+        </div>
+        <p id="table-info" class="text-sm text-gray-500 mt-4"></p>
+      </div>
+    </div>
+
+    <!-- Màn hình gọi món (iframe) -->
+    <div class="screen" id="iframe-screen">
+      <!-- Nút quay lại. Hoàn toàn trong suốt, kích thước nhỏ, đặt ở góc dưới cùng bên trái. -->
+      <button class="return-button" onclick="clearPage()"></button>
+      <!-- iframe sẽ được tạo và chèn vào đây -->
+    </div>
+  </div>
+
+  <script>
+    const LINKS_JSON_URL = "https://raw.githubusercontent.com/tngon462/QR/refs/heads/main/links.json";
+
+    let selectedBan = null;
+
+    function showScreen(screenId) {
+      document.querySelectorAll('.screen').forEach(screen => {
+        screen.style.display = 'none';
+      });
+      document.getElementById(screenId).style.display = 'flex';
+    }
+
+    function selectTable(banNumber) {
+      selectedBan = banNumber;
+      document.getElementById('table-info').textContent = `Bạn đang ở Bàn ${selectedBan}`;
+      showScreen('start-screen');
+    }
+
+    function startOrder() {
+      if (!selectedBan) {
+        showError('Không tìm thấy thông tin bàn. Vui lòng chọn lại.');
+        return;
+      }
+
+      const startScreen = document.getElementById('start-screen');
+      startScreen.style.display = 'none';
+      
+      const loadingMessage = document.createElement('div');
+      loadingMessage.className = 'loading-indicator';
+      loadingMessage.textContent = 'Đang tải trang gọi món...';
+      document.getElementById('main-container').appendChild(loadingMessage);
+
+      fetch(LINKS_JSON_URL)
+        .then(r => {
+          if (!r.ok) throw new Error('Không thể tải links.json');
+          return r.json();
+        })
+        .then(data => {
+          const url = data[selectedBan];
+          if (url) {
+            loadingMessage.remove();
+            createIframe(url);
+          } else {
+            loadingMessage.remove();
+            showError('Không tìm thấy link cho bàn ' + selectedBan);
+            showScreen('start-screen');
+          }
+        })
+        .catch(err => {
+          loadingMessage.remove();
+          showError('Lỗi tải file links.json: ' + err.message);
+          showScreen('start-screen');
+        });
+    }
+
+    function createIframe(url) {
+      const iframeScreen = document.getElementById('iframe-screen');
+      const returnButton = `<button class="return-button" onclick="clearPage()"></button>`;
+      iframeScreen.innerHTML = returnButton;
+      const iframe = document.createElement('iframe');
+      iframe.id = 'pos-iframe';
+      iframe.className = 'iframe-container';
+      iframe.src = url;
+      iframeScreen.appendChild(iframe);
+      showScreen('iframe-screen');
+    }
+
+    function clearPage() {
+      const iframeScreen = document.getElementById('iframe-screen');
+      if (iframeScreen) {
+        iframeScreen.innerHTML = '';
+      }
+      showScreen('start-screen');
+    }
+
+    function showError(message) {
+      const existingError = document.querySelector('.error-message');
+      if (existingError) existingError.remove();
+      
+      const errorMessage = document.createElement('div');
+      errorMessage.className = 'error-message';
+      errorMessage.textContent = message;
+      document.getElementById('main-container').appendChild(errorMessage);
+      setTimeout(() => errorMessage.remove(), 5000);
+    }
+  </script>
+</body>
+</html>
+ng */
     body {
       font-family: 'Inter', sans-serif;
       margin: 0;
