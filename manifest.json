@@ -1,13 +1,14 @@
 {
   "name": "T-NGON",
   "short_name": "T-NGON",
-  "start_url": "redirect.html",
+  "start_url": "./redirect.html",
   "display": "standalone",
+  "display_override": ["standalone"],
   "background_color": "#ffffff",
   "theme_color": "#007aff",
   "icons": [
     {
-      "src": "180x180.png",
+      "src": "./180x180.png",
       "sizes": "180x180",
       "type": "image/png"
     }
