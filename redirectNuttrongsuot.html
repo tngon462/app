@@ -6,19 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
   <!-- PWA meta tags for shortcut functionality -->
-  <!-- Thẻ này liên kết file manifest.json với trang web.
-       Đã thêm tham số v=2 để buộc trình duyệt tải lại file manifest mới,
-       phòng trường hợp trình duyệt đã lưu cache phiên bản cũ. -->
-  <link rel="manifest" href="manifest.json?v=2">
+  <link rel="manifest" href="manifest.json">
   <link rel="icon" href="https://placehold.co/192x192/da251d/fff?text=TN"/>
   <link rel="apple-touch-icon" href="https://placehold.co/192x192/da251d/fff?text=TN"/>
   <meta name="apple-mobile-web-app-title" content="T-NGON"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="mobile-web-app-capable" content="yes"> <!-- Thêm thẻ mới để thay thế thẻ đã lỗi thời -->
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="theme-color" content="#da251d">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* Sử dụng font Inter cho toàn bộ trang */
     body {
       font-family: 'Inter', sans-serif;
       margin: 0;
@@ -51,22 +48,22 @@
       grid-template-columns: repeat(3, 1fr);
       gap: 1.5rem;
       max-width: 600px;
-      margin: 2rem auto 0 auto; /* Căn giữa các nút */
+      margin: 2rem auto 0 auto;
     }
     .table-button {
       font-size: 2rem;
       font-weight: bold;
       padding: 2rem 1rem;
-      background-color: #007aff; /* Đổi màu nền nút */
-      color: white; /* Đổi màu chữ */
+      background-color: #007aff;
+      color: white;
       border: 2px solid #007aff;
       border-radius: 0.75rem;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1-px rgba(0, 0, 0, 0.06);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
       cursor: pointer;
       transition: all 0.3s ease;
     }
     .table-button:hover {
-      background-color: #005fbc; /* Đổi màu nền khi hover */
+      background-color: #005fbc;
       border-color: #005fbc;
       transform: translateY(-2px);
     }
@@ -121,13 +118,13 @@
     }
     .return-button {
       position: absolute;
-      bottom: 10px; /* Sát góc dưới */
-      left: 10px; /* Sát góc trái */
-      width: 24px; /* Kích thước nhỏ, tăng 20% */
-      height: 24px; /* Kích thước nhỏ, tăng 20% */
+      bottom: 10px;
+      left: 10px;
+      width: 24px;
+      height: 24px;
       padding: 0;
-      background-color: transparent; /* Nền trong suốt */
-      border: none; /* Bỏ viền */
+      background-color: transparent;
+      border: none;
       cursor: pointer;
       z-index: 100;
     }
@@ -135,13 +132,11 @@
 </head>
 <body class="bg-gray-100">
   <div class="main-container" id="main-container">
-    <!-- Màn hình chọn bàn -->
     <div class="screen" id="table-selection-screen">
       <h2 class="text-5xl font-bold text-gray-800">T-NGON</h2>
       <p class="text-lg text-gray-600 mt-2">Vui lòng chọn bàn của bạn</p>
       <div class="button-grid">
         <script>
-            // Tạo 15 nút bàn tự động
             for (let i = 1; i <= 15; i++) {
                 document.write(`<button class="table-button" onclick="selectTable(${i})">Bàn ${i}</button>`);
             }
@@ -149,7 +144,6 @@
       </div>
     </div>
     
-    <!-- Màn hình bắt đầu cho từng bàn -->
     <div class="screen" id="start-screen">
       <div class="space-y-4 text-gray-800 text-center">
         <h2 class="text-5xl font-bold">T-NGON</h2>
@@ -161,18 +155,59 @@
       </div>
     </div>
 
-    <!-- Màn hình gọi món (iframe) -->
     <div class="screen" id="iframe-screen">
-      <!-- Nút quay lại. Hoàn toàn trong suốt, kích thước nhỏ, đặt ở góc dưới cùng bên trái. -->
       <button class="return-button" onclick="clearPage()"></button>
-      <!-- iframe sẽ được tạo và chèn vào đây -->
     </div>
   </div>
 
   <script>
-    const LINKS_JSON_URL = "https://raw.githubusercontent.com/tngon462/QR/refs/heads/main/links.json";
-
+    // Cập nhật đường dẫn file links.json thành đường dẫn tuyệt đối trên GitHub
+    const LINKS_JSON_URL = "https://tngon462.github.io/QR/links.json";
     let selectedBan = null;
+    
+    // --- WebSocket Client Logic ---
+    const WS_SERVER_URL = "ws://localhost:8765";
+    let ws = null;
+
+    function connectWebSocket() {
+        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+            return;
+        }
+
+        console.log(`Connecting to WebSocket server at ${WS_SERVER_URL}...`);
+        ws = new WebSocket(WS_SERVER_URL);
+
+        ws.onopen = () => {
+            console.log("Connected to WebSocket server.");
+        };
+
+        ws.onmessage = (event) => {
+            console.log("Message from server: ", event.data);
+            try {
+                const message = JSON.parse(event.data);
+                if (message.ban == selectedBan && message.status === "expired") {
+                    console.log(`Table ${selectedBan} has expired. Clearing page.`);
+                    showError(`Bàn ${selectedBan} đã hết hạn. Đang quay lại màn hình chính...`);
+                    setTimeout(clearPage, 2000);
+                }
+            } catch (e) {
+                console.error("Failed to parse message:", e);
+            }
+        };
+
+        ws.onclose = () => {
+            console.log("Disconnected from WebSocket server. Attempting to reconnect in 3 seconds...");
+            setTimeout(connectWebSocket, 3000);
+        };
+
+        ws.onerror = (error) => {
+            console.error("WebSocket error occurred, attempting to reconnect...", error);
+        };
+    }
+    
+    document.addEventListener('DOMContentLoaded', connectWebSocket);
+
+    // --- End WebSocket Client Logic ---
 
     function showScreen(screenId) {
       document.querySelectorAll('.screen').forEach(screen => {
