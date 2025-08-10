@@ -11,6 +11,7 @@
   <link rel="apple-touch-icon" href="https://placehold.co/192x192/da251d/fff?text=TN"/>
   <meta name="apple-mobile-web-app-title" content="T-NGON"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="mobile-web-app-capable" content="yes"> <!-- Thêm thẻ mới để thay thế thẻ đã lỗi thời -->
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="theme-color" content="#da251d">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -160,15 +161,15 @@
   </div>
 
   <script>
-    const LINKS_JSON_URL = "https://raw.githubusercontent.com/tngon462/QR/refs/heads/main/links.json";
+    // Cập nhật đường dẫn file links.json thành đường dẫn tuyệt đối trên GitHub
+    const LINKS_JSON_URL = "https://tngon462.github.io/QR/links.json";
     let selectedBan = null;
     
     // --- WebSocket Client Logic ---
-    const WS_SERVER_URL = "ws://localhost:8765"; // Cập nhật địa chỉ này nếu server Python chạy trên máy khác
+    const WS_SERVER_URL = "ws://localhost:8765";
     let ws = null;
 
     function connectWebSocket() {
-        // Đảm bảo chỉ có một kết nối đang mở hoặc đang cố gắng kết nối
         if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
             return;
         }
@@ -178,19 +179,15 @@
 
         ws.onopen = () => {
             console.log("Connected to WebSocket server.");
-            // Có thể thêm logic ở đây nếu cần, ví dụ: gửi thông tin bàn
         };
 
         ws.onmessage = (event) => {
             console.log("Message from server: ", event.data);
             try {
                 const message = JSON.parse(event.data);
-                // Kiểm tra xem tin nhắn có phải của bàn hiện tại không
                 if (message.ban == selectedBan && message.status === "expired") {
                     console.log(`Table ${selectedBan} has expired. Clearing page.`);
-                    // Hiển thị thông báo trước khi quay lại màn hình chính
                     showError(`Bàn ${selectedBan} đã hết hạn. Đang quay lại màn hình chính...`);
-                    // Đợi 2 giây rồi chuyển màn hình
                     setTimeout(clearPage, 2000);
                 }
             } catch (e) {
@@ -199,19 +196,15 @@
         };
 
         ws.onclose = () => {
-            // Khi kết nối bị đóng, thử kết nối lại sau 3 giây.
-            // Điều này đảm bảo ứng dụng không báo lỗi và sẽ tự động kết nối lại khi server chạy.
             console.log("Disconnected from WebSocket server. Attempting to reconnect in 3 seconds...");
             setTimeout(connectWebSocket, 3000);
         };
 
         ws.onerror = (error) => {
-            // Lỗi này cũng sẽ kích hoạt sự kiện onclose, nên chỉ cần in ra console
             console.error("WebSocket error occurred, attempting to reconnect...", error);
         };
     }
     
-    // Bắt đầu kết nối khi trang tải xong
     document.addEventListener('DOMContentLoaded', connectWebSocket);
 
     // --- End WebSocket Client Logic ---
