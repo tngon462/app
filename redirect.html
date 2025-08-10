@@ -104,8 +104,8 @@
         const ts = v.ts || 0;
         if (v.status === "expired" && ts > lastTs) {
           lastTs = ts;
-          showError(`Bàn ${ban} đã hết hạn. Đang quay lại màn hình chính...`);
-          setTimeout(clearPage, 1500);
+          // im lặng: quay về ngay
+          clearPage();
         }
       });
     }
@@ -122,8 +122,8 @@
         const ts = v.ts || 0;
         if (v.status === "expired" && ts > lastTs) {
           lastTs = ts;
-          showError(`Bàn ${selectedBan} đã hết hạn. Đang quay lại màn hình chính...`);
-          setTimeout(clearPage, 1500);
+          // im lặng: quay về ngay
+          clearPage();
         }
       }catch(_){}
     }
@@ -143,7 +143,7 @@
     }
 
     function startOrder() {
-      if (!selectedBan) { showError("Không tìm thấy thông tin bàn. Vui lòng chọn lại."); return; }
+      if (!selectedBan) { return; }
       document.getElementById("start-screen").style.display = "none";
       const loading = document.createElement("div");
       loading.className = "loading-indicator";
@@ -155,9 +155,9 @@
         .then(data => {
           const url = data[selectedBan];
           loading.remove();
-          if (url) createIframe(url); else { showError("Không tìm thấy link cho bàn " + selectedBan); showScreen("start-screen"); }
+          if (url) createIframe(url); else showScreen("start-screen");
         })
-        .catch(err => { loading.remove(); showError("Lỗi tải file links.json: " + err.message); showScreen("start-screen"); });
+        .catch(_err => { loading.remove(); showScreen("start-screen"); });
     }
 
     function createIframe(url) {
@@ -175,15 +175,6 @@
       const iframeScreen = document.getElementById("iframe-screen");
       if (iframeScreen) iframeScreen.innerHTML = "";
       showScreen("start-screen");
-    }
-
-    function showError(msg) {
-      const prev = document.querySelector(".error-message"); if (prev) prev.remove();
-      const el = document.createElement("div");
-      el.className = "error-message";
-      el.textContent = msg;
-      document.getElementById("main-container").appendChild(el);
-      setTimeout(() => el.remove(), 5000);
     }
 
     /* ----------------- Auto select bàn ----------------- */
