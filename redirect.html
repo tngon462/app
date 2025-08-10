@@ -1,262 +1,48 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>T-NGON</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  
-  <!-- PWA meta tags for shortcut functionality -->
-  <link rel="manifest" href="manifest.json">
-  <link rel="icon" href="https://placehold.co/192x192/da251d/fff?text=TN"/>
-  <link rel="apple-touch-icon" href="https://placehold.co/192x192/da251d/fff?text=TN"/>
-  <meta name="apple-mobile-web-app-title" content="T-NGON"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <meta name="theme-color" content="#da251d">
-  <script src="https://cdn.tailwindcss.com"></script>
+<script>
+  // ======= AUTO-SELECT BÀN từ query hoặc từ URL của iframe =======
+  // Lấy query param
+  function getQueryParam(name) {
+    const url = new URL(window.location.href);
+    return url.searchParams.get(name);
+  }
 
-  <!-- Firebase SDK (compat) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-
-  <style>
-    body {
-      font-family: 'Inter', sans-serif;
-      margin: 0;
-      padding: 0;
-      background-color: #f3f4f6;
+  // Khi DOM sẵn sàng: nếu có ?ban=... thì tự chọn + tự start
+  document.addEventListener('DOMContentLoaded', () => {
+    const qBan = getQueryParam('ban');
+    if (qBan) {
+      // Lưu ý: phần selectTable/startOrder được định nghĩa ở script dưới (nó sẽ có sau DOMContentLoaded)
+      // nên ta đợi 1 tick cho chắc.
+      setTimeout(() => {
+        if (typeof selectTable === 'function') {
+          selectTable(parseInt(qBan, 10));
+          if (typeof startOrder === 'function') startOrder();
+        }
+      }, 100);
     }
-    .main-container {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      width: 100vw;
-      padding: 1rem;
-      box-sizing: border-box;
-    }
-    .screen { display: none; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; }
-    #table-selection-screen { display: flex; }
-    .button-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; max-width: 600px; margin: 2rem auto 0 auto; }
-    .table-button {
-      font-size: 2rem; font-weight: bold; padding: 2rem 1rem;
-      background-color: #007aff; color: white; border: 2px solid #007aff; border-radius: 0.75rem;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-      cursor: pointer; transition: all 0.3s ease;
-    }
-    .table-button:hover { background-color: #005fbc; border-color: #005fbc; transform: translateY(-2px); }
-    .start-button {
-      font-size: 2.5rem; padding: 1.25rem 2.5rem; background-color: #007aff; color: white; border: none; border-radius: 0.75rem;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-      cursor: pointer; transition: all 0.3s ease;
-    }
-    .start-button:hover { background-color: #005fbc; transform: translateY(-2px); }
-    .start-button:active { transform: translateY(0); box-shadow: none; }
-    .iframe-container { width: 100%; height: 100%; border: none; overflow: hidden; }
-    .loading-indicator { font-size: 1.5rem; color: #6b7280; margin-top: 1rem; }
-    .error-message { color: #ef4444; font-size: 1.2rem; margin-top: 1rem; }
-    @media (max-width: 640px) {
-      .button-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
-      .table-button { font-size: 1.5rem; padding: 1.5rem 0.5rem; }
-      .start-button { font-size: 2rem; padding: 1rem 2rem; }
-    }
-    .return-button { position: absolute; bottom: 10px; left: 10px; width: 24px; height: 24px; padding: 0; background-color: transparent; border: none; cursor: pointer; z-index: 100; }
-  </style>
-</head>
-<body class="bg-gray-100">
-  <div class="main-container" id="main-container">
-    <div class="screen" id="table-selection-screen">
-      <h2 class="text-5xl font-bold text-gray-800">T-NGON</h2>
-      <p class="text-lg text-gray-600 mt-2">Vui lòng chọn bàn của bạn</p>
-      <div class="button-grid">
-        <script>
-            for (let i = 1; i <= 15; i++) {
-                document.write(`<button class="table-button" onclick="selectTable(${i})">Bàn ${i}</button>`);
-            }
-        </script>
-      </div>
-    </div>
-    
-    <div class="screen" id="start-screen">
-      <div class="space-y-4 text-gray-800 text-center">
-        <h2 class="text-5xl font-bold">T-NGON</h2>
-        <p class="text-lg">Nhấn nút bên dưới để bắt đầu đặt món</p>
-        <div class="button-container">
-          <button class="start-button" onclick="startOrder()">🍽️ BẮT ĐẦU</button>
-        </div>
-        <p id="table-info" class="text-sm text-gray-500 mt-4"></p>
-      </div>
-    </div>
+  });
 
-    <div class="screen" id="iframe-screen">
-      <button class="return-button" onclick="clearPage()"></button>
-    </div>
-  </div>
-
-  <!-- Firebase Client Logic (có log + cập nhật badge) -->
-  <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyB4u2G41xdGkgBC0KltleRpcg5Lwru2RIU",
-      authDomain: "tngon-b37d6.firebaseapp.com",
-      databaseURL: "https://tngon-b37d6-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "tngon-b37d6",
-      storageBucket: "tngon-b37d6.firebasestorage.app",
-      messagingSenderId: "580319242104",
-      appId: "1:580319242104:web:6922e4327bdc8286c30a8d",
-      measurementId: "G-LHEH8ZC6SL"
-    };
-
-    let fbApp = null, rtdb = null;
-    let lastTs = 0;
-
-    function connectFirebase() {
-      try {
-        if (!fbApp) fbApp = firebase.initializeApp(firebaseConfig);
-        if (!rtdb) rtdb = firebase.database();
-
-        let currentBan = null, currentRef = null;
-
-        setInterval(() => {
-          if (!window.selectedBan) return;
-          if (currentBan === window.selectedBan) return;
-
-          if (currentRef) currentRef.off();
-          currentBan = window.selectedBan;
-          currentRef = rtdb.ref('signals/' + currentBan);
-
-          console.log('[RTDB] attach listener -> signals/' + currentBan);
-          currentRef.on('value',
-            (snap) => {
-              const v = snap.val();
-              console.log('[RTDB] value:', v);
-              if (!v) return;
-              const ts = v.ts || 0;
-              if (v.status === 'expired' && ts > lastTs) {
-                lastTs = ts;
-                if (typeof window.__updateLastTs === 'function') window.__updateLastTs(ts);
-                showError(`Bàn ${currentBan} đã hết hạn. Đang quay lại màn hình chính...`);
-                setTimeout(clearPage, 1500);
-              }
-            },
-            (err) => {
-              console.error('[RTDB] error', err && err.code, err && err.message);
-            }
-          );
-        }, 800);
-      } catch (e) {
-        console.error('Firebase error:', e);
+  // Nếu vì lý do gì selectedBan vẫn null nhưng iframe đã có src,
+  // ta sẽ map ngược src -> số bàn dựa vào links.json và tự set selectedBan.
+  async function backfillSelectedBanFromIframe() {
+    try {
+      if (window.selectedBan) return;
+      const iframe = document.getElementById('pos-iframe');
+      if (!iframe || !iframe.src) return;
+      const r = await fetch("https://tngon462.github.io/QR/links.json");
+      const data = await r.json();
+      for (const [ban, url] of Object.entries(data)) {
+        if (iframe.src === url) {
+          window.selectedBan = parseInt(ban, 10);
+          console.log('[AutoDetect] Gán selectedBan =', window.selectedBan, 'từ iframe.src');
+          break;
+        }
       }
+    } catch(e) {
+      console.warn('[AutoDetect] Không map được selectedBan từ iframe:', e);
     }
-    document.addEventListener('DOMContentLoaded', connectFirebase);
-  </script>
+  }
 
-  <script>
-    const LINKS_JSON_URL = "https://tngon462.github.io/QR/links.json";
-    let selectedBan = null;
-
-    function showScreen(screenId) {
-      document.querySelectorAll('.screen').forEach(screen => {
-        screen.style.display = 'none';
-      });
-      document.getElementById(screenId).style.display = 'flex';
-    }
-
-    function selectTable(banNumber) {
-      selectedBan = banNumber;
-      document.getElementById('table-info').textContent = `Bạn đang ở Bàn ${selectedBan}`;
-      showScreen('start-screen');
-    }
-
-    function startOrder() {
-      if (!selectedBan) {
-        showError('Không tìm thấy thông tin bàn. Vui lòng chọn lại.');
-        return;
-      }
-
-      const startScreen = document.getElementById('start-screen');
-      startScreen.style.display = 'none';
-      
-      const loadingMessage = document.createElement('div');
-      loadingMessage.className = 'loading-indicator';
-      loadingMessage.textContent = 'Đang tải trang gọi món...';
-      document.getElementById('main-container').appendChild(loadingMessage);
-
-      fetch(LINKS_JSON_URL)
-        .then(r => {
-          if (!r.ok) throw new Error('Không thể tải links.json');
-          return r.json();
-        })
-        .then(data => {
-          const url = data[selectedBan];
-          if (url) {
-            loadingMessage.remove();
-            createIframe(url);
-          } else {
-            loadingMessage.remove();
-            showError('Không tìm thấy link cho bàn ' + selectedBan);
-            showScreen('start-screen');
-          }
-        })
-        .catch(err => {
-          loadingMessage.remove();
-          showError('Lỗi tải file links.json: ' + err.message);
-          showScreen('start-screen');
-        });
-    }
-
-    function createIframe(url) {
-      const iframeScreen = document.getElementById('iframe-screen');
-      const returnButton = `<button class="return-button" onclick="clearPage()"></button>`;
-      iframeScreen.innerHTML = returnButton;
-      const iframe = document.createElement('iframe');
-      iframe.id = 'pos-iframe';
-      iframe.className = 'iframe-container';
-      iframe.src = url;
-      iframeScreen.appendChild(iframe);
-      showScreen('iframe-screen');
-    }
-
-    function clearPage() {
-      const iframeScreen = document.getElementById('iframe-screen');
-      if (iframeScreen) {
-        iframeScreen.innerHTML = '';
-      }
-      showScreen('start-screen');
-    }
-
-    function showError(message) {
-      const existingError = document.querySelector('.error-message');
-      if (existingError) existingError.remove();
-      
-      const errorMessage = document.createElement('div');
-      errorMessage.className = 'error-message';
-      errorMessage.textContent = message;
-      document.getElementById('main-container').appendChild(errorMessage);
-      setTimeout(() => errorMessage.remove(), 5000);
-    }
-  </script>
-
-  <!-- Badge debug ở góc dưới phải -->
-  <script>
-    (function(){
-      const badge = document.createElement('div');
-      badge.id = 'debug-badge';
-      badge.style.cssText = "position:fixed;right:10px;bottom:10px;background:#111;color:#fff;font:12px/1.3 system-ui;padding:8px 10px;border-radius:10px;opacity:.9;z-index:9999";
-      badge.textContent = "Firebase: chưa gắn listener";
-      document.body.appendChild(badge);
-
-      setInterval(() => {
-        if (!window.selectedBan) { badge.textContent = "Chưa chọn bàn"; return; }
-        badge.textContent = `Đang nghe: signals/${window.selectedBan} • lastTs=${window.__lastTs||0}`;
-      }, 800);
-
-      window.__updateLastTs = function(ts){
-        window.__lastTs = ts;
-        badge.textContent = `Đang nghe: signals/${window.selectedBan} • lastTs=${window.__lastTs}`;
-      }
-    })();
-  </script>
-</body>
-</html>
+  // Gọi định kỳ phòng khi selectedBan bị mất
+  setInterval(backfillSelectedBanFromIframe, 1000);
+  // ======= END AUTO-SELECT =======
+</script>
