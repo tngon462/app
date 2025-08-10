@@ -1,103 +1,265 @@
-# QRback_test_v2.py - Server WebSocket với chức năng thông báo hết hạn mã QR
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>T-NGON Test</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  
+  <link rel="apple-touch-icon" href="180x180.png">
+  <link rel="manifest" href="manifest.json">
 
-import asyncio
-import websockets
-import json
-import time
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      font-family: sans-serif;
+    }
+    .screen {
+      text-align: center;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      box-sizing: border-box;
+      background: white;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 20px;
+    }
+    #select-table-screen {
+      display: flex;
+      justify-content: flex-start;
+      padding-top: 20px;
+    }
+    #confirmation-screen {
+      gap: 30px;
+    }
+    .button-container {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      padding: 0 20px;
+      width: 100%;
+      max-width: 600px;
+    }
+    .table-button {
+      font-size: 40px;
+      padding: 20px 0;
+      background-color: #007aff;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    #confirm-button {
+      font-size: 45px;
+      padding: 20px 40px;
+      background-color: #007aff;
+      color: white;
+      border: none;
+      border-radius: 10px;
+    }
+    #order-iframe {
+      border: none;
+      width: 100%;
+      height: 100%;
+    }
+    #ban-display {
+      font-size: 50px;
+      font-weight: bold;
+      color: #333;
+    }
+    #custom-alert-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    #custom-alert-box {
+      background-color: white;
+      padding: 20px 30px;
+      border-radius: 10px;
+      text-align: center;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      max-width: 80%;
+    }
+    #custom-alert-message {
+      font-size: 20px;
+      margin-bottom: 15px;
+    }
+    #debug-log {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      width: 300px;
+      height: 200px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      font-size: 12px;
+      padding: 10px;
+      overflow-y: scroll;
+      border-radius: 5px;
+      display: none;
+      z-index: 999;
+    }
+  </style>
+</head>
+<body>
+  <div id="select-table-screen" class="screen">
+    <h2>T-NGON Test</h2>
+    <p>Vui lòng chọn số bàn của bạn</p>
+    <div class="button-container">
+      <button class="table-button" onclick="showConfirmation(1)">1</button>
+      <button class="table-button" onclick="showConfirmation(2)">2</button>
+      <button class="table-button" onclick="showConfirmation(3)">3</button>
+      <button class="table-button" onclick="showConfirmation(4)">4</button>
+      <button class="table-button" onclick="showConfirmation(5)">5</button>
+      <button class="table-button" onclick="showConfirmation(6)">6</button>
+      <button class="table-button" onclick="showConfirmation(7)">7</button>
+      <button class="table-button" onclick="showConfirmation(8)">8</button>
+      <button class="table-button" onclick="showConfirmation(9)">9</button>
+      <button class="table-button" onclick="showConfirmation(10)">10</button>
+      <button class="table-button" onclick="showConfirmation(11)">11</button>
+      <button class="table-button" onclick="showConfirmation(12)">12</button>
+      <button class="table-button" onclick="showConfirmation(13)">13</button>
+      <button class="table-button" onclick="showConfirmation(14)">14</button>
+      <button class="table-button" onclick="showConfirmation(15)">15</button>
+    </div>
+  </div>
 
-# Dictionary để lưu trữ các kết nối client theo số bàn
-connected_clients = {}
+  <div id="confirmation-screen" class="screen">
+    <h2>T-NGON Test</h2>
+    <p>Bạn đã chọn bàn:</p>
+    <p id="ban-display"></p>
+    <button id="confirm-button">🍽️ START</button>
+  </div>
+  
+  <iframe id="order-iframe" class="screen" src=""></iframe>
 
-async def handler(websocket):
-    """
-    Xử lý kết nối từ client WebSocket.
-    """
-    client_address = websocket.remote_address
-    print(f"--- Client mới kết nối từ {client_address} ---")
+  <div id="custom-alert-container">
+    <div id="custom-alert-box">
+      <p id="custom-alert-message"></p>
+    </div>
+  </div>
+  
+  <div id="debug-log"></div>
+
+  <script>
+    let selectedBan;
+    const WS_SERVER_URL = "ws://localhost:8765";
+    let ws = null;
+    const debugLog = document.getElementById('debug-log');
+
+    // Hàm ghi log vào cả console và hộp thoại trên màn hình
+    function log(message) {
+      console.log(message);
+      const p = document.createElement('p');
+      p.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      debugLog.appendChild(p);
+      debugLog.scrollTop = debugLog.scrollHeight;
+    }
+
+    function showScreen(screenId) {
+      document.querySelectorAll('.screen').forEach(screen => {
+        screen.style.display = 'none';
+      });
+      document.getElementById(screenId).style.display = 'flex';
+      if (screenId !== 'select-table-screen') {
+        debugLog.style.display = 'block';
+      } else {
+        debugLog.style.display = 'none';
+      }
+    }
+
+    function showAlert(message) {
+      document.getElementById('custom-alert-message').textContent = message;
+      document.getElementById('custom-alert-container').style.display = 'flex';
+      setTimeout(() => {
+        document.getElementById('custom-alert-container').style.display = 'none';
+      }, 2000);
+    }
+
+    function showConfirmation(ban) {
+      selectedBan = ban;
+      document.getElementById('ban-display').textContent = 'Bàn ' + ban;
+      showScreen('confirmation-screen');
+      connectWebSocket();
+    }
+
+    document.getElementById('confirm-button').onclick = function() {
+      // Bạn có thể thay thế bằng logic thực tế của mình
+      showAlert('Chức năng START đã được nhấn.');
+    };
+
+    function connectWebSocket() {
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        log("Đã có kết nối hoặc đang kết nối, không tạo mới.");
+        return;
+      }
+
+      log(`Đang kết nối đến WebSocket server tại ${WS_SERVER_URL}...`);
+      ws = new WebSocket(WS_SERVER_URL);
+
+      ws.onopen = () => {
+        log("Thành công! Đã kết nối với server WebSocket.");
+        // Gửi tin nhắn đầu tiên để server biết client nào vừa kết nối
+        ws.send(JSON.stringify({ "action": "client_connected", "ban": selectedBan }));
+      };
+
+      ws.onmessage = (event) => {
+        log(`Nhận tin nhắn từ server: ${event.data}`);
+        try {
+          const message = JSON.parse(event.data);
+          // Kiểm tra tin nhắn thử nghiệm
+          if (message.ban == selectedBan && message.test_message) {
+            showAlert(`✅ Đã nhận tin nhắn thử nghiệm: ${message.test_message}`);
+            log("Đã hiển thị tin nhắn thử nghiệm.");
+          }
+          // Xử lý tin nhắn hết hạn
+          if (message.ban == selectedBan && message.status === "expired") {
+            log(`❌ Bàn ${selectedBan} đã hết hạn. Đang quay lại màn hình chính.`);
+            showAlert(`Bàn ${selectedBan} đã hết hạn.`);
+            clearPage();
+          }
+        } catch (e) {
+          log("❌ Lỗi: Không thể phân tích cú pháp tin nhắn JSON.");
+          console.error("Failed to parse message:", e);
+        }
+      };
+
+      ws.onclose = (event) => {
+        log(`❌ Mất kết nối. Mã lỗi: ${event.code}. Lý do: ${event.reason}. Đang thử kết nối lại sau 3 giây...`);
+        showAlert("Mất kết nối với server. Đang thử kết nối lại...");
+        setTimeout(connectWebSocket, 3000);
+      };
+
+      ws.onerror = (error) => {
+        log("❌ Lỗi WebSocket nghiêm trọng, đang thử kết nối lại...");
+        console.error("WebSocket error occurred:", error);
+      };
+    }
     
-    try:
-        # Chờ tin nhắn đầu tiên từ client để xác định bàn
-        # Tin nhắn này phải có định dạng {"action": "client_connected", "ban": 10}
-        initial_message = await asyncio.wait_for(websocket.recv(), timeout=10.0)
-        message_data = json.loads(initial_message)
-        
-        ban_id = message_data.get("ban")
-        action = message_data.get("action")
-        
-        if action == "client_connected" and ban_id:
-            print(f"✅ Đã xác định: Client ở Bàn {ban_id} đã kết nối.")
-            connected_clients[ban_id] = websocket
-            
-            # Gửi một tin nhắn xác nhận ngay lập tức cho client này
-            await websocket.send(json.dumps({"ban": ban_id, "test_message": "connected"}))
-            print(f"✅ Đã gửi tin nhắn xác nhận đến Bàn {ban_id}.")
-        else:
-            print(f"❌ Nhận tin nhắn không hợp lệ: {initial_message}. Đóng kết nối.")
-            await websocket.close(code=1003, reason="Invalid message format")
-            return
-
-        # Vòng lặp để nhận các tin nhắn khác từ client
-        async for message in websocket:
-            print(f"➡️ Nhận tin nhắn từ Bàn {ban_id}: {message}")
-            # Ở đây bạn có thể thêm logic xử lý tin nhắn trong tương lai
-            
-    except asyncio.TimeoutError:
-        print(f"❌ Lỗi: Không nhận được tin nhắn xác định bàn trong 10 giây. Đóng kết nối.")
-    except websockets.exceptions.ConnectionClosed as e:
-        print(f"--- Client Bàn {ban_id} đã ngắt kết nối. Mã lỗi: {e.code}, Lý do: {e.reason} ---")
-    except json.JSONDecodeError:
-        print("❌ Lỗi: Không thể phân tích cú pháp tin nhắn JSON. Đóng kết nối.")
-    except Exception as e:
-        print(f"❌ Lỗi không xác định: {e}")
-    finally:
-        # Xóa client khi ngắt kết nối
-        if ban_id in connected_clients:
-            del connected_clients[ban_id]
-            print(f"--- Đã xóa Bàn {ban_id} khỏi danh sách kết nối ---")
-
-async def send_expired_message(ban_id):
-    """
-    Gửi tin nhắn hết hạn tới một client cụ thể.
-    """
-    if ban_id in connected_clients:
-        websocket = connected_clients[ban_id]
-        try:
-            message = json.dumps({"action": "expired"})
-            await websocket.send(message)
-            print(f"📢 Đã gửi tin nhắn hết hạn đến Bàn {ban_id}.")
-            return True
-        except websockets.exceptions.ConnectionClosed as e:
-            print(f"❌ Lỗi: Không thể gửi tin nhắn. Kết nối đến Bàn {ban_id} đã đóng. Mã lỗi: {e.code}")
-            return False
-    else:
-        print(f"⚠️ Không tìm thấy kết nối cho Bàn {ban_id}.")
-        return False
-
-async def simulate_expiry():
-    """
-    Hàm mô phỏng việc mã QR hết hạn cho bàn 10.
-    """
-    # Chờ 30 giây để mô phỏng một khoảng thời gian trước khi hết hạn
-    await asyncio.sleep(30)
-    print("\n--- MÔ PHỎNG: Đã hết thời gian sử dụng mã QR cho Bàn 10 ---")
-    await send_expired_message(10)
-
-async def main():
-    """
-    Khởi động server WebSocket và một hàm mô phỏng.
-    """
-    # Khởi động server
-    server_task = websockets.serve(handler, "0.0.0.0", 8765)
-    
-    # Khởi động hàm mô phỏng hết hạn
-    expiry_task = simulate_expiry()
-
-    print("🚀 Server WebSocket đang chạy tại ws://0.0.0.0:8765...")
-    print("Hãy chạy file redirect_test.html trên tablet và chọn số bàn.")
-    print("Mô phỏng: Tin nhắn hết hạn sẽ được gửi đến Bàn 10 sau 30 giây.")
-    
-    # Chạy cả hai tác vụ đồng thời
-    await asyncio.gather(server_task, expiry_task)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    function clearPage() {
+      document.getElementById('order-iframe').src = "";
+      showScreen('select-table-screen');
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+    }
+  </script>
+</body>
+</html>
