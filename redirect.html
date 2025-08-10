@@ -218,4 +218,45 @@
       showScreen('iframe-screen');
     }
 
-    function clearPage
+    function clearPage() {
+      const iframeScreen = document.getElementById('iframe-screen');
+      if (iframeScreen) {
+        iframeScreen.innerHTML = '';
+      }
+      showScreen('start-screen');
+    }
+
+    function showError(message) {
+      const existingError = document.querySelector('.error-message');
+      if (existingError) existingError.remove();
+      
+      const errorMessage = document.createElement('div');
+      errorMessage.className = 'error-message';
+      errorMessage.textContent = message;
+      document.getElementById('main-container').appendChild(errorMessage);
+      setTimeout(() => errorMessage.remove(), 5000);
+    }
+  </script>
+
+  <!-- Badge debug ở góc dưới phải -->
+  <script>
+    (function(){
+      const badge = document.createElement('div');
+      badge.id = 'debug-badge';
+      badge.style.cssText = "position:fixed;right:10px;bottom:10px;background:#111;color:#fff;font:12px/1.3 system-ui;padding:8px 10px;border-radius:10px;opacity:.9;z-index:9999";
+      badge.textContent = "Firebase: chưa gắn listener";
+      document.body.appendChild(badge);
+
+      setInterval(() => {
+        if (!window.selectedBan) { badge.textContent = "Chưa chọn bàn"; return; }
+        badge.textContent = `Đang nghe: signals/${window.selectedBan} • lastTs=${window.__lastTs||0}`;
+      }, 800);
+
+      window.__updateLastTs = function(ts){
+        window.__lastTs = ts;
+        badge.textContent = `Đang nghe: signals/${window.selectedBan} • lastTs=${window.__lastTs}`;
+      }
+    })();
+  </script>
+</body>
+</html>
