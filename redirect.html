@@ -30,18 +30,18 @@
       height: 100%;
       box-sizing: border-box;
       background: white;
-      display: flex;
+      display: none; /* Ban đầu tất cả màn hình đều ẩn */
       flex-direction: column;
       justify-content: center;
       align-items: center;
       gap: 20px;
     }
     #select-table-screen {
+      display: flex; /* Màn hình này hiển thị mặc định */
       justify-content: flex-start;
       padding-top: 20px;
     }
     #confirmation-screen {
-      display: none;
       gap: 30px;
     }
     .button-container {
@@ -73,12 +73,36 @@
       border: none;
       width: 100%;
       height: 100%;
-      display: none;
     }
     #ban-display {
       font-size: 50px;
       font-weight: bold;
       color: #333;
+    }
+    /* CSS cho hộp thoại thông báo tùy chỉnh */
+    #custom-alert-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    #custom-alert-box {
+      background-color: white;
+      padding: 20px 30px;
+      border-radius: 10px;
+      text-align: center;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      max-width: 80%;
+    }
+    #custom-alert-message {
+      font-size: 20px;
+      margin-bottom: 15px;
     }
   </style>
 </head>
@@ -112,18 +136,41 @@
     <button id="confirm-button">🍽️ START</button>
   </div>
   
-  <iframe id="order-iframe" src=""></iframe>
+  <iframe id="order-iframe" class="screen" src=""></iframe>
+
+  <!-- Hộp thoại thông báo tùy chỉnh -->
+  <div id="custom-alert-container">
+    <div id="custom-alert-box">
+      <p id="custom-alert-message"></p>
+    </div>
+  </div>
 
   <script>
     let selectedBan;
     const WS_SERVER_URL = "ws://localhost:8765";
     let ws = null;
 
+    // Hàm hiển thị màn hình cụ thể
+    function showScreen(screenId) {
+      document.querySelectorAll('.screen').forEach(screen => {
+        screen.style.display = 'none';
+      });
+      document.getElementById(screenId).style.display = 'flex';
+    }
+
+    // Hàm hiển thị hộp thoại thông báo
+    function showAlert(message) {
+      document.getElementById('custom-alert-message').textContent = message;
+      document.getElementById('custom-alert-container').style.display = 'flex';
+      setTimeout(() => {
+        document.getElementById('custom-alert-container').style.display = 'none';
+      }, 2000);
+    }
+
     function showConfirmation(ban) {
       selectedBan = ban;
       document.getElementById('ban-display').textContent = 'Bàn ' + ban;
-      document.getElementById('select-table-screen').style.display = 'none';
-      document.getElementById('confirmation-screen').style.display = 'flex';
+      showScreen('confirmation-screen');
       connectWebSocket();
     }
 
@@ -133,14 +180,13 @@
         .then(data => {
           const url = data[selectedBan];
           if (url) {
-            document.getElementById('confirmation-screen').style.display = 'none';
-            document.getElementById('order-iframe').style.display = 'block';
             document.getElementById('order-iframe').src = url;
+            showScreen('order-iframe');
           } else {
-            alert('Không tìm thấy link cho bàn ' + selectedBan);
+            showAlert('Không tìm thấy link cho bàn ' + selectedBan);
           }
         })
-        .catch(err => alert('Lỗi tải dữ liệu: ' + err));
+        .catch(err => showAlert('Lỗi tải dữ liệu: ' + err));
     };
 
     function connectWebSocket() {
@@ -161,7 +207,7 @@
           const message = JSON.parse(event.data);
           if (message.ban == selectedBan && message.status === "expired") {
             console.log(`Table ${selectedBan} has expired. Clearing page.`);
-            alert(`Bàn ${selectedBan} đã hết hạn. Đang quay lại màn hình chính...`);
+            showAlert(`Bàn ${selectedBan} đã hết hạn. Đang quay lại màn hình chính...`);
             clearPage();
           }
         } catch (e) {
@@ -180,9 +226,8 @@
     }
     
     function clearPage() {
-      document.getElementById('order-iframe').style.display = 'none';
       document.getElementById('order-iframe').src = "";
-      document.getElementById('select-table-screen').style.display = 'flex';
+      showScreen('select-table-screen');
     }
   </script>
 </body>
