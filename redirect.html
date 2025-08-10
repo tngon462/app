@@ -7,10 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   
-  <!-- Thẻ biểu tượng cho iOS -->
   <link rel="apple-touch-icon" href="180x180.png">
-  
-  <!-- Thẻ manifest cho Android, đảm bảo đường dẫn chính xác -->
   <link rel="manifest" href="manifest.json">
 
   <style>
@@ -30,14 +27,14 @@
       height: 100%;
       box-sizing: border-box;
       background: white;
-      display: none; /* Ban đầu tất cả màn hình đều ẩn */
+      display: none;
       flex-direction: column;
       justify-content: center;
       align-items: center;
       gap: 20px;
     }
     #select-table-screen {
-      display: flex; /* Màn hình này hiển thị mặc định */
+      display: flex;
       justify-content: flex-start;
       padding-top: 20px;
     }
@@ -79,7 +76,6 @@
       font-weight: bold;
       color: #333;
     }
-    /* CSS cho hộp thoại thông báo tùy chỉnh */
     #custom-alert-container {
       position: fixed;
       top: 0;
@@ -104,21 +100,21 @@
       font-size: 20px;
       margin-bottom: 15px;
     }
-    /* CSS cho hộp thoại thông báo trạng thái */
-    #status-message-box {
+    /* Hộp thoại log gỡ lỗi mới */
+    #debug-log {
       position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background-color: #4CAF50;
+      bottom: 10px;
+      right: 10px;
+      width: 300px;
+      height: 200px;
+      background: rgba(0, 0, 0, 0.7);
       color: white;
-      padding: 10px 20px;
+      font-size: 12px;
+      padding: 10px;
+      overflow-y: scroll;
       border-radius: 5px;
-      font-size: 16px;
-      display: none;
-      z-index: 1001;
-      opacity: 0;
-      transition: opacity 0.5s ease-in-out;
+      display: none; /* Ban đầu ẩn */
+      z-index: 999;
     }
   </style>
 </head>
@@ -154,50 +150,48 @@
   
   <iframe id="order-iframe" class="screen" src=""></iframe>
 
-  <!-- Hộp thoại thông báo tùy chỉnh -->
   <div id="custom-alert-container">
     <div id="custom-alert-box">
       <p id="custom-alert-message"></p>
     </div>
   </div>
-
-  <!-- Hộp thoại thông báo trạng thái -->
-  <div id="status-message-box"></div>
+  
+  <div id="debug-log"></div>
 
   <script>
     let selectedBan;
     const WS_SERVER_URL = "ws://localhost:8765";
     let ws = null;
+    const debugLog = document.getElementById('debug-log');
 
-    // Hàm hiển thị màn hình cụ thể
+    // Hàm ghi log vào cả console và hộp thoại trên màn hình
+    function log(message) {
+      console.log(message);
+      const p = document.createElement('p');
+      p.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      debugLog.appendChild(p);
+      debugLog.scrollTop = debugLog.scrollHeight;
+    }
+
     function showScreen(screenId) {
       document.querySelectorAll('.screen').forEach(screen => {
         screen.style.display = 'none';
       });
       document.getElementById(screenId).style.display = 'flex';
+      // Hiển thị hộp log khi không ở màn hình chọn bàn
+      if (screenId !== 'select-table-screen') {
+        debugLog.style.display = 'block';
+      } else {
+        debugLog.style.display = 'none';
+      }
     }
 
-    // Hàm hiển thị hộp thoại thông báo
     function showAlert(message) {
       document.getElementById('custom-alert-message').textContent = message;
       document.getElementById('custom-alert-container').style.display = 'flex';
       setTimeout(() => {
         document.getElementById('custom-alert-container').style.display = 'none';
       }, 2000);
-    }
-    
-    // Hàm hiển thị thông báo trạng thái
-    function showStatusMessage(message, duration = 3000) {
-      const statusBox = document.getElementById('status-message-box');
-      statusBox.textContent = message;
-      statusBox.style.display = 'block';
-      statusBox.style.opacity = 1;
-      setTimeout(() => {
-        statusBox.style.opacity = 0;
-        setTimeout(() => {
-          statusBox.style.display = 'none';
-        }, 500);
-      }, duration);
     }
 
     function showConfirmation(ban) {
@@ -224,50 +218,60 @@
 
     function connectWebSocket() {
       if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        log("Đã có kết nối hoặc đang kết nối, không tạo mới.");
         return;
       }
 
-      console.log(`Connecting to WebSocket server at ${WS_SERVER_URL}...`);
+      log(`Đang kết nối đến WebSocket server tại ${WS_SERVER_URL}...`);
       ws = new WebSocket(WS_SERVER_URL);
 
       ws.onopen = () => {
-        console.log("Connected to WebSocket server.");
-        showStatusMessage("Đã kết nối với server WebSocket.");
+        log("Thành công! Đã kết nối với server WebSocket.");
+        // Gửi một tin nhắn để server biết client nào vừa kết nối
+        ws.send(JSON.stringify({ "action": "client_connected", "ban": selectedBan }));
       };
 
       ws.onmessage = (event) => {
-        console.log("Message from server: ", event.data);
+        log(`Nhận tin nhắn từ server: ${event.data}`);
         try {
           const message = JSON.parse(event.data);
-          // Logic xử lý tin nhắn thử nghiệm
+          // Kiểm tra tin nhắn thử nghiệm
           if (message.ban == selectedBan && message.test_message) {
-            showStatusMessage(`Đã nhận tin nhắn thử nghiệm: ${message.test_message}`);
+            showAlert(`Đã nhận tin nhắn thử nghiệm: ${message.test_message}`);
+            log("Đã hiển thị tin nhắn thử nghiệm.");
           }
-          // Logic xử lý tin nhắn hết hạn
+          // Xử lý tin nhắn hết hạn
           if (message.ban == selectedBan && message.status === "expired") {
-            console.log(`Table ${selectedBan} has expired. Clearing page.`);
-            showAlert(`Bàn ${selectedBan} đã hết hạn. Đang quay lại màn hình chính...`);
+            log(`Bàn ${selectedBan} đã hết hạn. Đang quay lại màn hình chính.`);
+            showAlert(`Bàn ${selectedBan} đã hết hạn.`);
             clearPage();
           }
         } catch (e) {
+          log("Lỗi: Không thể phân tích cú pháp tin nhắn JSON.");
           console.error("Failed to parse message:", e);
         }
       };
 
-      ws.onclose = () => {
-        console.log("Disconnected from WebSocket server. Attempting to reconnect in 3 seconds...");
-        showStatusMessage("Mất kết nối với server. Đang thử kết nối lại...");
+      ws.onclose = (event) => {
+        log(`Mất kết nối với server. Mã lỗi: ${event.code}. Lý do: ${event.reason}. Đang thử kết nối lại sau 3 giây...`);
+        showAlert("Mất kết nối với server. Đang thử kết nối lại...");
         setTimeout(connectWebSocket, 3000);
       };
 
       ws.onerror = (error) => {
-        console.error("WebSocket error occurred, attempting to reconnect...", error);
+        log("Lỗi WebSocket nghiêm trọng, đang thử kết nối lại...");
+        console.error("WebSocket error occurred:", error);
       };
     }
     
     function clearPage() {
       document.getElementById('order-iframe').src = "";
       showScreen('select-table-screen');
+      // Đóng kết nối WebSocket cũ khi quay lại màn hình chính
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
     }
   </script>
 </body>
