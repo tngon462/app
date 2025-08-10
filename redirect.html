@@ -11,10 +11,15 @@
   <link rel="apple-touch-icon" href="https://placehold.co/192x192/da251d/fff?text=TN"/>
   <meta name="apple-mobile-web-app-title" content="T-NGON"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="mobile-web-app-capable" content="yes"> <!-- Thêm thẻ mới để thay thế thẻ đã lỗi thời -->
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="theme-color" content="#da251d">
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Firebase SDK (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
   <style>
     body {
       font-family: 'Inter', sans-serif;
@@ -32,102 +37,32 @@
       padding: 1rem;
       box-sizing: border-box;
     }
-    .screen {
-        display: none;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        width: 100%;
-        height: 100%;
-    }
-    #table-selection-screen {
-        display: flex;
-    }
-    .button-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1.5rem;
-      max-width: 600px;
-      margin: 2rem auto 0 auto;
-    }
+    .screen { display: none; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; }
+    #table-selection-screen { display: flex; }
+    .button-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; max-width: 600px; margin: 2rem auto 0 auto; }
     .table-button {
-      font-size: 2rem;
-      font-weight: bold;
-      padding: 2rem 1rem;
-      background-color: #007aff;
-      color: white;
-      border: 2px solid #007aff;
-      border-radius: 0.75rem;
+      font-size: 2rem; font-weight: bold; padding: 2rem 1rem;
+      background-color: #007aff; color: white; border: 2px solid #007aff; border-radius: 0.75rem;
       box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-      cursor: pointer;
-      transition: all 0.3s ease;
+      cursor: pointer; transition: all 0.3s ease;
     }
-    .table-button:hover {
-      background-color: #005fbc;
-      border-color: #005fbc;
-      transform: translateY(-2px);
-    }
+    .table-button:hover { background-color: #005fbc; border-color: #005fbc; transform: translateY(-2px); }
     .start-button {
-      font-size: 2.5rem;
-      padding: 1.25rem 2.5rem;
-      background-color: #007aff;
-      color: white;
-      border: none;
-      border-radius: 0.75rem;
+      font-size: 2.5rem; padding: 1.25rem 2.5rem; background-color: #007aff; color: white; border: none; border-radius: 0.75rem;
       box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-      cursor: pointer;
-      transition: all 0.3s ease;
+      cursor: pointer; transition: all 0.3s ease;
     }
-    .start-button:hover {
-      background-color: #005fbc;
-      transform: translateY(-2px);
-    }
-    .start-button:active {
-      transform: translateY(0);
-      box-shadow: none;
-    }
-    .iframe-container {
-      width: 100%;
-      height: 100%;
-      border: none;
-      overflow: hidden;
-    }
-    .loading-indicator {
-        font-size: 1.5rem;
-        color: #6b7280;
-        margin-top: 1rem;
-    }
-    .error-message {
-        color: #ef4444;
-        font-size: 1.2rem;
-        margin-top: 1rem;
-    }
+    .start-button:hover { background-color: #005fbc; transform: translateY(-2px); }
+    .start-button:active { transform: translateY(0); box-shadow: none; }
+    .iframe-container { width: 100%; height: 100%; border: none; overflow: hidden; }
+    .loading-indicator { font-size: 1.5rem; color: #6b7280; margin-top: 1rem; }
+    .error-message { color: #ef4444; font-size: 1.2rem; margin-top: 1rem; }
     @media (max-width: 640px) {
-      .button-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 1rem;
-      }
-      .table-button {
-        font-size: 1.5rem;
-        padding: 1.5rem 0.5rem;
-      }
-      .start-button {
-        font-size: 2rem;
-        padding: 1rem 2rem;
-      }
+      .button-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+      .table-button { font-size: 1.5rem; padding: 1.5rem 0.5rem; }
+      .start-button { font-size: 2rem; padding: 1rem 2rem; }
     }
-    .return-button {
-      position: absolute;
-      bottom: 10px;
-      left: 10px;
-      width: 24px;
-      height: 24px;
-      padding: 0;
-      background-color: transparent;
-      border: none;
-      cursor: pointer;
-      z-index: 100;
-    }
+    .return-button { position: absolute; bottom: 10px; left: 10px; width: 24px; height: 24px; padding: 0; background-color: transparent; border: none; cursor: pointer; z-index: 100; }
   </style>
 </head>
 <body class="bg-gray-100">
@@ -160,54 +95,55 @@
     </div>
   </div>
 
+  <!-- Firebase Client Logic -->
   <script>
-    // Cập nhật đường dẫn file links.json thành đường dẫn tuyệt đối trên GitHub
+    const firebaseConfig = {
+      apiKey: "AIzaSyB4u2G41xdGkgBC0KltleRpcg5Lwru2RIU",
+      authDomain: "tngon-b37d6.firebaseapp.com",
+      databaseURL: "https://tngon-b37d6-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "tngon-b37d6",
+      storageBucket: "tngon-b37d6.firebasestorage.app",
+      messagingSenderId: "580319242104",
+      appId: "1:580319242104:web:6922e4327bdc8286c30a8d",
+      measurementId: "G-LHEH8ZC6SL"
+    };
+
+    let fbApp = null, rtdb = null;
+    let lastTs = 0;
+    function connectFirebase() {
+      try {
+        if (!fbApp) fbApp = firebase.initializeApp(firebaseConfig);
+        if (!rtdb) rtdb = firebase.database();
+
+        let currentBan = null, currentRef = null;
+        setInterval(() => {
+          if (!window.selectedBan) return;
+          if (currentBan === window.selectedBan) return;
+
+          if (currentRef) currentRef.off();
+          currentBan = window.selectedBan;
+          currentRef = rtdb.ref('signals/' + currentBan);
+          currentRef.on('value', (snap) => {
+            const v = snap.val();
+            if (!v) return;
+            const ts = v.ts || 0;
+            if (v.status === 'expired' && ts > lastTs) {
+              lastTs = ts;
+              showError(`Bàn ${currentBan} đã hết hạn. Đang quay lại màn hình chính...`);
+              setTimeout(clearPage, 1500);
+            }
+          });
+        }, 800);
+      } catch (e) {
+        console.error('Firebase error:', e);
+      }
+    }
+    document.addEventListener('DOMContentLoaded', connectFirebase);
+  </script>
+
+  <script>
     const LINKS_JSON_URL = "https://tngon462.github.io/QR/links.json";
     let selectedBan = null;
-    
-    // --- WebSocket Client Logic ---
-    const WS_SERVER_URL = "ws://localhost:8765";
-    let ws = null;
-
-    function connectWebSocket() {
-        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-            return;
-        }
-
-        console.log(`Connecting to WebSocket server at ${WS_SERVER_URL}...`);
-        ws = new WebSocket(WS_SERVER_URL);
-
-        ws.onopen = () => {
-            console.log("Connected to WebSocket server.");
-        };
-
-        ws.onmessage = (event) => {
-            console.log("Message from server: ", event.data);
-            try {
-                const message = JSON.parse(event.data);
-                if (message.ban == selectedBan && message.status === "expired") {
-                    console.log(`Table ${selectedBan} has expired. Clearing page.`);
-                    showError(`Bàn ${selectedBan} đã hết hạn. Đang quay lại màn hình chính...`);
-                    setTimeout(clearPage, 2000);
-                }
-            } catch (e) {
-                console.error("Failed to parse message:", e);
-            }
-        };
-
-        ws.onclose = () => {
-            console.log("Disconnected from WebSocket server. Attempting to reconnect in 3 seconds...");
-            setTimeout(connectWebSocket, 3000);
-        };
-
-        ws.onerror = (error) => {
-            console.error("WebSocket error occurred, attempting to reconnect...", error);
-        };
-    }
-    
-    document.addEventListener('DOMContentLoaded', connectWebSocket);
-
-    // --- End WebSocket Client Logic ---
 
     function showScreen(screenId) {
       document.querySelectorAll('.screen').forEach(screen => {
