@@ -95,7 +95,7 @@
     </div>
   </div>
 
-  <!-- Firebase Client Logic -->
+  <!-- Firebase Client Logic (có log + cập nhật badge) -->
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyB4u2G41xdGkgBC0KltleRpcg5Lwru2RIU",
@@ -110,12 +110,14 @@
 
     let fbApp = null, rtdb = null;
     let lastTs = 0;
+
     function connectFirebase() {
       try {
         if (!fbApp) fbApp = firebase.initializeApp(firebaseConfig);
         if (!rtdb) rtdb = firebase.database();
 
         let currentBan = null, currentRef = null;
+
         setInterval(() => {
           if (!window.selectedBan) return;
           if (currentBan === window.selectedBan) return;
@@ -123,16 +125,25 @@
           if (currentRef) currentRef.off();
           currentBan = window.selectedBan;
           currentRef = rtdb.ref('signals/' + currentBan);
-          currentRef.on('value', (snap) => {
-            const v = snap.val();
-            if (!v) return;
-            const ts = v.ts || 0;
-            if (v.status === 'expired' && ts > lastTs) {
-              lastTs = ts;
-              showError(`Bàn ${currentBan} đã hết hạn. Đang quay lại màn hình chính...`);
-              setTimeout(clearPage, 1500);
+
+          console.log('[RTDB] attach listener -> signals/' + currentBan);
+          currentRef.on('value',
+            (snap) => {
+              const v = snap.val();
+              console.log('[RTDB] value:', v);
+              if (!v) return;
+              const ts = v.ts || 0;
+              if (v.status === 'expired' && ts > lastTs) {
+                lastTs = ts;
+                if (typeof window.__updateLastTs === 'function') window.__updateLastTs(ts);
+                showError(`Bàn ${currentBan} đã hết hạn. Đang quay lại màn hình chính...`);
+                setTimeout(clearPage, 1500);
+              }
+            },
+            (err) => {
+              console.error('[RTDB] error', err && err.code, err && err.message);
             }
-          });
+          );
         }, 800);
       } catch (e) {
         console.error('Firebase error:', e);
@@ -207,24 +218,4 @@
       showScreen('iframe-screen');
     }
 
-    function clearPage() {
-      const iframeScreen = document.getElementById('iframe-screen');
-      if (iframeScreen) {
-        iframeScreen.innerHTML = '';
-      }
-      showScreen('start-screen');
-    }
-
-    function showError(message) {
-      const existingError = document.querySelector('.error-message');
-      if (existingError) existingError.remove();
-      
-      const errorMessage = document.createElement('div');
-      errorMessage.className = 'error-message';
-      errorMessage.textContent = message;
-      document.getElementById('main-container').appendChild(errorMessage);
-      setTimeout(() => errorMessage.remove(), 5000);
-    }
-  </script>
-</body>
-</html>
+    function clearPage
