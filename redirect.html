@@ -267,12 +267,11 @@
     const SLIDE_DEFAULT_DURATION_SEC = 8; // mỗi slide mặc định
 
     let slides = [];
-    let cumEdges = [];   // các mốc biên tích lũy (ms) trong 1 chu kỳ
+    let cumEdges = [];   // các mốc biên tích lũy (ms) trong 1 chu kỳ (điểm KẾT THÚC mỗi slide)
     let periodMs = 0;    // tổng chu kỳ
     let currentIndex = -1;
     let startTs = null;  // mốc lịch tuyệt đối (server)
     let nextTimer = null;
-    let watchdog = null;
     let manifestChecked = false;
     let slidesAvailable = false;
 
@@ -331,30 +330,34 @@
       }
     }
 
-    // Tính chỉ số slide theo lịch tuyệt đối
+    // Trả về idx, offset trong slide, và thông tin để tính biên theo mốc tuyệt đối
     function indexAt(nowMs){
       if (!slides.length || !periodMs || startTs==null) {
         const d0 = msFromDur(slides[0]?.duration || SLIDE_DEFAULT_DURATION_SEC);
-        return {idx:0, offset:0, remain:periodMs||0, slideDur:d0};
+        return {idx:0, offset:0, slideDur:d0, baseCycleStart: nowMs};
       }
-      const elapsed = ((nowMs - startTs) % periodMs + periodMs) % periodMs; // [0, period)
+      const elapsedAll = nowMs - startTs;
+      const cycles = Math.floor(elapsedAll / periodMs);
+      const baseCycleStart = startTs + cycles * periodMs; // mốc đầu chu kỳ hiện tại (tuyệt đối)
+      const elapsed = ((elapsedAll % periodMs) + periodMs) % periodMs; // [0, period)
+
       let idx = cumEdges.findIndex(edge => elapsed < edge);
       if (idx < 0) idx = slides.length - 1;
+
       const slideDur = msFromDur(slides[idx].duration);
       const startOfThis = cumEdges[idx] - slideDur;
-      const offset = elapsed - startOfThis;       // đã trôi trong slide
-      const remain = slideDur - offset;           // còn lại tới biên
-      return { idx, offset, remain, slideDur };
+      const offset = elapsed - startOfThis; // đã trôi trong slide
+      return { idx, offset, slideDur, baseCycleStart };
     }
 
-    // ===== RENDER + HẸN ĐÚNG BIÊN (có rAF khi sát biên) =====
-    function renderAndArmToNextEdge(){
+    // ===== RENDER + HẸN ĐÚNG BIÊN THEO GIỜ SERVER (mỗi vòng tự bù drift) =====
+    function renderAndSchedule(){
       if (!slides.length || !periodMs || startTs==null) return;
 
       const now = nowServerMs();
-      const { idx, offset, remain, slideDur } = indexAt(now);
+      const { idx, offset, slideDur, baseCycleStart } = indexAt(now);
 
-      // Nếu đang hiển thị sai slide => render lại ngay (snap)
+      // render nếu đổi slide
       if (idx !== currentIndex){
         currentIndex = idx;
         const it = slides[idx];
@@ -362,41 +365,14 @@
         else showImage(it.src);
       }
 
-      // Hẹn giờ đúng biên tiếp theo (tuyệt đối theo giờ server)
-      const nextEdgeAbs = now + remain;
-      const left0 = nextEdgeAbs - nowServerMs();
+      // Biên kế tiếp tuyệt đối: cuối slide hiện tại trong chu kỳ hiện tại
+      const nextEdgeAbs = baseCycleStart + cumEdges[idx]; // mốc server tuyệt đối
+      let wait = nextEdgeAbs - nowServerMs();             // tính theo đồng hồ server (bù drift)
+      if (!isFinite(wait) || wait < 0) wait = 0;
+      if (wait > 60000) wait = 60000;                     // bảo vệ
 
-      const schedule = () => {
-        const left = nextEdgeAbs - nowServerMs();
-        if (left <= 8) {
-          if (nextTimer) clearTimeout(nextTimer);
-          requestAnimationFrame(() => renderAndArmToNextEdge());
-        } else if (left <= 180) {
-          if (nextTimer) clearTimeout(nextTimer);
-          nextTimer = setTimeout(() => requestAnimationFrame(renderAndArmToNextEdge), left - 8);
-        } else {
-          if (nextTimer) clearTimeout(nextTimer);
-          nextTimer = setTimeout(renderAndArmToNextEdge, Math.min(left - 120, 60000));
-        }
-      };
-      schedule();
-    }
-
-    // ===== Watchdog 500ms: kéo về đúng slide nếu timer bị lệch/đóng băng =====
-    function startSyncWatchdog(){
-      if (watchdog) clearInterval(watchdog);
-      watchdog = setInterval(() => {
-        if (!slides.length || !periodMs || startTs==null) return;
-        const { idx, offset, remain } = indexAt(nowServerMs());
-        const wrongSlide = (idx !== currentIndex);
-        const dur = msFromDur(slides[idx]?.duration || SLIDE_DEFAULT_DURATION_SEC);
-        const passedEdge = remain < -20 || offset < -20 || offset > (dur + 20);
-        if (wrongSlide || passedEdge) {
-          if (nextTimer) clearTimeout(nextTimer);
-          currentIndex = -1; // buộc render lại
-          renderAndArmToNextEdge();
-        }
-      }, 500);
+      if (nextTimer) clearTimeout(nextTimer);
+      nextTimer = setTimeout(renderAndSchedule, wait);
     }
 
     async function loadSlidesFromManifest(){
@@ -503,11 +479,10 @@
       if (ok) {
         if (startTs == null) { // có slide thì mới cần mốc
           await ensureStartTs(); // mốc lịch tuyệt đối
-          currentIndex = -1;
-          if (nextTimer) clearTimeout(nextTimer);
-          renderAndArmToNextEdge();
-          startSyncWatchdog(); // ⭐ quan trọng: watchdog kéo lệch về đúng
         }
+        currentIndex = -1;
+        if (nextTimer) clearTimeout(nextTimer);
+        renderAndSchedule(); // ⭐ mỗi vòng đều neo theo giờ server
         showScreen("start-slideshow-screen");
       } else {
         showScreen("start-screen");
@@ -534,8 +509,7 @@
             if (startTs == null) await ensureStartTs();
             currentIndex = -1;
             if (nextTimer) clearTimeout(nextTimer);
-            renderAndArmToNextEdge();
-            startSyncWatchdog(); // ⭐ bật watchdog cả khi auto bật
+            renderAndSchedule();
             setSlideStatus(""); showGlobalStatus("");
             showScreen("start-slideshow-screen");
           } else {
