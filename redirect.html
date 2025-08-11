@@ -49,14 +49,7 @@
     .slide-stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#ffffff; }
     .slide-stage img, .slide-stage video { max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; background:#ffffff; }
     .tap-overlay { position:absolute; inset:0; z-index:10; cursor:pointer; }
-
-    /* Status: chỉ hiện khi có lỗi/cảnh báo */
-    .slide-status {
-      position:absolute; top:10px; right:10px; z-index:20;
-      background: rgba(220, 38, 38, 0.9); color:#fff;
-      padding: 6px 10px; border-radius: 6px; font-size: 12px;
-      display:none; max-width: 70vw; line-height: 1.3;
-    }
+    .slide-status { position:absolute; top:10px; right:10px; z-index:20; background: rgba(220, 38, 38, 0.9); color:#fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; display:none; max-width: 70vw; line-height: 1.3; }
     #global-status { display:none; font-size:12px; color:#ef4444; margin-top:8px; }
   </style>
 </head>
@@ -112,11 +105,19 @@
       measurementId: "G-LHEH8ZC6SL"
     };
     let fbApp = null, rtdb = null, currentRef = null, currentBanListening = null, lastTs = 0;
-    let pollInitTs = null; // mốc lần poll đầu để bỏ qua trạng thái cũ
+    let pollInitTs = null; // mốc poll đầu để bỏ qua trạng thái cũ
+
+    // Đồng hồ server để đồng bộ tất cả máy
+    let serverOffsetMs = 0;
+    function nowServerMs(){ return Date.now() + (Number(serverOffsetMs) || 0); }
 
     function connectFirebase() {
       if (!fbApp) fbApp = firebase.initializeApp(firebaseConfig);
       if (!rtdb) rtdb = firebase.database();
+      // Lấy chênh lệch giờ server
+      rtdb.ref(".info/serverTimeOffset").on("value", snap => {
+        serverOffsetMs = Number(snap.val() || 0);
+      });
     }
 
     // BỎ QUA SNAPSHOT ĐẦU: tránh bị đá về CTA do trạng thái cũ
@@ -144,7 +145,7 @@
 
         if (v.status === "expired" && ts > lastTs && ts > firstTs) {
           lastTs = ts;
-          clearPage(); // quay về CTA như yêu cầu
+          clearPage(); // quay về CTA
         }
       });
     }
@@ -161,7 +162,7 @@
 
         const ts = v.ts || 0;
 
-        if (pollInitTs === null) { // lần poll đầu: chỉ ghi nhận mốc, không xử lý
+        if (pollInitTs === null) { // lần poll đầu: ghi mốc, không xử lý
           pollInitTs = ts;
           if (ts > lastTs) lastTs = ts;
           return;
@@ -256,9 +257,9 @@
         }
       }catch(_){}
     }
-    setInterval(backfillSelectedBanFromIframe, 1000);
+    setInterval(backfillSelectedBanFromIframe, 3000);
 
-    /* ----------------- SLIDESHOW (manifest only) ----------------- */
+    /* ----------------- SLIDESHOW (manifest only, đồng bộ) ----------------- */
     const GH_OWNER  = "tngon462";
     const GH_REPO   = "slide";
     const GH_BRANCH = "main";
@@ -269,7 +270,7 @@
     let cumDurations = [];
     let totalDuration = 0;
     let currentIndex = -1;
-    let cycleStartTs = null; // neo thời gian local (đồng bộ tương đối)
+    let cycleStartTs = null; // mốc chung (đọc từ Firebase)
     let syncTimer = null;
     let manifestChecked = false; // đã kiểm tra manifest ít nhất 1 lần
     let slidesAvailable = false; // có slide hợp lệ
@@ -328,7 +329,7 @@
     }
     function renderByClock(){
       if (!slides.length) return;
-      const { idx, offsetMs } = computeIndexAndOffset(Date.now());
+      const { idx, offsetMs } = computeIndexAndOffset(nowServerMs()); // DÙNG ĐỒNG HỒ SERVER
       if (idx !== currentIndex){
         currentIndex = idx;
         const it = slides[idx];
@@ -400,6 +401,32 @@
       }
     }
 
+    // Lấy/đặt mốc chu kỳ chung trên Firebase để đồng bộ mọi máy
+    async function ensureCycleStart(){
+      try {
+        if (!rtdb) { cycleStartTs = nowServerMs(); return; }
+        const ref = rtdb.ref("slideshow/cycleStartTs");
+
+        // nghe cập nhật mốc từ server
+        ref.on("value", snap => {
+          const val = snap.val();
+          if (typeof val === "number" && val > 0) cycleStartTs = val;
+        });
+
+        const snap = await ref.get();
+        if (snap.exists()) {
+          const t = snap.val();
+          if (typeof t === "number" && t > 0) { cycleStartTs = t; return; }
+        }
+        // chưa có hoặc lỗi → set mới
+        const t = nowServerMs();
+        await ref.set(t);
+        cycleStartTs = t;
+      } catch(_){
+        cycleStartTs = nowServerMs(); // fallback local nếu lỗi mạng
+      }
+    }
+
     async function initSlidesThenMaybeShow(){
       // Kiểm tra/ tải manifest (retry 1 lần nếu lỗi)
       let ok = false;
@@ -417,7 +444,7 @@
 
       if (ok) {
         if (cycleStartTs == null) {
-          cycleStartTs = Date.now();
+          await ensureCycleStart();  // MỐC CHUNG
           currentIndex = -1;
           renderByClock();
           startLoop();
@@ -446,7 +473,7 @@
             if (ok) { slidesAvailable = true; }
           }
           if (slidesAvailable) {
-            if (cycleStartTs == null) { cycleStartTs = Date.now(); startLoop(); }
+            if (cycleStartTs == null) { await ensureCycleStart(); startLoop(); }
             setSlideStatus(""); showGlobalStatus("");
             showScreen("start-slideshow-screen");
           } else {
@@ -472,7 +499,7 @@
         btn.textContent = "Bàn " + i;
         btn.addEventListener("click", () => {
           selectedBan = i;
-          pollInitTs = null; // reset mốc poll khi đổi bàn
+          pollInitTs = null;
           document.getElementById("table-info").textContent = `Bạn đang ở Bàn ${selectedBan}`;
           attachListenerFor(selectedBan);
           initSlidesThenMaybeShow();
