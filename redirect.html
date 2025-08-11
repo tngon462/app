@@ -35,16 +35,14 @@
     .iframe-container { width: 100%; height: 100%; border: none; overflow: hidden; }
     .loading-indicator { font-size: 1.5rem; color: #6b7280; margin-top: 1rem; }
     .error-message { color: #ef4444; font-size: 1.2rem; margin-top: 1rem; }
-
     @media (max-width: 640px) {
       .button-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
       .table-button { font-size: 1.5rem; padding: 1.5rem .5rem; }
       .start-button { font-size: 2rem; padding: 1rem 2rem; }
     }
-
     .return-button { position: absolute; bottom: 10px; left: 10px; width: 24px; height: 24px; padding: 0; background: transparent; border: none; cursor: pointer; z-index: 100; }
 
-    /* ===== Slideshow (nền trắng, không caption) ===== */
+    /* Slideshow (nền trắng, không caption) */
     #start-slideshow-screen { position: relative; width:100%; height:100%; background:#ffffff; overflow:hidden; }
     .slide-stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#ffffff; }
     .slide-stage img, .slide-stage video { max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; background:#ffffff; }
@@ -89,17 +87,11 @@
   </div>
 
   <script>
-    /* ===================== DEBUG ===================== */
-    const DEBUG = true;
-    const log = (...args)=>{ if (DEBUG) console.log("[TN]", ...args); };
-    const warn = (...args)=>{ if (DEBUG) console.warn("[TN]", ...args); };
-    const err  = (...args)=>{ if (DEBUG) console.error("[TN]", ...args); };
-
-    /* ----------------- Config chung ----------------- */
+    /* ====== CONFIG CHUNG ====== */
     const LINKS_JSON_URL = "https://tngon462.github.io/QR/links.json";
     let selectedBan = null;
 
-    /* ----------------- Firebase ----------------- */
+    /* ====== FIREBASE ====== */
     const firebaseConfig = {
       apiKey: "AIzaSyB4u2G41xdGkgBC0KltleRpcg5Lwru2RIU",
       authDomain: "tngon-b37d6.firebaseapp.com",
@@ -112,228 +104,135 @@
     };
     let fbApp = null, rtdb = null, currentRef = null, currentBanListening = null, lastTs = 0;
     let pollInitTs = null;
-
-    // Đồng hồ server
-    let serverOffsetMs = 0;
-    let serverClockReady = false;
-    let onClockReadyCallbacks = [];
+    let serverOffsetMs = 0, serverClockReady = false;
     function nowServerMs(){ return Date.now() + (Number(serverOffsetMs) || 0); }
-    function onServerClockReady(cb){
-      if (serverClockReady) cb(); else onClockReadyCallbacks.push(cb);
-    }
-    function waitForServerClockReady(timeoutMs=4000){
-      return new Promise(resolve=>{
-        if (serverClockReady) return resolve();
-        const to = setTimeout(()=>{ warn("Server clock not ready after", timeoutMs, "ms → continue"); resolve(); }, timeoutMs);
-        onServerClockReady(()=>{ clearTimeout(to); resolve(); });
-      });
-    }
-
     function connectFirebase() {
       if (!fbApp) fbApp = firebase.initializeApp(firebaseConfig);
       if (!rtdb) rtdb = firebase.database();
-
-      // Lấy chênh lệch giờ server
       rtdb.ref(".info/serverTimeOffset").on("value", snap => {
-        const old = serverOffsetMs;
-        serverOffsetMs = Number(snap.val() || 0);
-        log("serverTimeOffset changed:", { old, new: serverOffsetMs, clientNow: Date.now(), serverNow: nowServerMs() });
-        if (!serverClockReady) {
-          serverClockReady = true;
-          log("Server clock READY. Offset(ms):", serverOffsetMs);
-          onClockReadyCallbacks.splice(0).forEach(fn=>{ try{fn();}catch(e){ err("onClockReady cb error", e); } });
-        } else {
-          // offset thay đổi khi đang chạy → resync ngay
-          if (slideshowRunning) {
-            log("Offset changed while running → resync");
-            resyncSlideshowNow();
-          }
-        }
+        serverOffsetMs = Number(snap.val()||0);
+        serverClockReady = true;
       });
     }
 
-    // BỎ QUA SNAPSHOT ĐẦU
+    // RTDB signals (bỏ snapshot đầu)
     function attachListenerFor(ban) {
       if (!rtdb || currentBanListening === ban) return;
-
       if (currentRef) currentRef.off();
       currentBanListening = ban;
       currentRef = rtdb.ref("signals/" + ban);
 
-      let initialized = false;
-      let firstTs = 0;
-
+      let initialized = false, firstTs = 0;
       currentRef.on("value", (snap) => {
-        const v = snap.val();
-        if (!v) return;
+        const v = snap.val(); if (!v) return;
         const ts = v.ts || 0;
-
-        if (!initialized) {
-          initialized = true;
-          firstTs = ts;
-          if (ts > lastTs) lastTs = ts;
-          log("signals init:", { ban, firstTs });
-          return;
-        }
-
-        if (v.status === "expired" && ts > lastTs && ts > firstTs) {
-          lastTs = ts;
-          log("received expired signal:", { ban, ts });
-          clearPage();
-        }
+        if (!initialized) { initialized = true; firstTs = ts; if (ts > lastTs) lastTs = ts; return; }
+        if (v.status === "expired" && ts > lastTs && ts > firstTs) { lastTs = ts; clearPage(); }
       });
     }
 
-    /* Fallback REST polling */
     async function pollExpiredFallback(){
       try{
         if (!selectedBan) return;
         const url = firebaseConfig.databaseURL.replace(/\/$/,"") + "/signals/" + selectedBan + ".json?cb=" + Date.now();
         const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) return;
-        const v = await res.json();
-        if (!v) return;
-
+        const v = await res.json(); if (!v) return;
         const ts = v.ts || 0;
-
-        if (pollInitTs === null) {
-          pollInitTs = ts;
-          if (ts > lastTs) lastTs = ts;
-          log("poll init:", { ban: selectedBan, pollInitTs });
-          return;
-        }
-
-        if (v.status === "expired" && ts > lastTs && ts > pollInitTs) {
-          lastTs = ts;
-          log("poll expired:", { ban: selectedBan, ts });
-          clearPage();
-        }
-      }catch(e){ warn("poll error", e); }
+        if (pollInitTs === null) { pollInitTs = ts; if (ts>lastTs) lastTs=ts; return; }
+        if (v.status === "expired" && ts > lastTs && ts > pollInitTs) { lastTs = ts; clearPage(); }
+      }catch(_){}
     }
     setInterval(pollExpiredFallback, 3000);
 
-    /* ----------------- UI helpers ----------------- */
+    /* ====== UI HELPERS ====== */
     function showScreen(id) {
       document.querySelectorAll(".screen").forEach(s => s.style.display = "none");
-      const el = document.getElementById(id);
-      if (el) el.style.display = "flex";
-      log("showScreen:", id);
+      const el = document.getElementById(id); if (el) el.style.display = "flex";
+      if (id === "start-screen") resetIdleTimer();
     }
-    function showGlobalStatus(msg){
-      const el = document.getElementById("global-status");
-      if (!el) return;
-      if (msg && String(msg).trim()) { el.textContent = msg; el.style.display = "block"; }
-      else { el.textContent = ""; el.style.display = "none"; }
-      log("globalStatus:", msg || "(clear)");
-    }
-
     function selectTable(banNumber) {
-      selectedBan = banNumber;
-      pollInitTs = null;
+      selectedBan = banNumber; pollInitTs = null;
       document.getElementById("table-info").textContent = `Bạn đang ở Bàn ${selectedBan}`;
-      log("selectTable:", selectedBan);
       attachListenerFor(selectedBan);
       initSlidesThenMaybeShow();
     }
-
     function startOrder() {
-      if (!selectedBan) { warn("startOrder without selectedBan"); return; }
-      stopSlideshowTimers();
-
+      if (!selectedBan) return;
+      stopSlideTimers();
       document.getElementById("start-screen").style.display = "none";
-      const ss = document.getElementById("start-slideshow-screen");
-      if (ss) ss.style.display = "none";
+      const ss = document.getElementById("start-slideshow-screen"); if (ss) ss.style.display = "none";
 
       const loading = document.createElement("div");
       loading.className = "loading-indicator";
       loading.textContent = "Đang tải trang gọi món...";
       document.getElementById("main-container").appendChild(loading);
-      log("startOrder → fetch links:", LINKS_JSON_URL);
 
       fetch(LINKS_JSON_URL)
         .then(r => { if (!r.ok) throw new Error("Không thể tải links.json"); return r.json(); })
         .then(data => {
           const url = data[selectedBan] ?? data[String(selectedBan)];
           loading.remove();
-          log("links.json loaded. picked url:", { ban: selectedBan, url });
           if (url) createIframe(url); else showScreen("start-screen");
         })
-        .catch(e => { loading.remove(); err("links.json error:", e); showScreen("start-screen"); });
+        .catch(_ => { loading.remove(); showScreen("start-screen"); });
     }
-
     function createIframe(url) {
       const iframeScreen = document.getElementById("iframe-screen");
       iframeScreen.innerHTML = `<button class="return-button" onclick="clearPage()"></button>`;
       const iframe = document.createElement("iframe");
-      iframe.id = "pos-iframe";
-      iframe.className = "iframe-container";
-      iframe.src = url;
+      iframe.id = "pos-iframe"; iframe.className = "iframe-container"; iframe.src = url;
       iframeScreen.appendChild(iframe);
-      log("createIframe:", url);
       showScreen("iframe-screen");
     }
-
     function clearPage() {
-      stopSlideshowTimers();
+      stopSlideTimers();
       const iframeScreen = document.getElementById("iframe-screen");
       if (iframeScreen) iframeScreen.innerHTML = "";
-      log("clearPage → back to CTA");
       showScreen("start-screen");
     }
 
-    /* ----------------- Auto select bàn ----------------- */
+    /* ====== Auto select ?ban= ====== */
     function getQueryParam(name){
       try { return new URL(window.location.href).searchParams.get(name); } catch { return null; }
     }
-
     async function backfillSelectedBanFromIframe(){
       try{
         if (selectedBan) return;
         const iframe = document.getElementById("pos-iframe");
         if (!iframe || !iframe.src) return;
-        const r = await fetch(LINKS_JSON_URL);
-        const data = await r.json();
+        const r = await fetch(LINKS_JSON_URL); const data = await r.json();
         for (const [ban, url] of Object.entries(data)) {
-          if (iframe.src === url) {
-            selectedBan = parseInt(ban, 10);
-            attachListenerFor(selectedBan);
-            log("backfill selectedBan from iframe:", selectedBan);
-            break;
-          }
+          if (iframe.src === url) { selectedBan = parseInt(ban, 10); attachListenerFor(selectedBan); break; }
         }
-      }catch(e){ warn("backfill error", e); }
+      }catch(_){}
     }
     setInterval(backfillSelectedBanFromIframe, 1000);
 
-    /* ----------------- SLIDESHOW (manifest + lịch tuyệt đối) ----------------- */
+    /* ====== SLIDESHOW: MASTER TIMELINE (T GIÂY) ====== */
     const GH_OWNER  = "tngon462";
     const GH_REPO   = "slide";
     const GH_BRANCH = "main";
     const GH_FOLDER = "slides";
-    const SLIDE_DEFAULT_DURATION_SEC = 8;
+    const DEFAULT_DUR = 8; // giây/slide mặc định
 
-    let slides = [];
-    let cumEdges = [];   // mốc kết thúc mỗi slide, tính từ đầu chu kỳ (ms)
-    let periodMs = 0;
+    let slides = [];     // [{type:'image'|'video', src:'', duration:number}]
+    let edgesMs = [];    // các mốc kết thúc (ms) tính từ đầu chu kỳ
+    let periodMs = 0;    // T = tổng chu kỳ ms
+    let startTs = null;  // mốc server (ms)
     let currentIndex = -1;
-    let startTs = null;  // server ms
-    let nextTimer = null;
-    let manifestChecked = false;
-    let slidesAvailable = false;
-    let slideshowRunning = false;
+    let tickTimer = null, resyncTimer = null;
 
     function setSlideStatus(msg){
       const box = document.getElementById("slide-status");
       if (!box) return;
       if (msg && String(msg).trim()) { box.textContent = msg; box.style.display = "block"; }
       else { box.textContent = ""; box.style.display = "none"; }
-      if (msg) log("slideStatus:", msg);
     }
-
     function msFromDur(d){
       if (typeof d === "number") return Math.max(0, Math.round(d*1000));
       if (typeof d === "string" && /s$/i.test(d)) return Math.max(0, Math.round(parseFloat(d)*1000));
-      return SLIDE_DEFAULT_DURATION_SEC * 1000;
+      return DEFAULT_DUR * 1000;
     }
     function isVideoUrl(u){
       try { const ext = (new URL(u)).pathname.split('.').pop().toLowerCase();
@@ -352,7 +251,6 @@
       img.onload = () => setSlideStatus("");
       img.src = src;
       swapStage(img);
-      log("render IMG:", src);
     }
     function showVideo(src, offsetMs){
       const v = document.createElement("video");
@@ -362,134 +260,79 @@
         try {
           const offSec = Math.min((offsetMs||0)/1000, Math.max(0,(v.duration||0)-0.05));
           if (isFinite(offSec) && offSec > 0) v.currentTime = offSec;
-        } catch(e){ warn("video seek error", e); }
-        v.play().catch(e=>warn("video play error", e));
+        } catch(_) {}
+        v.play().catch(()=>{});
         setSlideStatus("");
       });
       swapStage(v);
-      log("render VIDEO:", src, "offsetMs:", offsetMs);
     }
 
-    function buildEdges(){
-      cumEdges = [];
-      periodMs = 0;
+    function buildTimeline(){
+      edgesMs = []; periodMs = 0;
       for (const s of slides){
-        const d = msFromDur(s.duration);
-        periodMs += d;
-        cumEdges.push(periodMs);
+        periodMs += msFromDur(s.duration);
+        edgesMs.push(periodMs);
       }
-      log("buildEdges:", { count: slides.length, periodMs, cumEdges });
     }
 
-    // Tính idx hiện tại + mốc đầu chu kỳ tuyệt đối (baseCycleStart)
-    function indexAt(nowMs){
-      if (!slides.length || !periodMs || startTs==null) {
-        const d0 = msFromDur(slides[0]?.duration || SLIDE_DEFAULT_DURATION_SEC);
-        return {idx:0, offset:0, slideDur:d0, baseCycleStart: nowMs};
-      }
-      const elapsedAll = nowMs - startTs;
-      const cycles = Math.floor(elapsedAll / periodMs);
-      const baseCycleStart = startTs + cycles * periodMs;
-      const elapsed = ((elapsedAll % periodMs) + periodMs) % periodMs;
-
-      let idx = cumEdges.findIndex(edge => elapsed < edge);
+    function indexFromOffset(offsetMs){
+      // offset trong [0, period)
+      let idx = edgesMs.findIndex(edge => offsetMs < edge);
       if (idx < 0) idx = slides.length - 1;
-
       const slideDur = msFromDur(slides[idx].duration);
-      const startOfThis = cumEdges[idx] - slideDur;
-      const offset = elapsed - startOfThis;
-      return { idx, offset, slideDur, baseCycleStart };
+      const startOfThis = edgesMs[idx] - slideDur;
+      const inside = offsetMs - startOfThis; // ms đã trôi trong slide
+      return { idx, inside, slideDur };
     }
 
-    function stopSlideshowTimers(){
-      slideshowRunning = false;
-      if (nextTimer) { clearTimeout(nextTimer); nextTimer = null; }
-      log("stopSlideshowTimers");
-    }
-
-    function resyncSlideshowNow(){
-      if (!slideshowRunning) return;
+    function renderAtServerNow(){
       if (!slides.length || !periodMs || startTs==null) return;
-      if (nextTimer) clearTimeout(nextTimer);
-      currentIndex = -1; // buộc render lại
-      log("RESYNC now. serverNow:", nowServerMs(), "startTs:", startTs);
-      renderAndSchedule();
-    }
 
-    // ===== RENDER + HẸN GIỜ THEO GIỜ SERVER (mỗi vòng tự bù drift) =====
-    function renderAndSchedule(){
-      if (!slides.length || !periodMs || startTs==null) { warn("render blocked: slides/period/startTs not ready", {slides:slides.length, periodMs, startTs}); return; }
-      slideshowRunning = true;
+      const elapsedAll = nowServerMs() - startTs;
+      const offset = ((elapsedAll % periodMs) + periodMs) % periodMs; // ms
+      const { idx, inside } = indexFromOffset(offset);
 
-      const now = nowServerMs();
-      const { idx, offset, baseCycleStart } = indexAt(now);
-
-      // log trạng thái vòng render
-      const nextEdgeAbs = baseCycleStart + cumEdges[idx];
-      let wait = nextEdgeAbs - nowServerMs();
-      log("render tick:", {
-        serverNow: nowServerMs(),
-        idx,
-        offsetMs: Math.round(offset),
-        baseCycleStart,
-        nextEdgeAbs,
-        waitMs: Math.round(wait)
-      });
-
-      // render nếu đổi slide
       if (idx !== currentIndex){
         currentIndex = idx;
         const it = slides[idx];
-        if (it.type === "video") showVideo(it.src, offset);
+        if (it.type === "video") showVideo(it.src, inside);
         else showImage(it.src);
       }
+    }
 
-      if (!isFinite(wait) || wait < 0) wait = 0;
-      if (wait > 60000) wait = 60000;
-
-      if (nextTimer) clearTimeout(nextTimer);
-      nextTimer = setTimeout(() => {
-        log("timer fired → render next. serverNow:", nowServerMs());
-        renderAndSchedule();
-      }, wait);
+    function startMasterLoop(){
+      stopSlideTimers();
+      // Tick 200ms: luôn đọc offset từ GIỜ SERVER → coi như “đang phát 1 video T giây”
+      tickTimer = setInterval(renderAtServerNow, 200);
+      // Resync mạnh mỗi 5s: ép renderAtServerNow (đề phòng tab ngủ)
+      resyncTimer = setInterval(()=>{ currentIndex = -1; renderAtServerNow(); }, 5000);
+    }
+    function stopSlideTimers(){
+      if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+      if (resyncTimer) { clearInterval(resyncTimer); resyncTimer = null; }
+      currentIndex = -1;
     }
 
     async function loadSlidesFromManifest(){
       const base = `https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/${GH_BRANCH}/${GH_FOLDER}/`;
       const url  = base + "manifest.json?cb=" + Date.now();
-      log("loadManifest:", url);
-
       try{
         const res = await fetch(url, { cache: "no-store" });
-        log("manifest http:", res.status);
-        if (!res.ok) {
-          setSlideStatus("Không tải được manifest.json (HTTP " + res.status + ")");
-          showGlobalStatus("Không tải được manifest.json (HTTP " + res.status + ")");
-          return false;
-        }
-
+        if (!res.ok) { setSlideStatus("Không tải được manifest.json (HTTP "+res.status+")"); return false; }
         let arr = await res.json();
-        log("manifest raw:", arr);
-        if (!Array.isArray(arr)) {
-          setSlideStatus("manifest.json không đúng định dạng (phải là mảng).");
-          showGlobalStatus("manifest.json không đúng định dạng (phải là mảng).");
-          return false;
-        }
+        if (!Array.isArray(arr)) { setSlideStatus("manifest.json phải là mảng."); return false; }
 
         const allowed = /\.(jpe?g|png|gif|mp4|webm|mov|m4v)$/i;
-
         const items = arr
           .map(item => {
             if (typeof item === "string") {
-              const name = item.trim();
-              if (!name) return null;
-              return { src: base + name, name, duration: SLIDE_DEFAULT_DURATION_SEC };
+              const name = item.trim(); if (!name) return null;
+              return { src: base + name, name, duration: DEFAULT_DUR };
             }
             if (item && typeof item === "object" && item.src) {
-              const name = String(item.src).trim();
-              if (!name) return null;
+              const name = String(item.src).trim(); if (!name) return null;
               const src = name.startsWith("http") ? name : (base + name);
-              const duration = Number(item.duration) > 0 ? Number(item.duration) : SLIDE_DEFAULT_DURATION_SEC;
+              const duration = Number(item.duration) > 0 ? Number(item.duration) : DEFAULT_DUR;
               return { src, name, duration };
             }
             return null;
@@ -497,97 +340,49 @@
           .filter(Boolean)
           .filter(it => allowed.test(it.name));
 
-        if (!items.length) {
-          setSlideStatus("Không tìm thấy ảnh/video hợp lệ trong manifest.json.");
-          showGlobalStatus("Không tìm thấy ảnh/video hợp lệ trong manifest.json.");
-          log("manifest parsed but empty after filter");
-          return false;
-        }
+        if (!items.length) { setSlideStatus("manifest.json không có file hợp lệ."); return false; }
 
         slides = items.map(it => ({ type: isVideoUrl(it.src) ? "video" : "image", src: it.src, duration: it.duration }));
-        log("slides parsed:", slides);
-        buildEdges();
-        setSlideStatus(""); showGlobalStatus("");
-        return true;
+        buildTimeline(); setSlideStatus(""); return true;
 
-      } catch(e){
-        err("manifest error:", e);
-        setSlideStatus("Lỗi khi tải/đọc manifest.json.");
-        showGlobalStatus("Lỗi khi tải/đọc manifest.json.");
-        return false;
-      }
+      } catch(_){ setSlideStatus("Lỗi khi tải/đọc manifest.json."); return false; }
     }
 
-    // Mốc lịch tuyệt đối trên server
     async function ensureStartTs(){
       try {
-        if (!rtdb) { startTs = nowServerMs(); log("ensureStartTs (no rtdb) →", startTs); return; }
+        if (!rtdb) { startTs = nowServerMs(); return; }
         const ref = rtdb.ref("slideshow/startTs");
-
         ref.on("value", snap => {
           const val = snap.val();
-          log("startTs subscribe:", val);
-          if (typeof val === "number" && val > 0) {
-            const old = startTs;
-            startTs = val;
-            if (old !== null && old !== val && slideshowRunning) {
-              log("startTs changed while running → resync");
-              resyncSlideshowNow();
-            }
-          }
+          if (typeof val === "number" && val > 0) startTs = val;
         });
-
-        const tx = await ref.transaction(curr => {
+        await ref.transaction(curr => {
           if (curr === null || curr === undefined || typeof curr !== "number" || curr <= 0) {
-            log("startTs transaction: set ServerValue.TIMESTAMP");
             return firebase.database.ServerValue.TIMESTAMP;
           }
-          log("startTs transaction: keep current", curr);
           return curr;
         });
-        log("startTs tx result:", tx && tx.committed);
-
         const s = await ref.get();
         const t = s.val();
         startTs = (typeof t === "number" && t > 0) ? t : nowServerMs();
-        log("startTs final:", startTs, "serverNow:", nowServerMs());
-      } catch(e){
-        err("ensureStartTs error:", e);
-        startTs = nowServerMs();
-      }
+      } catch(_){ startTs = nowServerMs(); }
     }
 
     async function initSlidesThenMaybeShow(){
-      log("initSlidesThenMaybeShow START");
-      // 1) Đợi đồng hồ server sẵn sàng (tối đa 4s)
-      await waitForServerClockReady();
-      log("server clock ready? ", serverClockReady, "offset:", serverOffsetMs);
-
-      // 2) Tải manifest
-      let ok = false;
-      if (!manifestChecked) {
+      // chỉ bật slideshow nếu thật sự có slide
+      let ok;
+      if (!slides.length) {
         ok = await loadSlidesFromManifest();
-        if (!ok) { await new Promise(r => setTimeout(r, 800)); ok = await loadSlidesFromManifest(); }
-        manifestChecked = true; slidesAvailable = ok;
-      } else ok = slidesAvailable;
-      log("manifestChecked:", manifestChecked, "slidesAvailable:", slidesAvailable);
-
-      if (ok) {
-        // 3) Lấy startTs
-        if (startTs == null) { await ensureStartTs(); }
-        // 4) Bắt đầu slideshow
-        currentIndex = -1;
-        stopSlideshowTimers();
-        renderAndSchedule();   // mỗi vòng tự bù drift theo server
-        showScreen("start-slideshow-screen");
-      } else {
-        showScreen("start-screen");
+        if (!ok) { showScreen("start-screen"); return; }
       }
-      resetIdleTimer();
-      log("initSlidesThenMaybeShow END");
+      if (!serverClockReady) await new Promise(r=>setTimeout(r,300));
+      if (startTs == null) await ensureStartTs();
+
+      startMasterLoop();
+      showScreen("start-slideshow-screen");
     }
 
-    /* ----------------- Idle 59s → tự bật slideshow ----------------- */
+    /* ====== Idle 59s → tự bật slideshow ====== */
     const IDLE_MS = 59000;
     let idleTimer = null;
     function isOnStartScreen(){
@@ -597,17 +392,14 @@
     function resetIdleTimer(){
       if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
       if (isOnStartScreen()) {
-        idleTimer = setTimeout(async () => {
-          log("IDLE trigger 59s → try open slideshow");
-          await initSlidesThenMaybeShow();
-        }, IDLE_MS);
+        idleTimer = setTimeout(async () => { await initSlidesThenMaybeShow(); }, IDLE_MS);
       }
     }
     ["touchstart","touchmove","mousedown","mousemove","keydown"].forEach(evt => {
       window.addEventListener(evt, () => { resetIdleTimer(); }, { passive:true });
     });
 
-    /* ----------------- Khởi động ----------------- */
+    /* ====== BOOT ====== */
     document.addEventListener("DOMContentLoaded", () => {
       connectFirebase();
 
@@ -618,41 +410,29 @@
         btn.className = "table-button";
         btn.textContent = "Bàn " + i;
         btn.addEventListener("click", () => {
-          selectedBan = i;
-          pollInitTs = null;
+          selectedBan = i; pollInitTs = null;
           document.getElementById("table-info").textContent = `Bạn đang ở Bàn ${selectedBan}`;
-          log("click table:", i);
           attachListenerFor(selectedBan);
           initSlidesThenMaybeShow();
         });
         wrap.appendChild(btn);
       }
 
-      // ?ban=10 → auto chọn + auto start
+      // ?ban=n → auto chọn + auto start + vào POS (giữ hành vi cũ)
       const qBan = getQueryParam("ban");
       if (qBan) {
         const n = parseInt(qBan, 10);
         if (!isNaN(n)) setTimeout(() => {
-          selectedBan = n;
-          pollInitTs = null;
+          selectedBan = n; pollInitTs = null;
           document.getElementById("table-info").textContent = `Bạn đang ở Bàn ${selectedBan}`;
-          log("auto select via query:", n);
           attachListenerFor(selectedBan);
           initSlidesThenMaybeShow();
-          startOrder(); // hành vi gốc
+          startOrder();
         }, 100);
       }
 
-      // Phòng khi mất selectedBan mà iframe còn
-      setInterval(backfillSelectedBanFromIframe, 1000);
-
-      log("DOMContentLoaded done");
+      showScreen("table-selection-screen");
     });
-
-    // Helper query param (đặt lại cuối file để khỏi shadow)
-    function getQueryParam(name){
-      try { return new URL(window.location.href).searchParams.get(name); } catch { return null; }
-    }
   </script>
 </body>
 </html>
