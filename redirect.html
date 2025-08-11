@@ -233,7 +233,7 @@
     let periodMs = 0;    // tổng chu kỳ
     let currentIndex = -1;
     let startTs = null;  // mốc lịch tuyệt đối (server)
-    let nextTimer = null;
+    let renderLoopId = null; // ID cho requestAnimationFrame
     let watchdog = null;
     let manifestChecked = false;
     let slidesAvailable = false;
@@ -305,27 +305,33 @@
       const remain = nextEdgeAbs - nowMs;
       return { idx, offset, remain, slideDur, nextEdgeMs: nextEdgeAbs };
     }
-    // SỬA LOGIC CHÍNH TẠI ĐÂY: hẹn giờ tuyệt đối, không còn trôi lệch
-    function renderAndArmToNextEdge(){
-      if (nextTimer) clearTimeout(nextTimer);
-      if (!slides.length || !periodMs || startTs == null) {
-        console.warn("Slideshow not ready to render.");
-        return;
+    // SỬA LOGIC CHÍNH TẠI ĐÂY: vòng lặp đồng bộ tuyệt đối
+    function startSlideshowLoop() {
+      const loop = () => {
+        if (!slides.length || !periodMs || startTs == null) {
+          renderLoopId = requestAnimationFrame(loop);
+          return;
+        }
+        const now = nowServerMs();
+        const { idx, offset, nextEdgeMs } = indexAt(now);
+        // Chỉ render khi slide thay đổi
+        if (idx !== currentIndex) {
+          currentIndex = idx;
+          const it = slides[idx];
+          if (it.type === "video") showVideo(it.src, offset);
+          else showImage(it.src);
+        }
+        renderLoopId = requestAnimationFrame(loop);
+      };
+      if (renderLoopId) cancelAnimationFrame(renderLoopId);
+      renderLoopId = requestAnimationFrame(loop);
+    }
+    // Hàm khởi động/dừng vòng lặp chính
+    function stopSlideshowLoop() {
+      if (renderLoopId) {
+        cancelAnimationFrame(renderLoopId);
+        renderLoopId = null;
       }
-      const now = nowServerMs();
-      const { idx, offset, remain, nextEdgeMs } = indexAt(now);
-      // Nếu cần chuyển slide, hiển thị ngay lập tức
-      if (idx !== currentIndex){
-        currentIndex = idx;
-        const it = slides[idx];
-        if (it.type === "video") showVideo(it.src, offset);
-        else showImage(it.src);
-      }
-      // Hẹn giờ cho lần chuyển slide kế tiếp
-      const timeToWait = nextEdgeMs - nowServerMs();
-      // Giới hạn thời gian chờ, tránh trường hợp lệch quá lớn
-      const clampedWait = Math.max(10, Math.min(timeToWait, 60000));
-      nextTimer = setTimeout(renderAndArmToNextEdge, clampedWait);
     }
     // ===== Watchdog 500ms: kéo về đúng slide nếu timer bị lệch/đóng băng =====
     function startSyncWatchdog(){
@@ -335,9 +341,7 @@
         const { idx } = indexAt(nowServerMs());
         if (idx !== currentIndex) {
           console.log("Watchdog triggered: Syncing slide due to time drift.");
-          if (nextTimer) clearTimeout(nextTimer);
-          currentIndex = -1; // buộc render lại
-          renderAndArmToNextEdge();
+          currentIndex = idx; // Cập nhật currentIndex để vòng lặp chính render lại
         }
       }, 500);
     }
@@ -433,10 +437,9 @@
         if (startTs == null) { // có slide thì mới cần mốc
           await ensureStartTs(); // mốc lịch tuyệt đối
           currentIndex = -1;
-          if (nextTimer) clearTimeout(nextTimer);
-          renderAndArmToNextEdge();
-          startSyncWatchdog(); // ⭐ quan trọng: watchdog kéo lệch về đúng
         }
+        startSlideshowLoop();
+        startSyncWatchdog(); // ⭐ quan trọng: watchdog kéo lệch về đúng
         showScreen("start-slideshow-screen");
       } else {
         showScreen("start-screen");
@@ -461,8 +464,7 @@
           if (slidesAvailable) {
             if (startTs == null) await ensureStartTs();
             currentIndex = -1;
-            if (nextTimer) clearTimeout(nextTimer);
-            renderAndArmToNextEdge();
+            startSlideshowLoop(); // KHỞI ĐỘNG VÒNG LẶP
             startSyncWatchdog(); // ⭐ bật watchdog cả khi auto bật
             setSlideStatus(""); showGlobalStatus("");
             showScreen("start-slideshow-screen");
