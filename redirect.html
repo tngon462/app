@@ -1,212 +1,410 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html>
 <head>
-<meta charset="UTF-8">
-<title>T-NGON</title>
-<style>
-  html, body {
-    margin:0; padding:0; height:100%; width:100%;
-    font-family:sans-serif;
-    background:#fff; color:#000;
-  }
-  #main-container { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; }
-  .ban-list { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
-  .ban-item { padding:15px 20px; background:#f0f0f0; border-radius:8px; cursor:pointer; font-size:20px; }
-  #slideshow { display:none; width:100%; height:100%; background:#fff; position:relative; overflow:hidden; }
-  #slideshow img, #slideshow video { max-width:100%; max-height:100%; object-fit:contain; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); }
-  .loading-indicator { color:#000; font-size:20px; }
-  iframe { border:none; width:100%; height:100%; }
-</style>
+  <meta charset="UTF-8" />
+  <title>T-NGON</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- PWA meta -->
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="https://placehold.co/192x192/da251d/fff?text=TN" />
+  <link rel="apple-touch-icon" href="https://placehold.co/192x192/da251d/fff?text=TN" />
+  <meta name="apple-mobile-web-app-title" content="T-NGON" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#da251d" />
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Firebase SDK (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+  <style>
+    body { font-family: "Inter", system-ui, sans-serif; margin: 0; padding: 0; background: #f3f4f6; }
+    .main-container { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; width: 100vw; padding: 1rem; box-sizing: border-box; }
+    .screen { display: none; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; }
+    #table-selection-screen { display: flex; } /* Mặc định: chỉ hiện màn chọn bàn */
+    .button-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; max-width: 600px; margin: 2rem auto 0; }
+    .table-button { font-size: 2rem; font-weight: 700; padding: 2rem 1rem; background: #007aff; color: #fff; border: 2px solid #007aff; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -1px rgba(0,0,0,.06); cursor: pointer; transition: all .2s ease; }
+    .table-button:active { transform: translateY(1px); }
+    .iframe-container { width: 100%; height: 100%; border: none; overflow: hidden; }
+    .loading-indicator { font-size: 1.5rem; color: #6b7280; margin-top: 1rem; }
+    .return-button { position: absolute; bottom: 10px; left: 10px; width: 24px; height: 24px; padding: 0; background: transparent; border: none; cursor: pointer; z-index: 100; }
+
+    @media (max-width: 640px) {
+      .button-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+      .table-button { font-size: 1.5rem; padding: 1.5rem .5rem; }
+    }
+
+    /* ===== Màn CTA (nút BẮT ĐẦU) giữ nguyên style cũ ===== */
+    #start-cta-screen { text-align:center; color:#1f2937; }
+    .start-button { font-size: 2.5rem; padding: 1.25rem 2.5rem; background: #007aff; color: #fff; border: none; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -1px rgba(0,0,0,.06); cursor: pointer; transition: all .2s ease; }
+    .start-button:active { transform: translateY(1px); }
+
+    /* ===== Màn SLIDESHOW (nền trắng, không caption/hint) ===== */
+    #start-slideshow-screen { position: relative; width:100%; height:100%; background:#ffffff; overflow:hidden; }
+    .slide-stage { position: absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#ffffff; }
+    .slide-stage img, .slide-stage video { max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; background:#fff; }
+    .tap-overlay { position:absolute; inset:0; cursor:pointer; z-index:50; } /* tap để quay về CTA */
+    .table-badge { position:absolute; top:12px; left:12px; background:rgba(0,0,0,.45); color:#fff; padding:.3rem .55rem; border-radius:.5rem; font-size:.85rem; z-index:30; }
+  </style>
 </head>
-<body>
+<body class="bg-gray-100">
+  <div class="main-container" id="main-container">
+    <!-- Màn chọn bàn -->
+    <div class="screen" id="table-selection-screen">
+      <h2 class="text-5xl font-bold text-gray-800">T-NGON</h2>
+      <p class="text-lg text-gray-600 mt-2">Vui lòng chọn bàn của bạn</p>
+      <div class="button-grid" id="table-buttons"></div>
+    </div>
 
-<div id="main-container">
-  <div id="start-screen">
-    <h2 class="text-5xl font-bold">T-NGON</h2>
-    <div class="ban-list" id="ban-list"></div>
+    <!-- Màn CTA: giống bản gốc -->
+    <div class="screen" id="start-cta-screen">
+      <div class="space-y-4 text-gray-800 text-center">
+        <h2 class="text-5xl font-bold">T-NGON</h2>
+        <p class="text-lg">Nhấn nút bên dưới để bắt đầu đặt món</p>
+        <div class="button-container">
+          <button class="start-button" onclick="startOrder()">🍽️ BẮT ĐẦU</button>
+        </div>
+        <p id="table-info" class="text-sm text-gray-500 mt-4"></p>
+      </div>
+    </div>
+
+    <!-- Màn SLIDESHOW (nếu manifest có ảnh/video) -->
+    <div class="screen" id="start-slideshow-screen">
+      <div class="tap-overlay" onclick="showCTAScreen()" title="Chạm để quay lại màn BẮT ĐẦU"></div>
+      <div class="slide-stage" id="slide-stage"></div>
+      <div id="table-badge" class="table-badge"></div>
+    </div>
+
+    <!-- Màn iframe -->
+    <div class="screen" id="iframe-screen">
+      <button class="return-button" onclick="clearPage()"></button>
+    </div>
   </div>
-  <div id="slideshow"></div>
-</div>
 
-<script>
-const GH_OWNER = "tngon462";
-const GH_REPO = "slide";
-const GH_BRANCH = "main";
-const GH_FOLDER = "slides";
-const SLIDE_DEFAULT_DURATION = "5s";
-const SLIDE_SHUFFLE = false;
-const RELOAD_INTERVAL_MS = 60000;
+  <script>
+    /* ----------------- Config chung ----------------- */
+    const LINKS_JSON_URL = "https://tngon462.github.io/QR/links.json";
+    let selectedBan = null;
 
-let slides = [];
-let cumDurations = [];
-let totalDuration = 0;
-let cycleStartTs = null;
-let currentIndex = -1;
-let slideshowEnabled = false;
+    /* ----------------- Firebase ----------------- */
+    const firebaseConfig = {
+      apiKey: "AIzaSyB4u2G41xdGkgBC0KltleRpcg5Lwru2RIU",
+      authDomain: "tngon-b37d6.firebaseapp.com",
+      databaseURL: "https://tngon-b37d6-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "tngon-b37d6",
+      storageBucket: "tngon-b37d6.firebasestorage.app",
+      messagingSenderId: "580319242104",
+      appId: "1:580319242104:web:6922e4327bdc8286c30a8d",
+      measurementId: "G-LHEH8ZC6SL"
+    };
+    let fbApp = null, rtdb = null, currentRef = null, currentBanListening = null, lastTs = 0;
+    let serverOffsetMs = 0;
 
-function ms(s){ if(typeof s==="number") return s*1000; if(typeof s==="string"&&s.endsWith("s")) return parseFloat(s)*1000; return parseFloat(s)||5000; }
-function isVideoUrl(url){ return /\.(mp4|webm|mov|m4v)$/i.test(url); }
-function nowServerMs(){ return Date.now(); }
+    function connectFirebase() {
+      if (!fbApp) fbApp = firebase.initializeApp(firebaseConfig);
+      if (!rtdb) rtdb = firebase.database();
+      rtdb.ref(".info/serverTimeOffset").on("value", snap => {
+        serverOffsetMs = Number(snap.val() || 0);
+      });
+    }
+    function nowServerMs(){ return Date.now() + (Number(serverOffsetMs||0)); }
 
-async function loadSlidesFromManifest(){
-  const base = `https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/${GH_BRANCH}/${GH_FOLDER}/`;
-  const url  = base + "manifest.json?cb=" + Date.now();
-  let res;
-  try { res = await fetch(url, { cache: "no-store" }); } catch { return false; }
-  if (!res.ok) return false;
-  let arr;
-  try { arr = await res.json(); } catch { return false; }
-  if (!Array.isArray(arr) || !arr.length) return false;
+    function attachListenerFor(ban) {
+      if (!rtdb || currentBanListening === ban) return;
+      if (currentRef) currentRef.off();
+      currentBanListening = ban;
+      currentRef = rtdb.ref("signals/" + ban);
+      currentRef.on("value", (snap) => {
+        const v = snap.val();
+        if (!v) return;
+        const ts = v.ts || 0;
+        if (v.status === "expired" && ts > lastTs) { lastTs = ts; clearPage(); }
+      });
+    }
 
-  const allowed = /\.(jpe?g|png|gif|mp4|webm|mov|m4v)$/i;
-  slides = arr
-    .map(item => {
-      if (typeof item === "string") return { src: base + item, name: item, duration: SLIDE_DEFAULT_DURATION };
-      if (item && typeof item === "object" && item.src) {
-        const src = item.src.startsWith("http") ? item.src : (base + item.src);
-        return { src, name: item.src, duration: item.duration || SLIDE_DEFAULT_DURATION };
+    /* Fallback REST polling */
+    async function pollExpiredFallback(){
+      try{
+        if (!selectedBan) return;
+        const url = firebaseConfig.databaseURL.replace(/\/$/,"") + "/signals/" + selectedBan + ".json?cb=" + Date.now();
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) return;
+        const v = await res.json();
+        if (!v) return;
+        const ts = v.ts || 0;
+        if (v.status === "expired" && ts > lastTs) { lastTs = ts; clearPage(); }
+      }catch(_){}
+    }
+    setInterval(pollExpiredFallback, 3000);
+
+    /* ----------------- UI helpers ----------------- */
+    function showScreen(id) {
+      document.querySelectorAll(".screen").forEach(s => s.style.display = "none");
+      const el = document.getElementById(id);
+      if (el) el.style.display = "flex";
+    }
+    function showCTAScreen(){
+      document.getElementById("table-info").textContent = selectedBan ? `Bạn đang ở Bàn ${selectedBan}` : "";
+      showScreen("start-cta-screen");
+    }
+    function showSlideshowScreen(){
+      const badge = document.getElementById("table-badge");
+      if (badge) badge.textContent = selectedBan ? `Bàn ${selectedBan}` : "";
+      showScreen("start-slideshow-screen");
+    }
+
+    function selectTable(banNumber) {
+      selectedBan = banNumber;
+      attachListenerFor(selectedBan);
+      initSlidesThenShow(); // quyết định hiển thị CTA hay Slideshow
+    }
+
+    function startOrder() {
+      if (!selectedBan) { showScreen("table-selection-screen"); return; }
+      document.getElementById("start-cta-screen").style.display = "none";
+      document.getElementById("start-slideshow-screen").style.display = "none";
+      const loading = document.createElement("div");
+      loading.className = "loading-indicator";
+      loading.textContent = "Đang tải trang gọi món...";
+      document.getElementById("main-container").appendChild(loading);
+
+      fetch(LINKS_JSON_URL)
+        .then(r => { if (!r.ok) throw new Error("Không thể tải links.json"); return r.json(); })
+        .then(data => {
+          const url = data[String(selectedBan)] || data[selectedBan];
+          loading.remove();
+          if (url) createIframe(url); else showCTAScreen();
+        })
+        .catch(_err => { loading.remove(); showCTAScreen(); });
+    }
+
+    function createIframe(url) {
+      const iframeScreen = document.getElementById("iframe-screen");
+      iframeScreen.innerHTML = `<button class="return-button" onclick="clearPage()"></button>`;
+      const iframe = document.createElement("iframe");
+      iframe.id = "pos-iframe";
+      iframe.className = "iframe-container";
+      iframe.src = url;
+      iframeScreen.appendChild(iframe);
+      showScreen("iframe-screen");
+    }
+
+    function clearPage() {
+      const iframeScreen = document.getElementById("iframe-screen");
+      if (iframeScreen) iframeScreen.innerHTML = "";
+      showCTAScreen();
+    }
+
+    /* ----------------- Auto select bàn ----------------- */
+    function getQueryParam(name){
+      try { return new URL(window.location.href).searchParams.get(name); } catch { return null; }
+    }
+
+    async function backfillSelectedBanFromIframe(){
+      try{
+        if (selectedBan) return;
+        const iframe = document.getElementById("pos-iframe");
+        if (!iframe || !iframe.src) return;
+        const r = await fetch(LINKS_JSON_URL);
+        const data = await r.json();
+        for (const [ban, url] of Object.entries(data)) {
+          if (iframe.src === url) { selectedBan = parseInt(ban, 10); attachListenerFor(selectedBan); break; }
+        }
+      }catch(_){}
+    }
+    setInterval(backfillSelectedBanFromIframe, 1000);
+
+    /* ================== SLIDESHOW (manifest only) ================== */
+    const GH_OWNER  = "tngon462";
+    const GH_REPO   = "slide";
+    const GH_BRANCH = "main";
+    const GH_FOLDER = "slides";
+
+    const SLIDE_DEFAULT_DURATION = 8;  // giây/slide
+    const SLIDE_SHUFFLE = true;        // shuffle nếu muốn
+    const RELOAD_INTERVAL_MS = 300000; // 5 phút (nếu muốn tự reload danh sách)
+
+    const slideStage = () => document.getElementById("slide-stage");
+
+    let slides = [];
+    let totalDuration = 0;
+    let cumDurations = [];
+    let currentIndex = -1;
+    let currentEl = null;
+    let cycleStartTs = null;
+    let syncTimer = null;
+    let slidesLoadedOnce = false;
+
+    function ms(s){ return Math.max(0, Math.round(Number(s)*1000)) || Math.round(SLIDE_DEFAULT_DURATION*1000); }
+    function nowMs(){ return Date.now() + (Number(serverOffsetMs||0)); }
+
+    function isVideoUrl(u){
+      try { const ext = (new URL(u)).pathname.split('.').pop().toLowerCase();
+        return ['mp4','webm','ogg','mov','m4v'].includes(ext);
+      } catch { return false; }
+    }
+
+    function swapStage(el){
+      const stage = slideStage(); if (!stage) return;
+      if (currentEl && currentEl.parentNode === stage) stage.removeChild(currentEl);
+      currentEl = el; stage.appendChild(el);
+    }
+    function showImage(src){
+      const img = document.createElement("img");
+      img.decoding = "async";
+      img.loading = "eager";
+      img.referrerPolicy = "no-referrer";
+      img.crossOrigin = "anonymous";
+      img.src = src;
+      swapStage(img);
+    }
+    function showVideo(src, offsetMs){
+      const vid = document.createElement("video");
+      vid.src = src;
+      vid.muted = true;
+      vid.playsInline = true;
+      vid.autoplay = true;
+      vid.preload = "auto";
+      vid.controls = false;
+      vid.crossOrigin = "anonymous";
+      vid.addEventListener("loadedmetadata", () => {
+        try {
+          const offSec = Math.min((offsetMs||0)/1000, Math.max(0,(vid.duration||0)-0.05));
+          if (isFinite(offSec) && offSec > 0) vid.currentTime = offSec;
+        } catch(_) {}
+        vid.play().catch(()=>{});
+      });
+      swapStage(vid);
+    }
+
+    function computeIndexAndOffset(now){
+      if (!slides.length || !totalDuration || cycleStartTs == null) return { idx:0, offsetMs:0 };
+      const elapsed = ((now - cycleStartTs) % totalDuration + totalDuration) % totalDuration;
+      let idx = cumDurations.findIndex(acc => elapsed < acc);
+      if (idx < 0) idx = slides.length - 1;
+      const startMs = cumDurations[idx] - ms(slides[idx].duration);
+      const offsetMs = elapsed - startMs;
+      return { idx, offsetMs };
+    }
+    function renderByClock(){
+      if (!slides.length) return;
+      const { idx, offsetMs } = computeIndexAndOffset(nowMs());
+      if (idx !== currentIndex){
+        currentIndex = idx;
+        const item = slides[idx];
+        if (item.type === "video") showVideo(item.src, offsetMs);
+        else showImage(item.src);
       }
-      return null;
-    })
-    .filter(Boolean)
-    .filter(it => allowed.test(it.name))
-    .map(it => ({ type: isVideoUrl(it.src) ? "video" : "image", src: it.src, duration: it.duration }));
-
-  if (SLIDE_SHUFFLE) {
-    for (let i = slides.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random()*(i+1));
-      [slides[i], slides[j]] = [slides[j], slides[i]];
     }
-  }
-
-  cumDurations = [];
-  totalDuration = 0;
-  for (const it of slides){ totalDuration += ms(it.duration); cumDurations.push(totalDuration); }
-
-  return slides.length > 0;
-}
-
-function computeIndexAndOffset(nowMs){
-  const elapsed = (nowMs - cycleStartTs) % totalDuration;
-  let idx = 0;
-  while (elapsed >= cumDurations[idx]) idx++;
-  const prevCum = idx===0 ? 0 : cumDurations[idx-1];
-  return { idx, offsetMs: elapsed - prevCum };
-}
-
-function swapStage(el){
-  const s = document.getElementById("slideshow");
-  s.innerHTML = "";
-  s.appendChild(el);
-}
-
-function showImage(src){
-  const img = document.createElement("img");
-  img.src = src;
-  swapStage(img);
-}
-
-function showVideo(src, offsetMs){
-  const vid = document.createElement("video");
-  vid.src = src;
-  vid.muted = true;
-  vid.playsInline = true;
-  vid.autoplay = true;
-  vid.preload = "auto";
-  vid.controls = false;
-  vid.addEventListener("loadedmetadata", () => {
-    try {
-      const offSec = Math.min((offsetMs||0)/1000, Math.max(0,(vid.duration||0)-0.05));
-      if (isFinite(offSec) && offSec > 0) vid.currentTime = offSec;
-    } catch(_) {}
-    vid.play().catch(()=>{});
-  });
-  swapStage(vid);
-}
-
-function renderByClock(){
-  if (!slides.length) return;
-  const { idx, offsetMs } = computeIndexAndOffset(nowServerMs());
-  if (idx !== currentIndex){
-    currentIndex = idx;
-    const item = slides[idx];
-    if (item.type === "video") showVideo(item.src, offsetMs);
-    else showImage(item.src);
-  }
-}
-
-function startSyncLoop(){
-  setInterval(() => {
-    renderByClock();
-  }, 1000);
-}
-
-async function initSlideshow(){
-  const hasSlides = await loadSlidesFromManifest();
-  if (!hasSlides) {
-    slideshowEnabled = false;
-    showScreen("start-screen");
-    return;
-  }
-  slideshowEnabled = true;
-  cycleStartTs = nowServerMs();
-  showScreen("slideshow");
-  renderByClock();
-  startSyncLoop();
-}
-
-function showScreen(id){
-  document.getElementById("start-screen").style.display = id==="start-screen" ? "block" : "none";
-  document.getElementById("slideshow").style.display = id==="slideshow" ? "block" : "none";
-}
-
-// ------------ Màn chọn bàn + logic cũ ------------
-const bans = Array.from({length: 15}, (_,i)=>i+1);
-const banList = document.getElementById("ban-list");
-let selectedBan = null;
-
-bans.forEach(b => {
-  const div = document.createElement("div");
-  div.className = "ban-item";
-  div.textContent = "Bàn " + b;
-  div.onclick = () => {
-    selectedBan = "ban" + b;
-    if (slideshowEnabled) {
-      // Nếu đang slideshow, chạm vào thì quay lại màn start
-      showScreen("start-screen");
-    } else {
-      startOrder();
+    function startSyncLoop(){
+      if (syncTimer) clearInterval(syncTimer);
+      syncTimer = setInterval(renderByClock, 300);
     }
-  };
-  banList.appendChild(div);
-});
 
-function startOrder(){
-  if (!selectedBan) { return; }
-  document.getElementById("start-screen").style.display = "none";
-  const loading = document.createElement("div");
-  loading.className = "loading-indicator";
-  loading.textContent = "Đang tải...";
-  document.getElementById("main-container").appendChild(loading);
-  fetch("links.json")
-    .then(res => res.json())
-    .then(data => {
-      const url = data[selectedBan];
-      loading.remove();
-      if (url) createIframe(url); else showScreen("start-screen");
-    })
-    .catch(_err => { loading.remove(); showScreen("start-screen"); });
-}
+    // Chỉ đọc manifest.json. Nếu rỗng/không có → coi như KHÔNG có slideshow.
+    async function loadSlidesFromManifestOnly(){
+      const base = `https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/${GH_BRANCH}/${GH_FOLDER}/`;
+      const url  = base + "manifest.json?cb=" + Date.now();
+      try{
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) return false;
+        let arr = await res.json();
+        if (!Array.isArray(arr)) return false;
 
-function createIframe(url){
-  const iframe = document.createElement("iframe");
-  iframe.src = url;
-  document.getElementById("main-container").innerHTML = "";
-  document.getElementById("main-container").appendChild(iframe);
-}
+        const allowed = /\.(jpe?g|png|gif|mp4|webm|mov|m4v)$/i;
+        const items = arr
+          .map(item => typeof item === "string" ? { src: base + item, name: item, duration: SLIDE_DEFAULT_DURATION }
+                                               : (item && item.src ? { src: item.src.startsWith("http")?item.src:(base+item.src), name: item.src, duration: Number(item.duration)||SLIDE_DEFAULT_DURATION } : null))
+          .filter(Boolean)
+          .filter(it => allowed.test(it.name));
 
-// ------------ Chạy ------------
-initSlideshow();
-</script>
+        if (!items.length) return false;
+
+        slides = items.map(it => ({ type: isVideoUrl(it.src) ? "video" : "image", src: it.src, duration: it.duration }));
+        if (SLIDE_SHUFFLE) {
+          for (let i = slides.length - 1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [slides[i], slides[j]] = [slides[j], slides[i]]; }
+        }
+        cumDurations = []; totalDuration = 0;
+        for (const it of slides){ totalDuration += ms(it.duration); cumDurations.push(totalDuration); }
+        return true;
+      } catch(_){
+        return false;
+      }
+    }
+
+    async function ensureCycleStart(){
+      try {
+        if (!rtdb) { cycleStartTs = nowMs(); return; }
+        const ref = rtdb.ref("slideshow/cycleStartTs");
+        try {
+          ref.on("value", snap => {
+            const val = snap.val();
+            if (typeof val === "number" && isFinite(val) && val > 0) cycleStartTs = val;
+          });
+        } catch (_) {}
+        let exists = false;
+        try {
+          const initCheck = await ref.get();
+          exists = initCheck.exists();
+          if (exists) {
+            const val = initCheck.val();
+            if (typeof val === "number" && isFinite(val) && val > 0) cycleStartTs = val;
+          }
+        } catch (_) {}
+        if (!exists) {
+          try { await ref.set(nowMs()); cycleStartTs = nowMs(); }
+          catch (_) { cycleStartTs = nowMs(); }
+        }
+      } catch (_){ cycleStartTs = nowMs(); }
+    }
+
+    async function initSlidesThenShow(){
+      // Tải danh sách đúng 1 lần/lần load trang
+      const ok = await loadSlidesFromManifestOnly(); // chỉ nhìn manifest
+      if (ok) {
+        await ensureCycleStart();
+        renderByClock();
+        startSyncLoop();
+        showSlideshowScreen();
+      } else {
+        showCTAScreen();
+      }
+    }
+
+    /* ----------------- Khởi động ----------------- */
+    document.addEventListener("DOMContentLoaded", () => {
+      connectFirebase();
+
+      // Tạo 15 nút bàn (giữ nguyên style cũ)
+      const wrap = document.getElementById("table-buttons");
+      for (let i = 1; i <= 15; i++) {
+        const btn = document.createElement("button");
+        btn.className = "table-button";
+        btn.textContent = "Bàn " + i;
+        btn.addEventListener("click", () => selectTable(i));
+        wrap.appendChild(btn);
+      }
+
+      // Hỗ trợ ?ban=10 → chọn bàn + vào luôn
+      const qBan = getQueryParam("ban");
+      if (qBan) {
+        const n = parseInt(qBan, 10);
+        if (!isNaN(n)) setTimeout(() => { selectTable(n); startOrder(); }, 100);
+      }
+
+      // Phòng khi mất selectedBan mà iframe còn
+      setInterval(backfillSelectedBanFromIframe, 1000);
+    });
+
+    /* ----------------- Helpers khác (giữ nguyên) ----------------- */
+    function getQueryParam(name){
+      try { return new URL(window.location.href).searchParams.get(name); } catch { return null; }
+    }
+  </script>
 </body>
 </html>
