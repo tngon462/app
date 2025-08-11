@@ -1,380 +1,373 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8" />
-  <title>T-NGON</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8" />
+  <title>T-NGON</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- PWA meta -->
-  <link rel="manifest" href="manifest.json" />
-  <link rel="icon" href="https://placehold.co/192x192/da251d/fff?text=TN" />
-  <link rel="apple-touch-icon" href="https://placehold.co/192x192/da251d/fff?text=TN" />
-  <meta name="apple-mobile-web-app-title" content="T-NGON" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="theme-color" content="#da251d" />
+    <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="https://placehold.co/192x192/da251d/fff?text=TN" />
+  <link rel="apple-touch-icon" href="https://placehold.co/192x192/da251d/fff?text=TN" />
+  <meta name="apple-mobile-web-app-title" content="T-NGON" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#da251d" />
 
-  <!-- Tailwind -->
-  <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Firebase SDK (compat) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
-  <style>
-    body { font-family: "Inter", system-ui, sans-serif; margin: 0; padding: 0; background: #0b0b0b; }
-    .main-container { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; width: 100vw; padding: 1rem; box-sizing: border-box; }
-    .screen { display: none; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; }
-    #table-selection-screen { display: flex; background:#f3f4f6; }
-    .button-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; max-width: 600px; margin: 2rem auto 0; }
-    .table-button { font-size: 2rem; font-weight: 700; padding: 2rem 1rem; background: #007aff; color: #fff; border: 2px solid #007aff; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -1px rgba(0,0,0,.06); cursor: pointer; transition: all .2s ease; }
-    .table-button:active { transform: translateY(1px); }
-    .iframe-container { width: 100%; height: 100%; border: none; overflow: hidden; }
-    .loading-indicator { font-size: 1.25rem; color: #9ca3af; margin-top: 1rem; }
-    .return-button { position: absolute; bottom: 10px; left: 10px; width: 24px; height: 24px; padding: 0; background: transparent; border: none; cursor: pointer; z-index: 100; }
+  <style>
+    body { font-family: "Inter", system-ui, sans-serif; margin: 0; padding: 0; background: #0b0b0b; }
+    .main-container { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; width: 100vw; padding: 1rem; box-sizing: border-box; }
+    .screen { display: none; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; }
+    #table-selection-screen { background:#f3f4f6; } /* Remove initial display:flex here */
+    .button-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; max-width: 600px; margin: 2rem auto 0; }
+    .table-button { font-size: 2rem; font-weight: 700; padding: 2rem 1rem; background: #007aff; color: #fff; border: 2px solid #007aff; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -1px rgba(0,0,0,.06); cursor: pointer; transition: all .2s ease; }
+    .table-button:active { transform: translateY(1px); }
+    .iframe-container { width: 100%; height: 100%; border: none; overflow: hidden; }
+    .loading-indicator { font-size: 1.25rem; color: #9ca3af; margin-top: 1rem; }
+    .return-button { position: absolute; bottom: 10px; left: 10px; width: 24px; height: 24px; padding: 0; background: transparent; border: none; cursor: pointer; z-index: 100; }
 
-    /* START-SCREEN -> slideshow */
-    #start-screen { position: relative; width:100%; height:100%; background:#000; overflow:hidden; display:flex; }
-    .slide-stage { position: absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#000; }
-    .slide-stage img, .slide-stage video { max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; }
-    .slide-overlay { position:absolute; inset:0; display:flex; align-items:flex-end; justify-content:center; pointer-events:none;
-      background: linear-gradient(180deg, rgba(0,0,0,0) 60%, rgba(0,0,0,0.55) 100%); }
-    .slide-caption { color:#fff; text-align:center; font-size:1rem; padding:1rem 1.25rem; max-width:90vw; }
-    .tap-to-start { position:absolute; inset:0; cursor:pointer; }
-    .tap-hint { position:absolute; bottom:32px; right:32px; background:rgba(0,0,0,.55); color:#fff; padding:.5rem .75rem; border-radius:.5rem;
-      font-weight:600; font-size:.95rem; pointer-events:none; user-select:none; }
+    /* START-SCREEN -> slideshow */
+    #start-screen { position: relative; width:100%; height:100%; background:#000; overflow:hidden; display:flex; }
+    .slide-stage { position: absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#000; }
+    .slide-stage img, .slide-stage video { max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; }
+    .slide-overlay { position:absolute; inset:0; display:flex; align-items:flex-end; justify-content:center; pointer-events:none;
+      background: linear-gradient(180deg, rgba(0,0,0,0) 60%, rgba(0,0,0,0.55) 100%); }
+    .slide-caption { color:#fff; text-align:center; font-size:1rem; padding:1rem 1.25rem; max-width:90vw; }
+    .tap-to-start { position:absolute; inset:0; cursor:pointer; }
+    .tap-hint { position:absolute; bottom:32px; right:32px; background:rgba(0,0,0,.55); color:#fff; padding:.5rem .75rem; border-radius:.5rem;
+      font-weight:600; font-size:.95rem; pointer-events:none; user-select:none; }
 
-    @media (max-width: 640px) {
-      .button-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
-      .table-button { font-size: 1.5rem; padding: 1.5rem .5rem; }
-    }
-  </style>
+    @media (max-width: 640px) {
+      .button-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+      .table-button { font-size: 1.5rem; padding: 1.5rem .5rem; }
+    }
+  </style>
 </head>
 <body>
-  <div class="main-container" id="main-container">
-    <!-- Màn chọn bàn -->
-    <div class="screen" id="table-selection-screen">
-      <h2 class="text-5xl font-bold text-gray-800">T-NGON</h2>
-      <p class="text-lg text-gray-600 mt-2">Vui lòng chọn bàn của bạn</p>
-      <div class="button-grid" id="table-buttons"></div>
-    </div>
+  <div class="main-container" id="main-container">
+        <div class="screen" id="table-selection-screen">
+      <h2 class="text-5xl font-bold text-gray-800">T-NGON</h2>
+      <p class="text-lg text-gray-600 mt-2">Vui lòng chọn bàn của bạn</p>
+      <div class="button-grid" id="table-buttons"></div>
+    </div>
 
-    <!-- Màn START (slideshow đồng bộ) -->
-    <div class="screen" id="start-screen">
-      <div class="tap-to-start" onclick="handleTapToStart()" title="Chạm để bắt đầu"></div>
-      <div class="slide-stage" id="slide-stage"></div>
-      <div class="slide-overlay"><div class="slide-caption" id="slide-caption"></div></div>
-      <div class="tap-hint">Chạm để bắt đầu đặt món</div>
-      <p id="table-info" class="text-sm text-gray-300 absolute top-3 left-4 bg-black/40 px-2 py-1 rounded">Chưa chọn bàn</p>
-    </div>
+        <div class="screen" id="start-screen">
+      <div class="tap-to-start" onclick="startOrder()" title="Chạm để bắt đầu"></div>
+      <div class="slide-stage" id="slide-stage"></div>
+      <div class="slide-overlay"><div class="slide-caption" id="slide-caption"></div></div>
+      <div class="tap-hint">Chạm để bắt đầu đặt món</div>
+      <p id="table-info" class="text-sm text-gray-300 absolute top-3 left-4 bg-black/40 px-2 py-1 rounded">Chưa chọn bàn</p>
+    </div>
 
-    <!-- Màn iframe -->
-    <div class="screen" id="iframe-screen">
-      <button class="return-button" onclick="clearPage()"></button>
-    </div>
-  </div>
+        <div class="screen" id="iframe-screen">
+      <button class="return-button" onclick="clearPage()"></button>
+    </div>
+  </div>
 
-  <script>
-    /* ----------------- Cấu hình ----------------- */
-    const LINKS_JSON_URL   = "https://tngon462.github.io/QR/links.json";
+  <script>
+    /* ----------------- Cấu hình ----------------- */
+    const LINKS_JSON_URL   = "https://tngon462.github.io/QR/links.json";
 
-    // GitHub repo của sếp
-    const GH_OWNER  = "tngon462";
-    const GH_REPO   = "slide";
-    const GH_BRANCH = "main";
-    const GH_FOLDER = "slides";
+    // GitHub repo của sếp
+    const GH_OWNER  = "tngon462";
+    const GH_REPO   = "slide";
+    const GH_BRANCH = "main";
+    const GH_FOLDER = "slides";
 
-    // Tùy chọn slideshow
-    const SLIDE_DEFAULT_DURATION = 8;     // giây/slide
-    const SLIDE_SHUFFLE = true;           // true = ngẫu nhiên, false = tuần tự
-    const RELOAD_INTERVAL_MS = 300000;    // 5 phút: giảm nguy cơ chạm rate limit GitHub API
+    // Tùy chọn slideshow
+    const SLIDE_DEFAULT_DURATION = 8;     // giây/slide
+    const SLIDE_SHUFFLE = true;           // true = ngẫu nhiên, false = tuần tự
+    const RELOAD_INTERVAL_MS = 300000;    // 5 phút: giảm nguy cơ chạm rate limit GitHub API
 
-    let selectedBan = null;
+    let selectedBan = null;
 
-    /* ----------------- Firebase (chỉ dùng Realtime DB để đồng bộ + expired) ----------------- */
-    const firebaseConfig = {
-      apiKey: "AIzaSyB4u2G41xdGkgBC0KltleRpcg5Lwru2RIU",
-      authDomain: "tngon-b37d6.firebaseapp.com",
-      databaseURL: "https://tngon-b37d6-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "tngon-b37d6",
-      storageBucket: "tngon-b37d6.firebasestorage.app",
-      messagingSenderId: "580319242104",
-      appId: "1:580319242104:web:6922e4327bdc8286c30a8d",
-      measurementId: "G-LHEH8ZC6SL"
-    };
-    let fbApp = null, rtdb = null, currentRef = null, currentBanListening = null, lastTs = 0;
-    let serverOffsetMs = 0;
+    /* ----------------- Firebase (chỉ dùng Realtime DB để đồng bộ + expired) ----------------- */
+    const firebaseConfig = {
+      apiKey: "AIzaSyB4u2G41xdGkgBC0KltleRpcg5Lwru2RIU",
+      authDomain: "tngon-b37d6.firebaseapp.com",
+      databaseURL: "https://tngon-b37d6-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "tngon-b37d6",
+      storageBucket: "tngon-b37d6.firebasestorage.app",
+      messagingSenderId: "580319242104",
+      appId: "1:580319242104:web:6922e4327bdc8286c30a8d",
+      measurementId: "G-LHEH8ZC6SL"
+    };
+    let fbApp = null, rtdb = null, currentRef = null, currentBanListening = null, lastTs = 0;
+    let serverOffsetMs = 0;
 
-    function connectFirebase() {
-      if (!fbApp) fbApp = firebase.initializeApp(firebaseConfig);
-      if (!rtdb) rtdb = firebase.database();
-      rtdb.ref(".info/serverTimeOffset").on("value", snap => {
-        serverOffsetMs = Number(snap.val() || 0);
-      });
-    }
-    function nowServerMs(){ return Date.now() + serverOffsetMs; }
+    function connectFirebase() {
+      if (!fbApp) fbApp = firebase.initializeApp(firebaseConfig);
+      if (!rtdb) rtdb = firebase.database();
+      rtdb.ref(".info/serverTimeOffset").on("value", snap => {
+        serverOffsetMs = Number(snap.val() || 0);
+      });
+    }
+    function nowServerMs(){ return Date.now() + serverOffsetMs; }
 
-    function attachListenerFor(ban) {
-      if (!rtdb || currentBanListening === ban) return;
-      if (currentRef) currentRef.off();
-      currentBanListening = ban;
-      currentRef = rtdb.ref("signals/" + ban);
-      currentRef.on("value", (snap) => {
-        const v = snap.val();
-        if (!v) return;
-        const ts = v.ts || 0;
-        if (v.status === "expired" && ts > lastTs) { lastTs = ts; clearPage(); }
-      });
-    }
+    function attachListenerFor(ban) {
+      if (!rtdb || currentBanListening === ban) return;
+      if (currentRef) currentRef.off();
+      currentBanListening = ban;
+      currentRef = rtdb.ref("signals/" + ban);
+      currentRef.on("value", (snap) => {
+        const v = snap.val();
+        if (!v) return;
+        const ts = v.ts || 0;
+        if (v.status === "expired" && ts > lastTs) { lastTs = ts; clearPage(); }
+      });
+    }
 
-    /* Fallback REST polling */
-    async function pollExpiredFallback(){
-      try{
-        if (!selectedBan) return;
-        const url = firebaseConfig.databaseURL.replace(/\/$/,"") + "/signals/" + selectedBan + ".json?cb=" + Date.now();
-        const res = await fetch(url, { cache: "no-store" });
-        if (!res.ok) return;
-        const v = await res.json();
-        if (!v) return;
-        const ts = v.ts || 0;
-        if (v.status === "expired" && ts > lastTs) { lastTs = ts; clearPage(); }
-      }catch(_){}
-    }
-    setInterval(pollExpiredFallback, 3000);
+    /* Fallback REST polling */
+    async function pollExpiredFallback(){
+      try{
+        if (!selectedBan) return;
+        const url = firebaseConfig.databaseURL.replace(/\/$/,"") + "/signals/" + selectedBan + ".json?cb=" + Date.now();
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) return;
+        const v = await res.json();
+        if (!v) return;
+        const ts = v.ts || 0;
+        if (v.status === "expired" && ts > lastTs) { lastTs = ts; clearPage(); }
+      }catch(_){}
+    }
+    setInterval(pollExpiredFallback, 3000);
 
-    /* ----------------- UI helpers ----------------- */
-    function showScreen(id) {
-      document.querySelectorAll(".screen").forEach(s => s.style.display = "none");
-      document.getElementById(id).style.display = "flex";
-    }
-    function selectTable(banNumber) {
-      selectedBan = banNumber;
-      document.getElementById("table-info").textContent = `Bạn đang ở Bàn ${selectedBan}`;
-      showScreen("start-screen");
-      attachListenerFor(selectedBan);
-    }
-    function handleTapToStart(){
-      if (!selectedBan) { showScreen("table-selection-screen"); return; }
-      startOrder();
-    }
-    function startOrder() {
-      if (!selectedBan) return;
-      document.getElementById("start-screen").style.display = "none";
-      const loading = document.createElement("div");
-      loading.className = "loading-indicator";
-      loading.textContent = "Đang tải trang gọi món...";
-      document.getElementById("main-container").appendChild(loading);
+    /* ----------------- UI helpers ----------------- */
+    function showScreen(id) {
+      document.querySelectorAll(".screen").forEach(s => s.style.display = "none");
+      document.getElementById(id).style.display = "flex";
+    }
+    function selectTable(banNumber) {
+      selectedBan = banNumber;
+      document.getElementById("table-info").textContent = `Bạn đang ở Bàn ${selectedBan}`;
+      showScreen("start-screen");
+      attachListenerFor(selectedBan);
+    }
+    function startOrder() {
+      if (!selectedBan) return;
+      document.getElementById("start-screen").style.display = "none";
+      const loading = document.createElement("div");
+      loading.className = "loading-indicator";
+      loading.textContent = "Đang tải trang gọi món...";
+      document.getElementById("main-container").appendChild(loading);
 
-      fetch(LINKS_JSON_URL)
-        .then(r => { if (!r.ok) throw new Error("Không thể tải links.json"); return r.json(); })
-        .then(data => {
-          const url = data[selectedBan];
-          loading.remove();
-          if (url) createIframe(url); else showScreen("start-screen");
-        })
-        .catch(_err => { loading.remove(); showScreen("start-screen"); });
-    }
-    function createIframe(url) {
-      const iframeScreen = document.getElementById("iframe-screen");
-      iframeScreen.innerHTML = `<button class="return-button" onclick="clearPage()"></button>`;
-      const iframe = document.createElement("iframe");
-      iframe.id = "pos-iframe";
-      iframe.className = "iframe-container";
-      iframe.src = url;
-      iframeScreen.appendChild(iframe);
-      showScreen("iframe-screen");
-    }
-    function clearPage() {
-      const iframeScreen = document.getElementById("iframe-screen");
-      if (iframeScreen) iframeScreen.innerHTML = "";
-      showScreen("start-screen");
-    }
-    function getQueryParam(name){
-      try { return new URL(window.location.href).searchParams.get(name); } catch { return null; }
-    }
-    async function backfillSelectedBanFromIframe(){
-      try{
-        if (selectedBan) return;
-        const iframe = document.getElementById("pos-iframe");
-        if (!iframe || !iframe.src) return;
-        const r = await fetch(LINKS_JSON_URL);
-        const data = await r.json();
-        for (const [ban, url] of Object.entries(data)) {
-          if (iframe.src === url) { selectedBan = parseInt(ban, 10); attachListenerFor(selectedBan); break; }
-        }
-      }catch(_){}
-    }
+      fetch(LINKS_JSON_URL)
+        .then(r => { if (!r.ok) throw new Error("Không thể tải links.json"); return r.json(); })
+        .then(data => {
+          const url = data[selectedBan];
+          loading.remove();
+          if (url) createIframe(url); else showScreen("start-screen");
+        })
+        .catch(_err => { loading.remove(); showScreen("start-screen"); });
+    }
+    function createIframe(url) {
+      const iframeScreen = document.getElementById("iframe-screen");
+      iframeScreen.innerHTML = `<button class="return-button" onclick="clearPage()"></button>`;
+      const iframe = document.createElement("iframe");
+      iframe.id = "pos-iframe";
+      iframe.className = "iframe-container";
+      iframe.src = url;
+      iframeScreen.appendChild(iframe);
+      showScreen("iframe-screen");
+    }
+    function clearPage() {
+      const iframeScreen = document.getElementById("iframe-screen");
+      if (iframeScreen) iframeScreen.innerHTML = "";
+      showScreen("start-screen");
+    }
+    function getQueryParam(name){
+      try { return new URL(window.location.href).searchParams.get(name); } catch { return null; }
+    }
+    async function backfillSelectedBanFromIframe(){
+      try{
+        if (selectedBan) return;
+        const iframe = document.getElementById("pos-iframe");
+        if (!iframe || !iframe.src) return;
+        const r = await fetch(LINKS_JSON_URL);
+        const data = await r.json();
+        for (const [ban, url] of Object.entries(data)) {
+          if (iframe.src === url) { selectedBan = parseInt(ban, 10); attachListenerFor(selectedBan); break; }
+        }
+      }catch(_){}
+    }
 
-    /* ----------------- Slideshow đồng bộ ----------------- */
-    const slideStage   = () => document.getElementById("slide-stage");
-    const slideCaption = () => document.getElementById("slide-caption");
+    /* ----------------- Slideshow đồng bộ ----------------- */
+    const slideStage   = () => document.getElementById("slide-stage");
+    const slideCaption = () => document.getElementById("slide-caption");
 
-    let slides = [];            // [{type:"image"|"video", src, duration, caption}]
-    let totalDuration = 0;      // ms
-    let cumDurations = [];      // ms
-    let currentIndex = -1;
-    let currentEl = null;
-    let cycleStartTs = null;    // ms (server time)
-    let syncTimer = null;
+    let slides = [];            // [{type:"image"|"video", src, duration, caption}]
+    let totalDuration = 0;      // ms
+    let cumDurations = [];      // ms
+    let currentIndex = -1;
+    let currentEl = null;
+    let cycleStartTs = null;    // ms (server time)
+    let syncTimer = null;
 
-    function ms(s){ return Math.max(0, Math.round(s*1000)); }
-    function setCaption(text){ slideCaption().textContent = text || ""; }
-    function isVideoUrl(u){
-      try {
-        const ext = (new URL(u)).pathname.split('.').pop().toLowerCase();
-        return ['mp4','webm','ogg','mov','m4v'].includes(ext);
-      } catch { return false; }
-    }
+    function ms(s){ return Math.max(0, Math.round(s*1000)); }
+    function setCaption(text){ slideCaption().textContent = text || ""; }
+    function isVideoUrl(u){
+      try {
+        const ext = (new URL(u)).pathname.split('.').pop().toLowerCase();
+        return ['mp4','webm','ogg','mov','m4v'].includes(ext);
+      } catch { return false; }
+    }
 
-    function swapStage(el){
-      const stage = slideStage();
-      if (currentEl && currentEl.parentNode === stage) stage.removeChild(currentEl);
-      currentEl = el; stage.appendChild(el);
-    }
-    function showImage(src){
-      const img = document.createElement("img");
-      img.decoding = "async";
-      img.loading = "eager";
-      img.src = src;
-      swapStage(img);
-    }
-    function showVideo(src, offsetMs){
-      const vid = document.createElement("video");
-      vid.src = src;
-      vid.muted = true;       // autoplay iOS
-      vid.playsInline = true; // iOS
-      vid.autoplay = true;
-      vid.preload = "auto";
-      vid.controls = false;
-      vid.addEventListener("loadedmetadata", () => {
-        try {
-          const offSec = Math.min((offsetMs||0)/1000, Math.max(0,(vid.duration||0)-0.05));
-          if (isFinite(offSec) && offSec > 0) vid.currentTime = offSec;
-        } catch(_) {}
-        vid.play().catch(()=>{});
-      });
-      swapStage(vid);
-    }
+    function swapStage(el){
+      const stage = slideStage();
+      if (currentEl && currentEl.parentNode === stage) stage.removeChild(currentEl);
+      currentEl = el; stage.appendChild(el);
+    }
+    function showImage(src){
+      const img = document.createElement("img");
+      img.decoding = "async";
+      img.loading = "eager";
+      img.src = src;
+      swapStage(img);
+    }
+    function showVideo(src, offsetMs){
+      const vid = document.createElement("video");
+      vid.src = src;
+      vid.muted = true;       // autoplay iOS
+      vid.playsInline = true; // iOS
+      vid.autoplay = true;
+      vid.preload = "auto";
+      vid.controls = false;
+      vid.addEventListener("loadedmetadata", () => {
+        try {
+          const offSec = Math.min((offsetMs||0)/1000, Math.max(0,(vid.duration||0)-0.05));
+          if (isFinite(offSec) && offSec > 0) vid.currentTime = offSec;
+        } catch(_) {}
+        vid.play().catch(()=>{});
+      });
+      swapStage(vid);
+    }
 
-    function computeIndexAndOffset(nowMs){
-      if (!slides.length || !totalDuration || cycleStartTs == null) return { idx:0, offsetMs:0 };
-      const elapsed = ((nowMs - cycleStartTs) % totalDuration + totalDuration) % totalDuration;
-      let idx = cumDurations.findIndex(acc => elapsed < acc);
-      if (idx < 0) idx = slides.length - 1;
-      const startMs = cumDurations[idx] - ms(slides[idx].duration);
-      const offsetMs = elapsed - startMs;
-      return { idx, offsetMs };
-    }
-    function renderByClock(){
-      const now = nowServerMs();
-      const { idx, offsetMs } = computeIndexAndOffset(now);
-      if (idx !== currentIndex){
-        currentIndex = idx;
-        const item = slides[idx];
-        setCaption(item.caption);
-        if (item.type === "video") showVideo(item.src, offsetMs);
-        else showImage(item.src);
-      }
-    }
-    function startSyncLoop(){
-      if (syncTimer) clearInterval(syncTimer);
-      syncTimer = setInterval(renderByClock, 300);
-    }
+    function computeIndexAndOffset(nowMs){
+      if (!slides.length || !totalDuration || cycleStartTs == null) return { idx:0, offsetMs:0 };
+      const elapsed = ((nowMs - cycleStartTs) % totalDuration + totalDuration) % totalDuration;
+      let idx = cumDurations.findIndex(acc => elapsed < acc);
+      if (idx < 0) idx = slides.length - 1;
+      const startMs = cumDurations[idx] - ms(slides[idx].duration);
+      const offsetMs = elapsed - startMs;
+      return { idx, offsetMs };
+    }
+    function renderByClock(){
+      const now = nowServerMs();
+      const { idx, offsetMs } = computeIndexAndOffset(now);
+      if (idx !== currentIndex){
+        currentIndex = idx;
+        const item = slides[idx];
+        setCaption(item.caption);
+        if (item.type === "video") showVideo(item.src, offsetMs);
+        else showImage(item.src);
+      }
+    }
+    function startSyncLoop(){
+      if (syncTimer) clearInterval(syncTimer);
+      syncTimer = setInterval(renderByClock, 300);
+    }
 
-    async function ensureCycleStart(){
-      const ref = rtdb.ref("slideshow/cycleStartTs");
-      ref.on("value", snap => {
-        const val = snap.val();
-        if (typeof val === "number" && isFinite(val) && val > 0){
-          cycleStartTs = val;
-        }
-      });
-      const initCheck = await ref.get();
-      if (!initCheck.exists()){
-        try { await ref.set(nowServerMs()); } catch(_){}
-      }
-    }
+    async function ensureCycleStart(){
+      const ref = rtdb.ref("slideshow/cycleStartTs");
+      ref.on("value", snap => {
+        const val = snap.val();
+        if (typeof val === "number" && isFinite(val) && val > 0){
+          cycleStartTs = val;
+        }
+      });
+      const initCheck = await ref.get();
+      if (!initCheck.exists()){
+        try { await ref.set(nowServerMs()); } catch(_){}
+      }
+    }
 
-    /* ---- Tải danh sách slide từ GitHub repo (/slides) ---- */
-    async function listGithubFolder(owner, repo, branch, folder){
-      const api = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(folder)}?ref=${encodeURIComponent(branch)}`;
-      const res = await fetch(api, { cache: "no-store" });
-      if (!res.ok) throw new Error("Không đọc được danh sách từ GitHub: " + res.status);
-      const arr = await res.json();
-      return arr.filter(it => it.type === "file").map(it => ({
-        name: it.name,
-        url: it.download_url || it.html_url
-      }));
-    }
+    /* ---- Tải danh sách slide từ GitHub repo (/slides) ---- */
+    async function listGithubFolder(owner, repo, branch, folder){
+      const api = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(folder)}?ref=${encodeURIComponent(branch)}`;
+      const res = await fetch(api, { cache: "no-store" });
+      if (!res.ok) throw new Error("Không đọc được danh sách từ GitHub: " + res.status);
+      const arr = await res.json();
+      return arr.filter(it => it.type === "file").map(it => ({
+        name: it.name,
+        url: it.download_url || it.html_url
+      }));
+    }
 
-    async function loadSlidesFromGitHub(){
-      let files = await listGithubFolder(GH_OWNER, GH_REPO, GH_BRANCH, GH_FOLDER);
-      files = files.filter(f => /\.(jpe?g|png|gif|mp4|webm|mov|m4v)$/i.test(f.name));
+    async function loadSlidesFromGitHub(){
+      let files = await listGithubFolder(GH_OWNER, GH_REPO, GH_BRANCH, GH_FOLDER);
+      files = files.filter(f => /\.(jpe?g|png|gif|mp4|webm|mov|m4v)$/i.test(f.name));
 
-      files.sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric:true, sensitivity:'base' }));
-      if (SLIDE_SHUFFLE) {
-        for (let i = files.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [files[i], files[j]] = [files[j], files[i]];
-        }
-      }
+      files.sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric:true, sensitivity:'base' }));
+      if (SLIDE_SHUFFLE) {
+        for (let i = files.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [files[i], files[j]] = [files[j], files[i]];
+        }
+      }
 
-      slides = files.map(({name, url}) => {
-        const vid = isVideoUrl(url);
-        const caption = name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ');
-        return { type: vid ? "video" : "image", src: url, duration: SLIDE_DEFAULT_DURATION, caption };
-      });
+      slides = files.map(({name, url}) => {
+        const vid = isVideoUrl(url);
+        const caption = name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ');
+        return { type: vid ? "video" : "image", src: url, duration: SLIDE_DEFAULT_DURATION, caption };
+      });
 
-      if (!slides.length){
-        slides = [
-          { type:"image", src:"https://placehold.co/1600x900/111/fff?text=T-NGON", duration:6, caption:"Chào mừng đến T-NGON" },
-          { type:"image", src:"https://placehold.co/1600x900/da251d/fff?text=Menu+m%E1%BB%9Bi", duration:6, caption:"Món mới mỗi tuần" }
-        ];
-      }
+      if (!slides.length){
+        slides = [
+          { type:"image", src:"https://placehold.co/1600x900/111/fff?text=T-NGON", duration:6, caption:"Chào mừng đến T-NGON" },
+          { type:"image", src:"https://placehold.co/1600x900/da251d/fff?text=Menu+m%E1%BB%9Bi", duration:6, caption:"Món mới mỗi tuần" }
+        ];
+      }
 
-      cumDurations = [];
-      totalDuration = 0;
-      for (const it of slides){ totalDuration += ms(it.duration); cumDurations.push(totalDuration); }
-    }
+      cumDurations = [];
+      totalDuration = 0;
+      for (const it of slides){ totalDuration += ms(it.duration); cumDurations.push(totalDuration); }
+    }
 
-    async function initSlideshow(){
-      await loadSlidesFromGitHub();
-      await ensureCycleStart();
-      startSyncLoop();
-      setInterval(loadSlidesFromGitHub, RELOAD_INTERVAL_MS);
-    }
+    async function initSlideshow(){
+      await loadSlidesFromGitHub();
+      await ensureCycleStart();
+      startSyncLoop();
+      setInterval(loadSlidesFromGitHub, RELOAD_INTERVAL_MS);
+    }
 
-    /* ----------------- Khởi động ----------------- */
-    document.addEventListener("DOMContentLoaded", () => {
-      connectFirebase();
+    /* ----------------- Khởi động ----------------- */
+    document.addEventListener("DOMContentLoaded", () => {
+      connectFirebase();
 
-      // Nút chọn bàn
-      const wrap = document.getElementById("table-buttons");
-      for (let i = 1; i <= 15; i++) {
-        const btn = document.createElement("button");
-        btn.className = "table-button";
-        btn.textContent = "Bàn " + i;
-        btn.addEventListener("click", () => selectTable(i));
-        wrap.appendChild(btn);
-      }
+      // Nút chọn bàn
+      const wrap = document.getElementById("table-buttons");
+      for (let i = 1; i <= 15; i++) {
+        const btn = document.createElement("button");
+        btn.className = "table-button";
+        btn.textContent = "Bàn " + i;
+        btn.addEventListener("click", () => selectTable(i));
+        wrap.appendChild(btn);
+      }
 
-      // Auto ?ban=10 và tự start
-      const qBan = getQueryParam("ban");
-      const n = qBan ? parseInt(qBan, 10) : NaN;
-      if (qBan && !isNaN(n)) {
-        setTimeout(() => { selectTable(n); startOrder(); }, 100);
-      } else {
-        // Mặc định: ở màn chọn bàn
-        showScreen("table-selection-screen");
-      }
+      // Tự động chọn bàn nếu có tham số, nếu không thì hiển thị màn hình chọn bàn
+      const qBan = getQueryParam("ban");
+      if (qBan) {
+        const n = parseInt(qBan, 10);
+        if (!isNaN(n)) {
+          setTimeout(() => { selectTable(n); startOrder(); }, 100);
+        } else {
+          showScreen("table-selection-screen");
+        }
+      } else {
+        showScreen("table-selection-screen");
+      }
 
-      // Phòng khi mất selectedBan mà iframe còn
-      setInterval(backfillSelectedBanFromIframe, 1000);
+      // Phòng khi mất selectedBan mà iframe còn
+      setInterval(backfillSelectedBanFromIframe, 1000);
 
-      // Khởi chạy slideshow (sẵn sàng khi vào màn START)
-      initSlideshow();
-    });
-  </script>
+      // Khởi chạy slideshow đồng bộ
+      initSlideshow();
+    });
+  </script>
 </body>
 </html>
