@@ -87,11 +87,15 @@
   </div>
 
   <script>
-    /* ====== CONFIG CHUNG ====== */
+    /************ DEBUG (bật/tắt tuỳ ý) ************/
+    const DEBUG = false;
+    const log = (...a)=>{ if(DEBUG) console.log("[TN]", ...a) };
+
+    /************ Config chung ************/
     const LINKS_JSON_URL = "https://tngon462.github.io/QR/links.json";
     let selectedBan = null;
 
-    /* ====== FIREBASE ====== */
+    /************ Firebase ************/
     const firebaseConfig = {
       apiKey: "AIzaSyB4u2G41xdGkgBC0KltleRpcg5Lwru2RIU",
       authDomain: "tngon-b37d6.firebaseapp.com",
@@ -104,18 +108,22 @@
     };
     let fbApp = null, rtdb = null, currentRef = null, currentBanListening = null, lastTs = 0;
     let pollInitTs = null;
+
+    // Đồng hồ server (không dùng startTs nữa)
     let serverOffsetMs = 0, serverClockReady = false;
-    function nowServerMs(){ return Date.now() + (Number(serverOffsetMs) || 0); }
+    function nowServerMs(){ return Date.now() + (Number(serverOffsetMs)||0); }
+
     function connectFirebase() {
       if (!fbApp) fbApp = firebase.initializeApp(firebaseConfig);
       if (!rtdb) rtdb = firebase.database();
       rtdb.ref(".info/serverTimeOffset").on("value", snap => {
         serverOffsetMs = Number(snap.val()||0);
         serverClockReady = true;
+        log("serverOffsetMs:", serverOffsetMs, "serverNow:", nowServerMs());
       });
     }
 
-    // RTDB signals (bỏ snapshot đầu)
+    // Lắng nghe EXPired (bỏ snapshot đầu)
     function attachListenerFor(ban) {
       if (!rtdb || currentBanListening === ban) return;
       if (currentRef) currentRef.off();
@@ -126,17 +134,17 @@
       currentRef.on("value", (snap) => {
         const v = snap.val(); if (!v) return;
         const ts = v.ts || 0;
-        if (!initialized) { initialized = true; firstTs = ts; if (ts > lastTs) lastTs = ts; return; }
+        if (!initialized) { initialized = true; firstTs = ts; if (ts>lastTs) lastTs=ts; return; }
         if (v.status === "expired" && ts > lastTs && ts > firstTs) { lastTs = ts; clearPage(); }
       });
     }
 
+    // Poll REST fallback
     async function pollExpiredFallback(){
       try{
         if (!selectedBan) return;
         const url = firebaseConfig.databaseURL.replace(/\/$/,"") + "/signals/" + selectedBan + ".json?cb=" + Date.now();
-        const res = await fetch(url, { cache: "no-store" });
-        if (!res.ok) return;
+        const res = await fetch(url, { cache: "no-store" }); if (!res.ok) return;
         const v = await res.json(); if (!v) return;
         const ts = v.ts || 0;
         if (pollInitTs === null) { pollInitTs = ts; if (ts>lastTs) lastTs=ts; return; }
@@ -145,7 +153,7 @@
     }
     setInterval(pollExpiredFallback, 3000);
 
-    /* ====== UI HELPERS ====== */
+    /************ UI helpers ************/
     function showScreen(id) {
       document.querySelectorAll(".screen").forEach(s => s.style.display = "none");
       const el = document.getElementById(id); if (el) el.style.display = "flex";
@@ -159,7 +167,7 @@
     }
     function startOrder() {
       if (!selectedBan) return;
-      stopSlideTimers();
+      stopSlideLoop();
       document.getElementById("start-screen").style.display = "none";
       const ss = document.getElementById("start-slideshow-screen"); if (ss) ss.style.display = "none";
 
@@ -186,13 +194,13 @@
       showScreen("iframe-screen");
     }
     function clearPage() {
-      stopSlideTimers();
+      stopSlideLoop();
       const iframeScreen = document.getElementById("iframe-screen");
       if (iframeScreen) iframeScreen.innerHTML = "";
       showScreen("start-screen");
     }
 
-    /* ====== Auto select ?ban= ====== */
+    /************ Auto select ?ban= ************/
     function getQueryParam(name){
       try { return new URL(window.location.href).searchParams.get(name); } catch { return null; }
     }
@@ -209,19 +217,22 @@
     }
     setInterval(backfillSelectedBanFromIframe, 1000);
 
-    /* ====== SLIDESHOW: MASTER TIMELINE (T GIÂY) ====== */
+    /************ SLIDESHOW (EPOCH-fixed timeline) ************/
     const GH_OWNER  = "tngon462";
     const GH_REPO   = "slide";
     const GH_BRANCH = "main";
     const GH_FOLDER = "slides";
-    const DEFAULT_DUR = 8; // giây/slide mặc định
+    const DEFAULT_DUR = 8;       // giây/slide mặc định
+
+    // EPOCH cố định toàn vũ trụ (không đổi)
+    const SLIDES_EPOCH_MS = Date.UTC(2024,0,1,0,0,0); // 2024-01-01T00:00:00Z
+    const PHASE_SHIFT_MS = 0; // chỉnh pha nếu cần (mặc định 0)
 
     let slides = [];     // [{type:'image'|'video', src:'', duration:number}]
-    let edgesMs = [];    // các mốc kết thúc (ms) tính từ đầu chu kỳ
-    let periodMs = 0;    // T = tổng chu kỳ ms
-    let startTs = null;  // mốc server (ms)
+    let edgesMs = [];    // mốc kết thúc (ms) tính từ đầu chu kỳ
+    let periodMs = 0;    // tổng chu kỳ
     let currentIndex = -1;
-    let tickTimer = null, resyncTimer = null;
+    let loopTimer = null, kickTimer = null;
 
     function setSlideStatus(msg){
       const box = document.getElementById("slide-status");
@@ -269,27 +280,23 @@
 
     function buildTimeline(){
       edgesMs = []; periodMs = 0;
-      for (const s of slides){
-        periodMs += msFromDur(s.duration);
-        edgesMs.push(periodMs);
-      }
+      for (const s of slides){ periodMs += msFromDur(s.duration); edgesMs.push(periodMs); }
     }
 
     function indexFromOffset(offsetMs){
-      // offset trong [0, period)
       let idx = edgesMs.findIndex(edge => offsetMs < edge);
       if (idx < 0) idx = slides.length - 1;
       const slideDur = msFromDur(slides[idx].duration);
-      const startOfThis = edgesMs[idx] - slideDur;
-      const inside = offsetMs - startOfThis; // ms đã trôi trong slide
+      const startOf = edgesMs[idx] - slideDur;
+      const inside = offsetMs - startOf;
       return { idx, inside, slideDur };
     }
 
-    function renderAtServerNow(){
-      if (!slides.length || !periodMs || startTs==null) return;
-
-      const elapsedAll = nowServerMs() - startTs;
-      const offset = ((elapsedAll % periodMs) + periodMs) % periodMs; // ms
+    function renderByEpoch(){
+      if (!slides.length || !periodMs) return;
+      // Đồng hồ server + epoch cố định → offset tuyệt đối, không cần startTs
+      const t = nowServerMs() - SLIDES_EPOCH_MS + PHASE_SHIFT_MS;
+      const offset = ((t % periodMs) + periodMs) % periodMs; // ms trong chu kỳ hiện tại
       const { idx, inside } = indexFromOffset(offset);
 
       if (idx !== currentIndex){
@@ -300,16 +307,16 @@
       }
     }
 
-    function startMasterLoop(){
-      stopSlideTimers();
-      // Tick 200ms: luôn đọc offset từ GIỜ SERVER → coi như “đang phát 1 video T giây”
-      tickTimer = setInterval(renderAtServerNow, 200);
-      // Resync mạnh mỗi 5s: ép renderAtServerNow (đề phòng tab ngủ)
-      resyncTimer = setInterval(()=>{ currentIndex = -1; renderAtServerNow(); }, 5000);
+    function startSlideLoop(){
+      stopSlideLoop();
+      // Tick 200ms: luôn tính theo giờ server + epoch → đồng bộ cứng
+      loopTimer = setInterval(renderByEpoch, 200);
+      // Kick 5s: ép render lại đề phòng tab ngủ
+      kickTimer = setInterval(() => { currentIndex = -1; renderByEpoch(); }, 5000);
     }
-    function stopSlideTimers(){
-      if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
-      if (resyncTimer) { clearInterval(resyncTimer); resyncTimer = null; }
+    function stopSlideLoop(){
+      if (loopTimer) { clearInterval(loopTimer); loopTimer = null; }
+      if (kickTimer) { clearInterval(kickTimer); kickTimer = null; }
       currentIndex = -1;
     }
 
@@ -348,41 +355,24 @@
       } catch(_){ setSlideStatus("Lỗi khi tải/đọc manifest.json."); return false; }
     }
 
-    async function ensureStartTs(){
-      try {
-        if (!rtdb) { startTs = nowServerMs(); return; }
-        const ref = rtdb.ref("slideshow/startTs");
-        ref.on("value", snap => {
-          const val = snap.val();
-          if (typeof val === "number" && val > 0) startTs = val;
-        });
-        await ref.transaction(curr => {
-          if (curr === null || curr === undefined || typeof curr !== "number" || curr <= 0) {
-            return firebase.database.ServerValue.TIMESTAMP;
-          }
-          return curr;
-        });
-        const s = await ref.get();
-        const t = s.val();
-        startTs = (typeof t === "number" && t > 0) ? t : nowServerMs();
-      } catch(_){ startTs = nowServerMs(); }
-    }
-
     async function initSlidesThenMaybeShow(){
-      // chỉ bật slideshow nếu thật sự có slide
-      let ok;
+      // tải manifest (retry nhẹ)
+      let ok = false;
       if (!slides.length) {
         ok = await loadSlidesFromManifest();
-        if (!ok) { showScreen("start-screen"); return; }
-      }
-      if (!serverClockReady) await new Promise(r=>setTimeout(r,300));
-      if (startTs == null) await ensureStartTs();
+        if (!ok) { await new Promise(r=>setTimeout(r,800)); ok = await loadSlidesFromManifest(); }
+      } else ok = true;
 
-      startMasterLoop();
+      if (!ok) { showScreen("start-screen"); return; }
+
+      // đợi đồng hồ server sẵn sàng một nhịp nhỏ (tránh lệch do offset chưa về)
+      if (!serverClockReady) await new Promise(r=>setTimeout(r,300));
+
+      startSlideLoop();
       showScreen("start-slideshow-screen");
     }
 
-    /* ====== Idle 59s → tự bật slideshow ====== */
+    /************ Idle 59s → tự bật slideshow ************/
     const IDLE_MS = 59000;
     let idleTimer = null;
     function isOnStartScreen(){
@@ -399,11 +389,11 @@
       window.addEventListener(evt, () => { resetIdleTimer(); }, { passive:true });
     });
 
-    /* ====== BOOT ====== */
+    /************ Boot ************/
     document.addEventListener("DOMContentLoaded", () => {
       connectFirebase();
 
-      // Tạo nút bàn
+      // tạo nút bàn
       const wrap = document.getElementById("table-buttons");
       for (let i = 1; i <= 15; i++) {
         const btn = document.createElement("button");
