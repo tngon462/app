@@ -35,18 +35,20 @@
     .iframe-container { width: 100%; height: 100%; border: none; overflow: hidden; }
     .loading-indicator { font-size: 1.5rem; color: #6b7280; margin-top: 1rem; }
     .error-message { color: #ef4444; font-size: 1.2rem; margin-top: 1rem; }
+
     @media (max-width: 640px) {
       .button-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
       .table-button { font-size: 1.5rem; padding: 1.5rem .5rem; }
       .start-button { font-size: 2rem; padding: 1rem 2rem; }
     }
+
     .return-button { position: absolute; bottom: 10px; left: 10px; width: 24px; height: 24px; padding: 0; background: transparent; border: none; cursor: pointer; z-index: 100; }
 
-    /* ======= Slideshow screen (nền trắng) ======= */
+    /* ===== Slideshow screen (nền trắng, không caption/hint) ===== */
     #start-slideshow-screen { position: relative; width:100%; height:100%; background:#ffffff; overflow:hidden; }
     .slide-stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#ffffff; }
     .slide-stage img, .slide-stage video { max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; background:#ffffff; }
-    .tap-overlay { position:absolute; inset:0; z-index:10; cursor:pointer; } /* chạm để quay về CTA */
+    .tap-overlay { position:absolute; inset:0; z-index:10; cursor:pointer; } /* chạm để quay lại CTA */
   </style>
 </head>
 <body class="bg-gray-100">
@@ -150,13 +152,12 @@
       selectedBan = banNumber;
       document.getElementById("table-info").textContent = `Bạn đang ở Bàn ${selectedBan}`;
       attachListenerFor(selectedBan);
-      // Quyết định hiển thị: nếu có slide thì show slideshow; nếu không thì show CTA như cũ
-      initSlidesThenShow();
+      initSlidesThenMaybeShow(); // quyết định slideshow/CTA theo manifest
     }
 
     function startOrder() {
       if (!selectedBan) { return; }
-      // Ẩn cả CTA/slideshow trước khi vào iframe
+      // Ẩn CTA/slideshow trước khi vào iframe
       document.getElementById("start-screen").style.display = "none";
       const ss = document.getElementById("start-slideshow-screen");
       if (ss) ss.style.display = "none";
@@ -190,7 +191,6 @@
     function clearPage() {
       const iframeScreen = document.getElementById("iframe-screen");
       if (iframeScreen) iframeScreen.innerHTML = "";
-      // quay lại CTA (không tự động vào slideshow)
       showScreen("start-screen");
     }
 
@@ -217,19 +217,21 @@
     }
     setInterval(backfillSelectedBanFromIframe, 1000);
 
-    /* ----------------- SLIDESHOW (chỉ dùng manifest) ----------------- */
+    /* ----------------- SLIDESHOW (manifest only) ----------------- */
     const GH_OWNER  = "tngon462";
     const GH_REPO   = "slide";
     const GH_BRANCH = "main";
     const GH_FOLDER = "slides";
-    const SLIDE_DEFAULT_DURATION_SEC = 8; // thời lượng mặc định mỗi slide
+    const SLIDE_DEFAULT_DURATION_SEC = 8; // mỗi slide mặc định
 
     let slides = [];
     let cumDurations = [];
     let totalDuration = 0;
     let currentIndex = -1;
-    let cycleStartTs = null; // neo thời gian để tính slide hiện tại
+    let cycleStartTs = null; // neo thời gian để đồng bộ
     let syncTimer = null;
+    let manifestChecked = false; // đã kiểm tra manifest ít nhất 1 lần
+    let slidesAvailable = false; // có slide hợp lệ
 
     function msFromDur(d){
       if (typeof d === "number") return Math.max(0, Math.round(d*1000));
@@ -292,52 +294,109 @@
       const url  = base + "manifest.json?cb=" + Date.now();
       try{
         const res = await fetch(url, { cache: "no-store" });
-        if (!res.ok) return false;
+        if (!res.ok) { console.warn("manifest fetch !ok", res.status); return false; }
+
         let arr = await res.json();
-        if (!Array.isArray(arr)) return false;
+        if (!Array.isArray(arr)) { console.warn("manifest is not array"); return false; }
 
         const allowed = /\.(jpe?g|png|gif|mp4|webm|mov|m4v)$/i;
+
         const items = arr
-          .map(item => typeof item === "string"
-            ? { src: base + item, name: item, duration: SLIDE_DEFAULT_DURATION_SEC }
-            : (item && item.src
-                ? { src: item.src.startsWith("http") ? item.src : (base + item.src), name: item.src, duration: item.duration ?? SLIDE_DEFAULT_DURATION_SEC }
-                : null))
+          .map(item => {
+            if (typeof item === "string") {
+              const name = item.trim();
+              if (!name) return null;
+              return { src: base + name, name, duration: SLIDE_DEFAULT_DURATION_SEC };
+            }
+            if (item && typeof item === "object" && item.src) {
+              const name = String(item.src).trim();
+              if (!name) return null;
+              const src = name.startsWith("http") ? name : (base + name);
+              const duration = Number(item.duration) > 0 ? Number(item.duration) : SLIDE_DEFAULT_DURATION_SEC;
+              return { src, name, duration };
+            }
+            return null;
+          })
           .filter(Boolean)
           .filter(it => allowed.test(it.name));
 
-        if (!items.length) return false;
+        if (!items.length) { console.warn("manifest parsed but empty after filter"); return false; }
 
         slides = items.map(it => ({ type: isVideoUrl(it.src) ? "video" : "image", src: it.src, duration: it.duration }));
         cumDurations = []; totalDuration = 0;
         for (const it of slides){ totalDuration += msFromDur(it.duration); cumDurations.push(totalDuration); }
         return true;
-      }catch(_){ return false; }
-    }
 
-    async function initSlidesThenShow(){
-      // Mặc định: hiện CTA trước cho chắc
-      showScreen("start-screen");
-
-      const ok = await loadSlidesFromManifest();
-      if (ok) {
-        // Có slide → hiển thị slideshow nền trắng
-        cycleStartTs = Date.now();
-        currentIndex = -1;
-        renderByClock();
-        startLoop();
-        showScreen("start-slideshow-screen");
-      } else {
-        // Không có slide → giữ CTA như cũ
-        // (table-info đã set bên trên)
+      } catch(err){
+        console.error("manifest load error", err);
+        return false;
       }
     }
+
+    async function initSlidesThenMaybeShow(){
+      // Kiểm tra/ tải manifest (retry 1 lần nếu lỗi)
+      let ok = false;
+      if (!manifestChecked) {
+        ok = await loadSlidesFromManifest();
+        if (!ok) {
+          await new Promise(r => setTimeout(r, 800));
+          ok = await loadSlidesFromManifest();
+        }
+        manifestChecked = true;
+        slidesAvailable = ok;
+      } else {
+        ok = slidesAvailable;
+      }
+
+      if (ok) {
+        // Có slide → khởi tạo chạy (nếu chưa chạy)
+        if (cycleStartTs == null) {
+          cycleStartTs = Date.now();
+          currentIndex = -1;
+          renderByClock();
+          startLoop();
+        }
+        showScreen("start-slideshow-screen");
+      } else {
+        // Không có slide → CTA như cũ
+        showScreen("start-screen");
+      }
+
+      // (Re)start bộ đếm idle cho màn CTA
+      resetIdleTimer();
+    }
+
+    /* ----------------- Idle 59s → tự bật slideshow ----------------- */
+    const IDLE_MS = 59000;
+    let idleTimer = null;
+    function isOnStartScreen(){
+      const el = document.getElementById("start-screen");
+      return el && el.style.display !== "none";
+    }
+    function resetIdleTimer(){
+      if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+      // Chỉ đếm khi đang ở màn CTA và đã chọn bàn
+      if (selectedBan && isOnStartScreen()) {
+        idleTimer = setTimeout(async () => {
+          // Nếu có slides rồi thì show; nếu chưa có (do lỗi trước) thì thử load lại nhanh
+          if (!slidesAvailable) {
+            const ok = await loadSlidesFromManifest();
+            if (ok) { slidesAvailable = true; cycleStartTs = cycleStartTs ?? Date.now(); startLoop(); }
+          }
+          if (slidesAvailable) showScreen("start-slideshow-screen");
+        }, IDLE_MS);
+      }
+    }
+    // Sự kiện tương tác để reset timer
+    ["touchstart","touchmove","mousedown","mousemove","keydown"].forEach(evt => {
+      window.addEventListener(evt, () => { resetIdleTimer(); }, { passive:true });
+    });
 
     /* ----------------- Khởi động ----------------- */
     document.addEventListener("DOMContentLoaded", () => {
       connectFirebase();
 
-      // Tạo nút bàn sau khi DOM sẵn sàng
+      // Tạo nút bàn sau khi DOM sẵn sàng (giữ nguyên style)
       const wrap = document.getElementById("table-buttons");
       for (let i = 1; i <= 15; i++) {
         const btn = document.createElement("button");
@@ -347,7 +406,7 @@
           selectedBan = i;
           document.getElementById("table-info").textContent = `Bạn đang ở Bàn ${selectedBan}`;
           attachListenerFor(selectedBan);
-          initSlidesThenShow();
+          initSlidesThenMaybeShow();
         });
         wrap.appendChild(btn);
       }
@@ -356,12 +415,12 @@
       const qBan = getQueryParam("ban");
       if (qBan) {
         const n = parseInt(qBan, 10);
-        if (!isNaN(n)) setTimeout(() => { 
+        if (!isNaN(n)) setTimeout(() => {
           selectedBan = n;
           document.getElementById("table-info").textContent = `Bạn đang ở Bàn ${selectedBan}`;
           attachListenerFor(selectedBan);
-          initSlidesThenShow();
-          startOrder(); 
+          initSlidesThenMaybeShow();
+          startOrder(); // hành vi cũ: auto start nếu có ?ban
         }, 100);
       }
 
