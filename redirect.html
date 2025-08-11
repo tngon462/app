@@ -44,7 +44,7 @@
 
     .return-button { position: absolute; bottom: 10px; left: 10px; width: 24px; height: 24px; padding: 0; background: transparent; border: none; cursor: pointer; z-index: 100; }
 
-    /* ===== Slideshow (nền trắng, mặc định không chữ) ===== */
+    /* ===== Slideshow (nền trắng, không caption) ===== */
     #start-slideshow-screen { position: relative; width:100%; height:100%; background:#ffffff; overflow:hidden; }
     .slide-stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#ffffff; }
     .slide-stage img, .slide-stage video { max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; background:#ffffff; }
@@ -62,7 +62,7 @@
       <div class="button-grid" id="table-buttons"></div>
     </div>
 
-    <!-- Màn BẮT ĐẦU (giữ nguyên) -->
+    <!-- Màn BẮT ĐẦU -->
     <div class="screen" id="start-screen">
       <div class="space-y-4 text-gray-800 text-center">
         <h2 class="text-5xl font-bold">T-NGON</h2>
@@ -105,7 +105,7 @@
       measurementId: "G-LHEH8ZC6SL"
     };
     let fbApp = null, rtdb = null, currentRef = null, currentBanListening = null, lastTs = 0;
-    let pollInitTs = null; // mốc poll đầu để bỏ qua trạng thái cũ
+    let pollInitTs = null; // mốc poll đầu
 
     // Đồng hồ server để đồng bộ tất cả máy
     let serverOffsetMs = 0;
@@ -150,7 +150,7 @@
       });
     }
 
-    /* Fallback REST polling (ẩn) — CŨNG BỎ QUA LẦN ĐẦU */
+    /* Fallback REST polling (ẩn) — BỎ QUA LẦN ĐẦU */
     async function pollExpiredFallback(){
       try{
         if (!selectedBan) return;
@@ -259,7 +259,7 @@
     }
     setInterval(backfillSelectedBanFromIframe, 1000);
 
-    /* ----------------- SLIDESHOW (manifest only, đồng bộ) ----------------- */
+    /* ----------------- SLIDESHOW (manifest only, lịch tuyệt đối) ----------------- */
     const GH_OWNER  = "tngon462";
     const GH_REPO   = "slide";
     const GH_BRANCH = "main";
@@ -267,13 +267,13 @@
     const SLIDE_DEFAULT_DURATION_SEC = 8; // mỗi slide mặc định
 
     let slides = [];
-    let cumDurations = [];
-    let totalDuration = 0;
+    let cumEdges = [];   // các mốc biên tích lũy (ms) trong 1 chu kỳ
+    let periodMs = 0;    // tổng chu kỳ
     let currentIndex = -1;
-    let cycleStartTs = null; // mốc chung (server timestamp)
+    let startTs = null;  // mốc lịch tuyệt đối (server) — đọc từ Firebase
     let nextTimer = null;
-    let manifestChecked = false; // đã kiểm tra manifest ít nhất 1 lần
-    let slidesAvailable = false; // có slide hợp lệ
+    let manifestChecked = false;
+    let slidesAvailable = false;
 
     function setSlideStatus(msg){
       const box = document.getElementById("slide-status");
@@ -320,35 +320,45 @@
       swapStage(v);
     }
 
-    function computeIndexAndOffset(nowMs){
-      if (!slides.length || totalDuration<=0 || cycleStartTs==null) return {idx:0, offsetMs:0, withinMs:0, slideDurMs: msFromDur(slides[0]?.duration ?? SLIDE_DEFAULT_DURATION_SEC)};
-      const elapsed = ((nowMs - cycleStartTs) % totalDuration + totalDuration) % totalDuration;
-      let idx = cumDurations.findIndex(acc => elapsed < acc);
-      if (idx < 0) idx = slides.length - 1;
-      const slideDurMs = msFromDur(slides[idx].duration);
-      const startMs = cumDurations[idx] - slideDurMs;
-      const withinMs = elapsed - startMs;
-      return { idx, offsetMs: withinMs, withinMs, slideDurMs };
+    function buildEdges(){
+      cumEdges = [];
+      periodMs = 0;
+      for (const s of slides){
+        const d = msFromDur(s.duration);
+        periodMs += d;
+        cumEdges.push(periodMs); // cuối mỗi slide
+      }
     }
 
-    function renderOnceAndSchedule(){
-      if (!slides.length) return;
-      // dùng đồng hồ server
-      const { idx, withinMs, slideDurMs } = computeIndexAndOffset(nowServerMs());
+    // Tính chỉ số slide theo lịch tuyệt đối
+    function indexAt(nowMs){
+      if (!slides.length || !periodMs || startTs==null) return {idx:0, offset:0, remain:periodMs||0, slideDur: msFromDur(slides[0]?.duration || SLIDE_DEFAULT_DURATION_SEC)};
+      const elapsed = ((nowMs - startTs) % periodMs + periodMs) % periodMs; // [0, period)
+      let idx = cumEdges.findIndex(edge => elapsed < edge);
+      if (idx < 0) idx = slides.length - 1;
+      const slideDur = msFromDur(slides[idx].duration);
+      const startOfThis = cumEdges[idx] - slideDur;
+      const offset = elapsed - startOfThis;       // đã trôi trong slide
+      const remain = slideDur - offset;           // còn lại tới biên
+      return { idx, offset, remain, slideDur };
+    }
 
-      // nếu đổi slide → render
+    function renderAndArmToNextEdge(){
+      if (!slides.length || !periodMs || startTs==null) return;
+      const now = nowServerMs();
+      const { idx, offset, remain, slideDur } = indexAt(now);
+
       if (idx !== currentIndex){
         currentIndex = idx;
         const it = slides[idx];
-        if (it.type === "video") showVideo(it.src, withinMs);
+        if (it.type === "video") showVideo(it.src, offset);
         else showImage(it.src);
       }
 
-      // hẹn lần kế tiếp đúng biên
-      const remain = Math.max(0, slideDurMs - withinMs);
-      const delay = remain <= 5 ? 5 : remain; // tránh 0ms
+      // Hẹn giờ đúng biên lần kế tiếp
+      let delay = Math.max(10, Math.min(remain, 60000)); // bảo vệ: >=10ms, <=60s
       if (nextTimer) clearTimeout(nextTimer);
-      nextTimer = setTimeout(renderOnceAndSchedule, delay);
+      nextTimer = setTimeout(renderAndArmToNextEdge, delay);
     }
 
     async function loadSlidesFromManifest(){
@@ -398,8 +408,7 @@
         }
 
         slides = items.map(it => ({ type: isVideoUrl(it.src) ? "video" : "image", src: it.src, duration: it.duration }));
-        cumDurations = []; totalDuration = 0;
-        for (const it of slides){ totalDuration += msFromDur(it.duration); cumDurations.push(totalDuration); }
+        buildEdges();
         setSlideStatus(""); showGlobalStatus("");
         return true;
 
@@ -410,16 +419,16 @@
       }
     }
 
-    // Lấy/đặt mốc chu kỳ chung bằng server timestamp thật (tránh lệch)
-    async function ensureCycleStart(){
+    // Tạo “mốc lịch” tuyệt đối trên server (1 lần) và theo dõi
+    async function ensureStartTs(){
       try {
-        if (!rtdb) { cycleStartTs = nowServerMs(); return; }
-        const ref = rtdb.ref("slideshow/cycleStartTs");
+        if (!rtdb) { startTs = nowServerMs(); return; }
+        const ref = rtdb.ref("slideshow/startTs");
 
-        // nghe mốc từ server
+        // nghe cập nhật mốc từ server
         ref.on("value", snap => {
           const val = snap.val();
-          if (typeof val === "number" && val > 0) cycleStartTs = val;
+          if (typeof val === "number" && val > 0) startTs = val;
         });
 
         // đặt mốc bằng transaction + ServerValue.TIMESTAMP (chỉ khi chưa có)
@@ -433,15 +442,15 @@
         // đọc lại giá trị chuẩn từ server
         const s = await ref.get();
         const t = s.val();
-        if (typeof t === "number" && t > 0) cycleStartTs = t;
-        else cycleStartTs = nowServerMs(); // fallback
+        if (typeof t === "number" && t > 0) startTs = t;
+        else startTs = nowServerMs(); // fallback
       } catch(_){
-        cycleStartTs = nowServerMs();
+        startTs = nowServerMs();
       }
     }
 
     async function initSlidesThenMaybeShow(){
-      // Kiểm tra/ tải manifest (retry 1 lần nếu lỗi)
+      // tải manifest (retry nhẹ)
       let ok = false;
       if (!manifestChecked) {
         ok = await loadSlidesFromManifest();
@@ -451,22 +460,19 @@
         }
         manifestChecked = true;
         slidesAvailable = ok;
-      } else {
-        ok = slidesAvailable;
-      }
+      } else ok = slidesAvailable;
 
       if (ok) {
-        if (cycleStartTs == null) {
-          await ensureCycleStart();  // MỐC CHUNG (server time)
+        if (startTs == null) { // có slide thì mới cần mốc
+          await ensureStartTs(); // mốc lịch tuyệt đối
           currentIndex = -1;
           if (nextTimer) clearTimeout(nextTimer);
-          renderOnceAndSchedule();
+          renderAndArmToNextEdge();
         }
         showScreen("start-slideshow-screen");
       } else {
         showScreen("start-screen");
       }
-
       resetIdleTimer(); // (re)start idle 59s
     }
 
@@ -483,13 +489,13 @@
         idleTimer = setTimeout(async () => {
           if (!slidesAvailable) {
             const ok = await loadSlidesFromManifest();
-            if (ok) { slidesAvailable = true; }
+            if (ok) slidesAvailable = true;
           }
           if (slidesAvailable) {
-            if (cycleStartTs == null) { await ensureCycleStart(); }
+            if (startTs == null) await ensureStartTs();
             currentIndex = -1;
             if (nextTimer) clearTimeout(nextTimer);
-            renderOnceAndSchedule();
+            renderAndArmToNextEdge();
             setSlideStatus(""); showGlobalStatus("");
             showScreen("start-slideshow-screen");
           } else {
