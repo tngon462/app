@@ -105,7 +105,7 @@
       measurementId: "G-LHEH8ZC6SL"
     };
     let fbApp = null, rtdb = null, currentRef = null, currentBanListening = null, lastTs = 0;
-    let pollInitTs = null; // mốc poll đầu
+    let pollInitTs = null; // mốc poll đầu để bỏ qua trạng thái cũ
 
     // Đồng hồ server để đồng bộ tất cả máy
     let serverOffsetMs = 0;
@@ -150,7 +150,7 @@
       });
     }
 
-    /* Fallback REST polling (ẩn) — BỎ QUA LẦN ĐẦU */
+    /* Fallback REST polling (ẩn) — CŨNG BỎ QUA LẦN ĐẦU */
     async function pollExpiredFallback(){
       try{
         if (!selectedBan) return;
@@ -259,7 +259,7 @@
     }
     setInterval(backfillSelectedBanFromIframe, 1000);
 
-    /* ----------------- SLIDESHOW (manifest only, lịch tuyệt đối) ----------------- */
+    /* ----------------- SLIDESHOW (manifest + lịch tuyệt đối) ----------------- */
     const GH_OWNER  = "tngon462";
     const GH_REPO   = "slide";
     const GH_BRANCH = "main";
@@ -270,8 +270,9 @@
     let cumEdges = [];   // các mốc biên tích lũy (ms) trong 1 chu kỳ
     let periodMs = 0;    // tổng chu kỳ
     let currentIndex = -1;
-    let startTs = null;  // mốc lịch tuyệt đối (server) — đọc từ Firebase
+    let startTs = null;  // mốc lịch tuyệt đối (server)
     let nextTimer = null;
+    let watchdog = null;
     let manifestChecked = false;
     let slidesAvailable = false;
 
@@ -332,7 +333,10 @@
 
     // Tính chỉ số slide theo lịch tuyệt đối
     function indexAt(nowMs){
-      if (!slides.length || !periodMs || startTs==null) return {idx:0, offset:0, remain:periodMs||0, slideDur: msFromDur(slides[0]?.duration || SLIDE_DEFAULT_DURATION_SEC)};
+      if (!slides.length || !periodMs || startTs==null) {
+        const d0 = msFromDur(slides[0]?.duration || SLIDE_DEFAULT_DURATION_SEC);
+        return {idx:0, offset:0, remain:periodMs||0, slideDur:d0};
+      }
       const elapsed = ((nowMs - startTs) % periodMs + periodMs) % periodMs; // [0, period)
       let idx = cumEdges.findIndex(edge => elapsed < edge);
       if (idx < 0) idx = slides.length - 1;
@@ -343,11 +347,14 @@
       return { idx, offset, remain, slideDur };
     }
 
+    // ===== RENDER + HẸN ĐÚNG BIÊN (có rAF khi sát biên) =====
     function renderAndArmToNextEdge(){
       if (!slides.length || !periodMs || startTs==null) return;
+
       const now = nowServerMs();
       const { idx, offset, remain, slideDur } = indexAt(now);
 
+      // Nếu đang hiển thị sai slide => render lại ngay (snap)
       if (idx !== currentIndex){
         currentIndex = idx;
         const it = slides[idx];
@@ -355,10 +362,41 @@
         else showImage(it.src);
       }
 
-      // Hẹn giờ đúng biên lần kế tiếp
-      let delay = Math.max(10, Math.min(remain, 60000)); // bảo vệ: >=10ms, <=60s
-      if (nextTimer) clearTimeout(nextTimer);
-      nextTimer = setTimeout(renderAndArmToNextEdge, delay);
+      // Hẹn giờ đúng biên tiếp theo (tuyệt đối theo giờ server)
+      const nextEdgeAbs = now + remain;
+      const left0 = nextEdgeAbs - nowServerMs();
+
+      const schedule = () => {
+        const left = nextEdgeAbs - nowServerMs();
+        if (left <= 8) {
+          if (nextTimer) clearTimeout(nextTimer);
+          requestAnimationFrame(() => renderAndArmToNextEdge());
+        } else if (left <= 180) {
+          if (nextTimer) clearTimeout(nextTimer);
+          nextTimer = setTimeout(() => requestAnimationFrame(renderAndArmToNextEdge), left - 8);
+        } else {
+          if (nextTimer) clearTimeout(nextTimer);
+          nextTimer = setTimeout(renderAndArmToNextEdge, Math.min(left - 120, 60000));
+        }
+      };
+      schedule();
+    }
+
+    // ===== Watchdog 500ms: kéo về đúng slide nếu timer bị lệch/đóng băng =====
+    function startSyncWatchdog(){
+      if (watchdog) clearInterval(watchdog);
+      watchdog = setInterval(() => {
+        if (!slides.length || !periodMs || startTs==null) return;
+        const { idx, offset, remain } = indexAt(nowServerMs());
+        const wrongSlide = (idx !== currentIndex);
+        const dur = msFromDur(slides[idx]?.duration || SLIDE_DEFAULT_DURATION_SEC);
+        const passedEdge = remain < -20 || offset < -20 || offset > (dur + 20);
+        if (wrongSlide || passedEdge) {
+          if (nextTimer) clearTimeout(nextTimer);
+          currentIndex = -1; // buộc render lại
+          renderAndArmToNextEdge();
+        }
+      }, 500);
     }
 
     async function loadSlidesFromManifest(){
@@ -419,24 +457,24 @@
       }
     }
 
-    // Tạo “mốc lịch” tuyệt đối trên server (1 lần) và theo dõi
+    // Tạo/đọc “mốc lịch” tuyệt đối trên server (đặt 1 lần bằng ServerValue.TIMESTAMP)
     async function ensureStartTs(){
       try {
         if (!rtdb) { startTs = nowServerMs(); return; }
         const ref = rtdb.ref("slideshow/startTs");
 
-        // nghe cập nhật mốc từ server
+        // nghe mốc từ server
         ref.on("value", snap => {
           const val = snap.val();
           if (typeof val === "number" && val > 0) startTs = val;
         });
 
-        // đặt mốc bằng transaction + ServerValue.TIMESTAMP (chỉ khi chưa có)
+        // đặt mốc bằng transaction (chỉ khi chưa có)
         await ref.transaction(curr => {
           if (curr === null || curr === undefined || typeof curr !== "number" || curr <= 0) {
             return firebase.database.ServerValue.TIMESTAMP;
           }
-          return curr; // đã có thì giữ nguyên
+          return curr;
         });
 
         // đọc lại giá trị chuẩn từ server
@@ -468,6 +506,7 @@
           currentIndex = -1;
           if (nextTimer) clearTimeout(nextTimer);
           renderAndArmToNextEdge();
+          startSyncWatchdog(); // ⭐ quan trọng: watchdog kéo lệch về đúng
         }
         showScreen("start-slideshow-screen");
       } else {
@@ -496,6 +535,7 @@
             currentIndex = -1;
             if (nextTimer) clearTimeout(nextTimer);
             renderAndArmToNextEdge();
+            startSyncWatchdog(); // ⭐ bật watchdog cả khi auto bật
             setSlideStatus(""); showGlobalStatus("");
             showScreen("start-slideshow-screen");
           } else {
