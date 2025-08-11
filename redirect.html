@@ -62,7 +62,7 @@
 
     <!-- Màn START (slideshow đồng bộ) -->
     <div class="screen" id="start-screen">
-      <div class="tap-to-start" onclick="startOrder()" title="Chạm để bắt đầu"></div>
+      <div class="tap-to-start" onclick="handleTapToStart()" title="Chạm để bắt đầu"></div>
       <div class="slide-stage" id="slide-stage"></div>
       <div class="slide-overlay"><div class="slide-caption" id="slide-caption"></div></div>
       <div class="tap-hint">Chạm để bắt đầu đặt món</div>
@@ -153,6 +153,10 @@
       document.getElementById("table-info").textContent = `Bạn đang ở Bàn ${selectedBan}`;
       showScreen("start-screen");
       attachListenerFor(selectedBan);
+    }
+    function handleTapToStart(){
+      if (!selectedBan) { showScreen("table-selection-screen"); return; }
+      startOrder();
     }
     function startOrder() {
       if (!selectedBan) return;
@@ -357,19 +361,19 @@
 
       // Auto ?ban=10 và tự start
       const qBan = getQueryParam("ban");
-      if (qBan) {
-        const n = parseInt(qBan, 10);
-        if (!isNaN(n)) setTimeout(() => { selectTable(n); startOrder(); }, 100);
+      const n = qBan ? parseInt(qBan, 10) : NaN;
+      if (qBan && !isNaN(n)) {
+        setTimeout(() => { selectTable(n); startOrder(); }, 100);
+      } else {
+        // Mặc định: ở màn chọn bàn
+        showScreen("table-selection-screen");
       }
 
       // Phòng khi mất selectedBan mà iframe còn
       setInterval(backfillSelectedBanFromIframe, 1000);
 
-      // Khởi chạy slideshow đồng bộ
+      // Khởi chạy slideshow (sẵn sàng khi vào màn START)
       initSlideshow();
-
-      // Hiện ngay màn start (slideshow)
-      showScreen("start-screen");
     });
   </script>
 </body>
