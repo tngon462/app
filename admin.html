@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>T‑NGON Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Firebase (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+  <style>
+    html, body { height: 100%; }
+    .sidebar a.active { background: rgba(218,37,29,0.12); color: #da251d; }
+    .toggle input { display:none; }
+    .toggle label {
+      width: 56px; height: 32px; border-radius: 999px; display: inline-block; position: relative;
+      background: #e5e7eb; transition: .2s;
+    }
+    .toggle label::after {
+      content: ""; position: absolute; top: 4px; left: 4px; width: 24px; height: 24px; border-radius: 999px;
+      background: white; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: .2s;
+    }
+    .toggle input:checked + label { background: #10b981; }
+    .toggle input:checked + label::after { transform: translateX(24px); }
+    /* Iframe fill */
+    #ads-iframe { width: 100%; height: calc(100vh - 64px); border: 0; }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <!-- Topbar -->
+  <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-6">
+    <button id="homeBtn" class="text-xl font-extrabold tracking-wide text-[#da251d]">T‑NGON</button>
+    <div class="text-xs text-gray-500">Admin Panel</div>
+  </header>
+
+  <div class="flex">
+    <!-- Sidebar -->
+    <aside class="sidebar w-56 bg-white border-r border-gray-200 min-h-[calc(100vh-64px)]">
+      <nav class="p-3 space-y-1">
+        <a href="#screen" id="navScreen" class="block px-3 py-2 rounded-md font-medium text-gray-700 hover:bg-gray-100">Tắt/Bật màn hình</a>
+        <a href="#ads" id="navAds" class="block px-3 py-2 rounded-md font-medium text-gray-700 hover:bg-gray-100">Up ảnh quảng cáo</a>
+      </nav>
+    </aside>
+
+    <!-- Main content -->
+    <main class="flex-1 min-h-[calc(100vh-64px)]">
+      <!-- View: Screen control -->
+      <section id="viewScreen" class="p-6 hidden">
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">Điều khiển màn hình tablet</h2>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 max-w-xl">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="text-lg font-semibold">Bật màn hình</div>
+              <div id="screenStatusText" class="text-sm text-gray-500 mt-0.5">Đang tải trạng thái…</div>
+            </div>
+            <div class="toggle">
+              <input type="checkbox" id="screenToggle" />
+              <label for="screenToggle" aria-label="Bật/Tắt"></label>
+            </div>
+          </div>
+
+          <div class="mt-5 flex gap-3">
+            <button id="btnOn"
+              class="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">Bật tất cả</button>
+            <button id="btnOff"
+              class="px-4 py-2 rounded-lg bg-gray-800 text-white hover:bg-black">Tắt (màn đen)</button>
+          </div>
+
+          <p class="text-xs text-gray-400 mt-4">
+            Ghi chú: Lệnh áp dụng cho tất cả tablet đang mở <em>app tngon (redirect.html)</em> và có kết nối internet.
+          </p>
+        </div>
+      </section>
+
+      <!-- View: Ads (iframe) -->
+      <section id="viewAds" class="hidden">
+        <iframe id="ads-iframe" src="about:blank" referrerpolicy="no-referrer"></iframe>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    // ===== Firebase config: dùng chung với redirect.html =====
+    const firebaseConfig = {
+      apiKey: "AIzaSyB4u2G41xdGkgBC0KltleRpcg5Lwru2RIU",
+      authDomain: "tngon-b37d6.firebaseapp.com",
+      databaseURL: "https://tngon-b37d6-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "tngon-b37d6",
+      storageBucket: "tngon-b37d6.firebasestorage.app",
+      messagingSenderId: "580319242104",
+      appId: "1:580319242104:web:6922e4327bdc8286c30a8d",
+      measurementId: "G-LHEH8ZC6SL"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // ===== Simple SPA router =====
+    const views = {
+      screen: document.getElementById('viewScreen'),
+      ads: document.getElementById('viewAds'),
+    };
+    const navScreen = document.getElementById('navScreen');
+    const navAds = document.getElementById('navAds');
+    const homeBtn = document.getElementById('homeBtn');
+
+    function setActive(hash) {
+      // toggle nav active
+      [navScreen, navAds].forEach(a => a.classList.remove('active'));
+      if (hash === '#ads') navAds.classList.add('active');
+      else navScreen.classList.add('active');
+
+      // show/hide views
+      Object.values(views).forEach(v => v.classList.add('hidden'));
+      if (hash === '#ads') {
+        views.ads.classList.remove('hidden');
+        // load target page into iframe
+        const ifr = document.getElementById('ads-iframe');
+        if (ifr && (!ifr.src || ifr.src === 'about:blank')) {
+          ifr.src = 'https://pic-flame.vercel.app/';
+        }
+      } else {
+        views.screen.classList.remove('hidden');
+      }
+    }
+
+    function route() {
+      const hash = location.hash || '#screen';
+      setActive(hash);
+    }
+    window.addEventListener('hashchange', route);
+    homeBtn.addEventListener('click', () => {
+      location.href = location.pathname; // reload về trang chủ admin.html
+    });
+
+    // ===== Screen control wiring =====
+    const refScreen = db.ref('control/screen'); // "on" | "off"
+    const toggleEl = document.getElementById('screenToggle');
+    const statusEl = document.getElementById('screenStatusText');
+    const btnOn = document.getElementById('btnOn');
+    const btnOff = document.getElementById('btnOff');
+
+    // Sync UI <- DB
+    refScreen.on('value', (snap) => {
+      const v = (snap && snap.val()) || 'on';
+      const isOn = String(v).toLowerCase() === 'on';
+      toggleEl.checked = isOn;
+      statusEl.textContent = isOn ? 'Đang bật màn hình' : 'Đang tắt (phủ đen)';
+    });
+
+    // UI -> DB
+    toggleEl.addEventListener('change', () => {
+      refScreen.set(toggleEl.checked ? 'on' : 'off');
+    });
+    btnOn.addEventListener('click', () => refScreen.set('on'));
+    btnOff.addEventListener('click', () => refScreen.set('off'));
+
+    // Init
+    route();
+  </script>
+</body>
+</html>
