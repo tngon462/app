@@ -26,7 +26,6 @@
     }
     .toggle input:checked + label { background: #10b981; }
     .toggle input:checked + label::after { transform: translateX(24px); }
-    /* Iframe fill */
     #ads-iframe { width: 100%; height: calc(100vh - 64px); border: 0; }
   </style>
 </head>
@@ -34,7 +33,7 @@
   <!-- Topbar -->
   <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-6">
     <button id="homeBtn" class="text-xl font-extrabold tracking-wide text-[#da251d]">T‑NGON</button>
-    <div class="text-xs text-gray-500">Admin Panel</div>
+    <div id="connBadge" class="text-xs text-gray-500">Đang kiểm tra kết nối…</div>
   </header>
 
   <div class="flex">
@@ -64,16 +63,20 @@
             </div>
           </div>
 
-          <div class="mt-5 flex gap-3">
+          <div class="mt-5 flex flex-wrap gap-3">
             <button id="btnOn"
               class="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">Bật tất cả</button>
             <button id="btnOff"
               class="px-4 py-2 rounded-lg bg-gray-800 text-white hover:bg-black">Tắt (màn đen)</button>
+            <button id="btnInit"
+              class="px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700">Khởi tạo giá trị</button>
           </div>
 
           <p class="text-xs text-gray-400 mt-4">
             Ghi chú: Lệnh áp dụng cho tất cả tablet đang mở <em>app tngon (redirect.html)</em> và có kết nối internet.
           </p>
+
+          <div id="errorBox" class="mt-4 hidden p-3 rounded-lg bg-red-50 text-red-700 text-sm"></div>
         </div>
       </section>
 
@@ -99,7 +102,7 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // ===== Simple SPA router =====
+    // ===== UI refs =====
     const views = {
       screen: document.getElementById('viewScreen'),
       ads: document.getElementById('viewAds'),
@@ -107,59 +110,106 @@
     const navScreen = document.getElementById('navScreen');
     const navAds = document.getElementById('navAds');
     const homeBtn = document.getElementById('homeBtn');
+    const connBadge = document.getElementById('connBadge');
 
-    function setActive(hash) {
-      // toggle nav active
-      [navScreen, navAds].forEach(a => a.classList.remove('active'));
-      if (hash === '#ads') navAds.classList.add('active');
-      else navScreen.classList.add('active');
-
-      // show/hide views
-      Object.values(views).forEach(v => v.classList.add('hidden'));
-      if (hash === '#ads') {
-        views.ads.classList.remove('hidden');
-        // load target page into iframe
-        const ifr = document.getElementById('ads-iframe');
-        if (ifr && (!ifr.src || ifr.src === 'about:blank')) {
-          ifr.src = 'https://pic-flame.vercel.app/';
-        }
-      } else {
-        views.screen.classList.remove('hidden');
-      }
-    }
-
-    function route() {
-      const hash = location.hash || '#screen';
-      setActive(hash);
-    }
-    window.addEventListener('hashchange', route);
-    homeBtn.addEventListener('click', () => {
-      location.href = location.pathname; // reload về trang chủ admin.html
-    });
-
-    // ===== Screen control wiring =====
+    const refConnected = db.ref(".info/connected");
     const refScreen = db.ref('control/screen'); // "on" | "off"
     const toggleEl = document.getElementById('screenToggle');
     const statusEl = document.getElementById('screenStatusText');
     const btnOn = document.getElementById('btnOn');
     const btnOff = document.getElementById('btnOff');
+    const btnInit = document.getElementById('btnInit');
+    const errorBox = document.getElementById('errorBox');
 
-    // Sync UI <- DB
+    function showError(msg) {
+      errorBox.textContent = msg || '';
+      errorBox.classList.toggle('hidden', !msg);
+    }
+
+    // ===== Connection status =====
+    refConnected.on('value', (snap) => {
+      const online = !!snap.val();
+      connBadge.textContent = online ? 'Đã kết nối Firebase' : 'Mất kết nối Firebase';
+      connBadge.className = online
+        ? 'text-xs text-emerald-600'
+        : 'text-xs text-red-600';
+    });
+
+    // ===== Simple SPA router =====
+    function setActive(hash) {
+      [navScreen, navAds].forEach(a => a.classList.remove('active'));
+      if (hash === '#ads') navAds.classList.add('active'); else navScreen.classList.add('active');
+
+      Object.values(views).forEach(v => v.classList.add('hidden'));
+      if (hash === '#ads') {
+        views.ads.classList.remove('hidden');
+        const ifr = document.getElementById('ads-iframe');
+        if (!ifr.src || ifr.src === 'about:blank') ifr.src = 'https://pic-flame.vercel.app/';
+      } else {
+        views.screen.classList.remove('hidden');
+      }
+    }
+    function route() { setActive(location.hash || '#screen'); }
+    window.addEventListener('hashchange', route);
+    homeBtn.addEventListener('click', () => { location.href = location.pathname; });
+
+    // ===== Load initial value with timeout & init if missing =====
+    let firstLoaded = false;
+    let initialTimeout = setTimeout(() => {
+      if (!firstLoaded) {
+        showError('Không đọc được trạng thái. Kiểm tra lại databaseURL hoặc Rules của Realtime Database (cần cho phép read).');
+      }
+    }, 6000);
+
     refScreen.on('value', (snap) => {
-      const v = (snap && snap.val()) || 'on';
+      firstLoaded = true;
+      clearTimeout(initialTimeout);
+      showError('');
+
+      const v = snap.exists() ? snap.val() : null;
+
+      if (v === null) {
+        statusEl.textContent = 'Chưa có giá trị. Nhấn "Khởi tạo giá trị".';
+        toggleEl.checked = true; // mặc định coi như "on" trên UI
+        return;
+      }
+
       const isOn = String(v).toLowerCase() === 'on';
       toggleEl.checked = isOn;
       statusEl.textContent = isOn ? 'Đang bật màn hình' : 'Đang tắt (phủ đen)';
+    }, (err) => {
+      clearTimeout(initialTimeout);
+      showError('Lỗi subscribe: ' + (err && err.message ? err.message : err));
     });
 
-    // UI -> DB
-    toggleEl.addEventListener('change', () => {
-      refScreen.set(toggleEl.checked ? 'on' : 'off');
-    });
-    btnOn.addEventListener('click', () => refScreen.set('on'));
-    btnOff.addEventListener('click', () => refScreen.set('off'));
+    // ===== Write helpers with rollback on failure =====
+    async function setScreen(val) {
+      showError('');
+      const prev = toggleEl.checked;
+      try {
+        toggleEl.checked = (val === 'on');
+        await refScreen.set(val);
+      } catch (e) {
+        // rollback UI
+        toggleEl.checked = prev;
+        showError('Ghi thất bại (có thể do Rules không cho write): ' + (e && e.message ? e.message : e));
+      }
+    }
 
-    // Init
+    toggleEl.addEventListener('change', () => setScreen(toggleEl.checked ? 'on' : 'off'));
+    btnOn.addEventListener('click', () => setScreen('on'));
+    btnOff.addEventListener('click', () => setScreen('off'));
+
+    btnInit.addEventListener('click', async () => {
+      showError('');
+      try {
+        await refScreen.transaction((cur) => cur ?? 'on'); // chỉ set nếu chưa có
+      } catch (e) {
+        showError('Khởi tạo thất bại: ' + (e && e.message ? e.message : e));
+      }
+    });
+
+    // Init view
     route();
   </script>
 </body>
