@@ -24,26 +24,44 @@
 
   <style>
     html, body { height: 100%; background:#f6f7f9; }
-    .sidebar a.active { background: rgba(218,37,29,0.12); color: #da251d; }
+    .nav-link { display:block; padding:.5rem .75rem; border-radius:.5rem; font-weight:600; color:#374151; }
+    .nav-link:hover { background:#f3f4f6; }
+    .nav-link.active { background:rgba(218,37,29,.12); color:#da251d; }
     .toggle input { display:none; }
     .toggle label {
-      width: 56px; height: 32px; border-radius: 999px; display: inline-block; position: relative;
-      background: #e5e7eb; transition: .2s;
+      width:56px; height:32px; border-radius:999px; display:inline-block; position:relative;
+      background:#e5e7eb; transition:.2s;
     }
-    .toggle label::after {
-      content: ""; position: absolute; top: 4px; left: 4px; width: 24px; height: 24px; border-radius: 999px;
-      background: white; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: .2s;
+    .toggle label::after{
+      content:""; position:absolute; top:4px; left:4px; width:24px; height:24px; border-radius:999px;
+      background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:.2s;
     }
-    .toggle input:checked + label { background: #10b981; }
-    .toggle input:checked + label::after { transform: translateX(24px); }
-    #ads-iframe { width: 100%; height: calc(100vh - 64px); border: 0; background:#fff; }
+    .toggle input:checked + label { background:#10b981; }
+    .toggle input:checked + label::after { transform:translateX(24px); }
+    #ads-iframe { width:100%; height:calc(100vh - 64px); border:0; background:#fff; }
     .app-badge { font-size:12px; padding:2px 6px; border-radius:6px; border:1px solid #e5e7eb; color:#6b7280; }
+
+    /* Off-canvas sidebar (mobile) */
+    .drawer { position:fixed; top:64px; left:0; height:calc(100vh - 64px); width:260px; background:#fff;
+      border-right:1px solid #e5e7eb; transform:translateX(-100%); transition:transform .2s ease; z-index:40; }
+    .drawer.open { transform:translateX(0); }
+    .drawer-mask { position:fixed; inset:0; background:rgba(0,0,0,.25); display:none; z-index:30; }
+    .drawer-mask.show { display:block; }
+
+    /* On md+ keep static sidebar */
+    @media (min-width:768px){
+      .drawer { position:static; transform:none; height:auto; width:260px; z-index:auto; }
+      .drawer-mask { display:none !important; }
+      .layout { display:flex; }
+      .content { min-height:calc(100vh - 64px); }
+    }
   </style>
 </head>
 <body class="bg-gray-50">
   <!-- Topbar -->
   <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-3 md:px-6">
     <div class="flex items-center gap-3">
+      <button id="btnMenu" class="md:hidden p-2 -ml-1 rounded hover:bg-gray-100" aria-label="Mở menu">☰</button>
       <img src="./icons/icon-72.png" alt="logo" class="w-8 h-8 rounded-md" />
       <button id="homeBtn" class="text-xl font-extrabold tracking-wide text-[#da251d]">T‑NGON Admin</button>
       <span id="pwaBadge" class="app-badge hidden">Installed</span>
@@ -54,40 +72,43 @@
     </div>
   </header>
 
-  <div class="flex">
-    <!-- Sidebar -->
-    <aside class="sidebar w-60 bg-white border-r border-gray-200 min-h-[calc(100vh-64px)]">
+  <!-- Drawer mask (mobile) -->
+  <div id="drawerMask" class="drawer-mask"></div>
+
+  <div class="layout">
+    <!-- Sidebar / Drawer -->
+    <aside id="drawer" class="drawer">
       <nav class="p-3 space-y-1">
-        <a href="#screen" id="navScreen" class="block px-3 py-2 rounded-md font-medium text-gray-700 hover:bg-gray-100">Tắt/Bật màn hình</a>
-        <a href="#ads" id="navAds" class="block px-3 py-2 rounded-md font-medium text-gray-700 hover:bg-gray-100">Up ảnh quảng cáo</a>
+        <a href="#screen" id="navScreen" class="nav-link">Tắt/Bật màn hình</a>
+        <a href="#ads" id="navAds" class="nav-link">Up ảnh quảng cáo</a>
       </nav>
-      <div class="p-3 text-xs text-gray-400">
+      <div class="p-3 text-xs text-gray-400 border-t">
         Phiên bản <span id="ver">—</span>
       </div>
     </aside>
 
     <!-- Main content -->
-    <main class="flex-1 min-h-[calc(100vh-64px)]">
+    <main class="content flex-1">
       <!-- View: Screen control -->
-      <section id="viewScreen" class="p-6 hidden">
+      <section id="viewScreen" class="p-4 md:p-6 hidden">
         <h2 class="text-2xl font-bold text-gray-800 mb-4">Điều khiển màn hình tablet</h2>
 
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 max-w-xl">
-          <div class="flex items-center justify-between">
-            <div>
-              <div class="text-lg font-semibold">Bật màn hình</div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-5 max-w-xl">
+          <div class="flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <div class="text-lg font-semibold truncate">Bật màn hình</div>
               <div id="screenStatusText" class="text-sm text-gray-500 mt-0.5">Đang tải trạng thái…</div>
             </div>
-            <div class="toggle">
+            <div class="toggle shrink-0">
               <input type="checkbox" id="screenToggle" />
               <label for="screenToggle" aria-label="Bật/Tắt"></label>
             </div>
           </div>
 
-          <div class="mt-5 flex flex-wrap gap-3">
+          <div class="mt-5 grid grid-cols-2 gap-3">
             <button id="btnOn"  class="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">Bật tất cả</button>
             <button id="btnOff" class="px-4 py-2 rounded-lg bg-gray-800 text-white hover:bg-black">Tắt (màn đen)</button>
-            <button id="btnInit" class="px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700">Khởi tạo giá trị</button>
+            <button id="btnInit" class="col-span-2 px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700">Khởi tạo giá trị</button>
           </div>
 
           <p class="text-xs text-gray-400 mt-4">
@@ -106,8 +127,8 @@
   </div>
 
   <script>
-    // ===== App version for SW update UI =====
-    const APP_VERSION = "1.0.0";
+    // ===== App version =====
+    const APP_VERSION = "1.1.0"; // tăng version
     document.getElementById('ver').textContent = APP_VERSION;
 
     // ===== Firebase config =====
@@ -138,7 +159,19 @@
     const btnInit = document.getElementById('btnInit');
     const errorBox = document.getElementById('errorBox');
 
+    // Drawer (mobile)
+    const drawer = document.getElementById('drawer');
+    const drawerMask = document.getElementById('drawerMask');
+    const btnMenu = document.getElementById('btnMenu');
+    function openDrawer(){ drawer.classList.add('open'); drawerMask.classList.add('show'); }
+    function closeDrawer(){ drawer.classList.remove('open'); drawerMask.classList.remove('show'); }
+    btnMenu.addEventListener('click', openDrawer);
+    drawerMask.addEventListener('click', closeDrawer);
+    // đóng khi chọn menu (trên mobile)
+    [navScreen, navAds].forEach(a => a.addEventListener('click', () => { if (window.innerWidth < 768) closeDrawer(); }));
+
     function showError(msg) { errorBox.textContent = msg||''; errorBox.classList.toggle('hidden', !msg); }
+
     function setActive(hash) {
       [navScreen, navAds].forEach(a => a.classList.remove('active'));
       if (hash === '#ads') navAds.classList.add('active'); else navScreen.classList.add('active');
@@ -155,26 +188,24 @@
     window.addEventListener('hashchange', route);
     homeBtn.addEventListener('click', () => { location.href = location.pathname; });
 
-    // ===== PWA: SW + install prompt =====
+    // ===== PWA (Service Worker + Install Prompt) =====
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw-admin.js')
-      .then(reg => {
-        // listen for updates
-        reg.addEventListener('updatefound', () => {
-          const installing = reg.installing;
-          installing?.addEventListener('statechange', () => {
-            if (installing.state === 'installed' && navigator.serviceWorker.controller) {
-              // new version ready
-              const bar = document.createElement('div');
-              bar.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-4 py-2 rounded-lg shadow';
-              bar.textContent = 'Có bản cập nhật. Đang tự tải…';
-              document.body.appendChild(bar);
-              setTimeout(()=> bar.remove(), 3000);
-            }
+        .then(reg => {
+          reg.addEventListener('updatefound', () => {
+            const installing = reg.installing;
+            installing?.addEventListener('statechange', () => {
+              if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+                const bar = document.createElement('div');
+                bar.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-4 py-2 rounded-lg shadow';
+                bar.textContent = 'Có bản cập nhật. Đang tự tải…';
+                document.body.appendChild(bar);
+                setTimeout(()=> bar.remove(), 3000);
+              }
+            });
           });
-        });
-      })
-      .catch(console.error);
+        })
+        .catch(console.error);
     }
 
     let deferredPrompt = null;
@@ -200,7 +231,6 @@
       try {
         firebase.initializeApp(firebaseConfig);
 
-        // Kết nối
         const db = firebase.database();
         const refConnected = db.ref(".info/connected");
         refConnected.on('value', (snap) => {
