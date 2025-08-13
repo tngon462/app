@@ -93,10 +93,10 @@
       <section id="viewScreen" class="p-4 md:p-6 hidden">
         <h2 class="text-2xl font-bold text-gray-800 mb-4">Điều khiển màn hình tablet</h2>
 
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-5 max-w-xl">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-5 max-w-3xl">
           <div class="flex items-center justify-between gap-3">
             <div class="min-w-0">
-              <div class="text-lg font-semibold truncate">Bật màn hình</div>
+              <div class="text-lg font-semibold truncate">Bật màn hình (toàn quán)</div>
               <div id="screenStatusText" class="text-sm text-gray-500 mt-0.5">Đang tải trạng thái…</div>
             </div>
             <div class="toggle shrink-0">
@@ -105,15 +105,19 @@
             </div>
           </div>
 
-          <div class="mt-5 grid grid-cols-2 gap-3">
+          <div class="mt-5 grid grid-cols-2 sm:grid-cols-3 gap-3">
             <button id="btnOn"  class="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">Bật tất cả</button>
             <button id="btnOff" class="px-4 py-2 rounded-lg bg-gray-800 text-white hover:bg-black">Tắt (màn đen)</button>
-            <button id="btnInit" class="col-span-2 px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700">Khởi tạo giá trị</button>
           </div>
 
-          <p class="text-xs text-gray-400 mt-4">
-            Áp dụng cho tất cả tablet đang mở <em>app tngon (redirect.html)</em> và có internet.
-          </p>
+          <!-- Điều khiển từng tablet -->
+          <div class="mt-6">
+            <h3 class="text-lg font-semibold text-gray-800 mb-3">Điều khiển từng tablet</h3>
+            <div id="tablesGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"></div>
+            <p class="text-xs text-gray-400 mt-2">
+              Gợi ý: Nhấn “Bật tất cả” để xoá trạng thái tắt lẻ, sau đó tắt riêng những bàn cần.
+            </p>
+          </div>
 
           <div id="errorBox" class="mt-4 hidden p-3 rounded-lg bg-red-50 text-red-700 text-sm"></div>
         </div>
@@ -128,7 +132,7 @@
 
   <script>
     // ===== App version =====
-    const APP_VERSION = "1.1.0"; // tăng version
+    const APP_VERSION = "1.2.0";
     document.getElementById('ver').textContent = APP_VERSION;
 
     // ===== Firebase config =====
@@ -156,7 +160,6 @@
     const statusEl = document.getElementById('screenStatusText');
     const btnOn = document.getElementById('btnOn');
     const btnOff = document.getElementById('btnOff');
-    const btnInit = document.getElementById('btnInit');
     const errorBox = document.getElementById('errorBox');
 
     // Drawer (mobile)
@@ -167,7 +170,6 @@
     function closeDrawer(){ drawer.classList.remove('open'); drawerMask.classList.remove('show'); }
     btnMenu.addEventListener('click', openDrawer);
     drawerMask.addEventListener('click', closeDrawer);
-    // đóng khi chọn menu (trên mobile)
     [navScreen, navAds].forEach(a => a.addEventListener('click', () => { if (window.innerWidth < 768) closeDrawer(); }));
 
     function showError(msg) { errorBox.textContent = msg||''; errorBox.classList.toggle('hidden', !msg); }
@@ -246,18 +248,16 @@
         });
         await new Promise(r => { const un = firebase.auth().onAuthStateChanged(()=>{ un(); r(); }); });
 
-        // DB refs
+        // ===== Global control =====
         const refScreen = db.ref('control/screen'); // "on" | "off"
 
-        // Subscribe
+        // Nếu chưa có giá trị -> tự khởi tạo "on"
+        refScreen.once('value').then(snap => { if (!snap.exists()) refScreen.set('on'); });
+
+        // Subscribe trạng thái toàn quán
         refScreen.on('value', (snap) => {
           showError('');
-          if (!snap.exists()) {
-            statusEl.textContent = 'Chưa có giá trị. Nhấn "Khởi tạo giá trị".';
-            toggleEl.checked = true;
-            return;
-          }
-          const v = snap.val();
+          const v = snap.exists() ? snap.val() : 'on';
           const isOn = String(v).toLowerCase() === 'on';
           toggleEl.checked = isOn;
           statusEl.textContent = isOn ? 'Đang bật màn hình' : 'Đang tắt (phủ đen)';
@@ -271,14 +271,94 @@
         }
 
         toggleEl.addEventListener('change', () => setScreen(toggleEl.checked ? 'on' : 'off'));
-        btnOn.addEventListener('click', () => setScreen('on'));
-        btnOff.addEventListener('click', () => setScreen('off'));
-        btnInit.addEventListener('click', async () => {
-          showError('');
-          try { await refScreen.transaction(cur => cur ?? 'on'); }
-          catch (e) { showError('Khởi tạo thất bại: ' + (e?.message||e)); }
+
+        // ===== Per-table controls =====
+        const TABLE_COUNT = 15;
+        const tablesGrid = document.getElementById('tablesGrid');
+        const tableRefs = {};
+        const tableStates = {};
+
+        function makeTableTile(i, onChange) {
+          const card = document.createElement('div');
+          card.className = 'bg-white rounded-xl shadow-sm border border-gray-200 p-3 flex items-center justify-between';
+
+          const left = document.createElement('div');
+          left.innerHTML = `<div class="font-semibold text-gray-800">Bàn ${i}</div>
+                            <div id="tb-status-${i}" class="text-xs text-gray-500">Đang tải…</div>`;
+
+          const wrapper = document.createElement('div');
+          wrapper.className = 'toggle';
+          const input = document.createElement('input');
+          input.type = 'checkbox';
+          input.id = `tb-toggle-${i}`;
+          const label = document.createElement('label');
+          label.setAttribute('for', input.id);
+          wrapper.appendChild(input);
+          wrapper.appendChild(label);
+
+          input.addEventListener('change', () => onChange(i, input.checked ? 'on' : 'off'));
+
+          card.appendChild(left);
+          card.appendChild(wrapper);
+          return { card, input };
+        }
+
+        function renderPerTableControls() {
+          tablesGrid.innerHTML = '';
+          for (let i = 1; i <= TABLE_COUNT; i++) {
+            const { card, input } = makeTableTile(i, setTableScreen);
+            tablesGrid.appendChild(card);
+
+            const statusElTb = document.getElementById(`tb-status-${i}`);
+            const ref = db.ref(`control/tables/${i}/screen`);
+            tableRefs[i] = ref;
+
+            ref.on('value', async (snap) => {
+              if (!snap.exists()) {
+                try { await ref.set('on'); } catch(_) {}
+                statusElTb.textContent = 'Đang bật (khởi tạo)';
+                input.checked = true;
+                tableStates[i] = 'on';
+                return;
+              }
+              const val = (snap.val() || 'on').toString().toLowerCase();
+              tableStates[i] = val;
+              statusElTb.textContent = (val === 'on') ? 'Đang bật' : 'Đang tắt';
+              if (input.checked !== (val === 'on')) input.checked = (val === 'on');
+            }, (err) => {
+              statusElTb.textContent = 'Lỗi: ' + (err?.message || err);
+            });
+          }
+        }
+
+        async function setTableScreen(i, val) {
+          try {
+            await tableRefs[i].set(val); // 'on' | 'off'
+          } catch (e) {
+            showError(`Ghi thất bại cho Bàn ${i}: ` + (e?.message || e));
+            const input = document.getElementById(`tb-toggle-${i}`);
+            if (input) input.checked = (tableStates[i] === 'on');
+          }
+        }
+
+        // Nút Bật/Tắt tất cả
+        btnOn.addEventListener('click', async () => {
+          try {
+            await refScreen.set('on');
+            const updates = {};
+            for (let i=1;i<=TABLE_COUNT;i++) updates[`control/tables/${i}/screen`] = 'on';
+            await db.ref().update(updates);
+          } catch (e) {
+            showError('Bật tất cả thất bại: ' + (e?.message||e));
+          }
         });
 
+        btnOff.addEventListener('click', async () => {
+          try { await refScreen.set('off'); }
+          catch (e) { showError('Tắt tất cả thất bại: ' + (e?.message||e)); }
+        });
+
+        renderPerTableControls();
         route();
       } catch (e) {
         console.error(e);
