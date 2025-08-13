@@ -3,17 +3,27 @@
 <head>
   <meta charset="UTF-8" />
   <title>T‑NGON Admin</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#da251d" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="T‑NGON Admin" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+  <!-- Icons / Manifest -->
+  <link rel="icon" sizes="192x192" href="./icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <link rel="manifest" href="./admin.webmanifest" />
 
   <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
 
   <!-- Firebase (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
   <style>
-    html, body { height: 100%; }
+    html, body { height: 100%; background:#f6f7f9; }
     .sidebar a.active { background: rgba(218,37,29,0.12); color: #da251d; }
     .toggle input { display:none; }
     .toggle label {
@@ -26,24 +36,34 @@
     }
     .toggle input:checked + label { background: #10b981; }
     .toggle input:checked + label::after { transform: translateX(24px); }
-    /* Iframe fill */
-    #ads-iframe { width: 100%; height: calc(100vh - 64px); border: 0; }
+    #ads-iframe { width: 100%; height: calc(100vh - 64px); border: 0; background:#fff; }
+    .app-badge { font-size:12px; padding:2px 6px; border-radius:6px; border:1px solid #e5e7eb; color:#6b7280; }
   </style>
 </head>
 <body class="bg-gray-50">
   <!-- Topbar -->
-  <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-6">
-    <button id="homeBtn" class="text-xl font-extrabold tracking-wide text-[#da251d]">T‑NGON</button>
-    <div class="text-xs text-gray-500">Admin Panel</div>
+  <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-3 md:px-6">
+    <div class="flex items-center gap-3">
+      <img src="./icons/icon-72.png" alt="logo" class="w-8 h-8 rounded-md" />
+      <button id="homeBtn" class="text-xl font-extrabold tracking-wide text-[#da251d]">T‑NGON Admin</button>
+      <span id="pwaBadge" class="app-badge hidden">Installed</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="btnInstall" class="px-3 py-1.5 rounded-md bg-[#da251d] text-white text-sm hidden">Cài đặt ứng dụng</button>
+      <div id="connBadge" class="text-xs text-gray-500">Đang kiểm tra kết nối…</div>
+    </div>
   </header>
 
   <div class="flex">
     <!-- Sidebar -->
-    <aside class="sidebar w-56 bg-white border-r border-gray-200 min-h-[calc(100vh-64px)]">
+    <aside class="sidebar w-60 bg-white border-r border-gray-200 min-h-[calc(100vh-64px)]">
       <nav class="p-3 space-y-1">
         <a href="#screen" id="navScreen" class="block px-3 py-2 rounded-md font-medium text-gray-700 hover:bg-gray-100">Tắt/Bật màn hình</a>
         <a href="#ads" id="navAds" class="block px-3 py-2 rounded-md font-medium text-gray-700 hover:bg-gray-100">Up ảnh quảng cáo</a>
       </nav>
+      <div class="p-3 text-xs text-gray-400">
+        Phiên bản <span id="ver">—</span>
+      </div>
     </aside>
 
     <!-- Main content -->
@@ -64,16 +84,17 @@
             </div>
           </div>
 
-          <div class="mt-5 flex gap-3">
-            <button id="btnOn"
-              class="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">Bật tất cả</button>
-            <button id="btnOff"
-              class="px-4 py-2 rounded-lg bg-gray-800 text-white hover:bg-black">Tắt (màn đen)</button>
+          <div class="mt-5 flex flex-wrap gap-3">
+            <button id="btnOn"  class="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">Bật tất cả</button>
+            <button id="btnOff" class="px-4 py-2 rounded-lg bg-gray-800 text-white hover:bg-black">Tắt (màn đen)</button>
+            <button id="btnInit" class="px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700">Khởi tạo giá trị</button>
           </div>
 
           <p class="text-xs text-gray-400 mt-4">
-            Ghi chú: Lệnh áp dụng cho tất cả tablet đang mở <em>app tngon (redirect.html)</em> và có kết nối internet.
+            Áp dụng cho tất cả tablet đang mở <em>app tngon (redirect.html)</em> và có internet.
           </p>
+
+          <div id="errorBox" class="mt-4 hidden p-3 rounded-lg bg-red-50 text-red-700 text-sm"></div>
         </div>
       </section>
 
@@ -85,7 +106,11 @@
   </div>
 
   <script>
-    // ===== Firebase config: dùng chung với redirect.html =====
+    // ===== App version for SW update UI =====
+    const APP_VERSION = "1.0.0";
+    document.getElementById('ver').textContent = APP_VERSION;
+
+    // ===== Firebase config =====
     const firebaseConfig = {
       apiKey: "AIzaSyB4u2G41xdGkgBC0KltleRpcg5Lwru2RIU",
       authDomain: "tngon-b37d6.firebaseapp.com",
@@ -96,71 +121,140 @@
       appId: "1:580319242104:web:6922e4327bdc8286c30a8d",
       measurementId: "G-LHEH8ZC6SL"
     };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
 
-    // ===== Simple SPA router =====
-    const views = {
-      screen: document.getElementById('viewScreen'),
-      ads: document.getElementById('viewAds'),
-    };
+    // ===== UI refs =====
+    const views = { screen: document.getElementById('viewScreen'), ads: document.getElementById('viewAds') };
     const navScreen = document.getElementById('navScreen');
     const navAds = document.getElementById('navAds');
     const homeBtn = document.getElementById('homeBtn');
+    const connBadge = document.getElementById('connBadge');
+    const pwaBadge = document.getElementById('pwaBadge');
+    const btnInstall = document.getElementById('btnInstall');
 
-    function setActive(hash) {
-      // toggle nav active
-      [navScreen, navAds].forEach(a => a.classList.remove('active'));
-      if (hash === '#ads') navAds.classList.add('active');
-      else navScreen.classList.add('active');
-
-      // show/hide views
-      Object.values(views).forEach(v => v.classList.add('hidden'));
-      if (hash === '#ads') {
-        views.ads.classList.remove('hidden');
-        // load target page into iframe
-        const ifr = document.getElementById('ads-iframe');
-        if (ifr && (!ifr.src || ifr.src === 'about:blank')) {
-          ifr.src = 'https://pic-flame.vercel.app/';
-        }
-      } else {
-        views.screen.classList.remove('hidden');
-      }
-    }
-
-    function route() {
-      const hash = location.hash || '#screen';
-      setActive(hash);
-    }
-    window.addEventListener('hashchange', route);
-    homeBtn.addEventListener('click', () => {
-      location.href = location.pathname; // reload về trang chủ admin.html
-    });
-
-    // ===== Screen control wiring =====
-    const refScreen = db.ref('control/screen'); // "on" | "off"
     const toggleEl = document.getElementById('screenToggle');
     const statusEl = document.getElementById('screenStatusText');
     const btnOn = document.getElementById('btnOn');
     const btnOff = document.getElementById('btnOff');
+    const btnInit = document.getElementById('btnInit');
+    const errorBox = document.getElementById('errorBox');
 
-    // Sync UI <- DB
-    refScreen.on('value', (snap) => {
-      const v = (snap && snap.val()) || 'on';
-      const isOn = String(v).toLowerCase() === 'on';
-      toggleEl.checked = isOn;
-      statusEl.textContent = isOn ? 'Đang bật màn hình' : 'Đang tắt (phủ đen)';
+    function showError(msg) { errorBox.textContent = msg||''; errorBox.classList.toggle('hidden', !msg); }
+    function setActive(hash) {
+      [navScreen, navAds].forEach(a => a.classList.remove('active'));
+      if (hash === '#ads') navAds.classList.add('active'); else navScreen.classList.add('active');
+      Object.values(views).forEach(v => v.classList.add('hidden'));
+      if (hash === '#ads') {
+        views.ads.classList.remove('hidden');
+        const ifr = document.getElementById('ads-iframe');
+        if (!ifr.src || ifr.src === 'about:blank') ifr.src = 'https://pic-flame.vercel.app/';
+      } else {
+        views.screen.classList.remove('hidden');
+      }
+    }
+    function route() { setActive(location.hash || '#screen'); }
+    window.addEventListener('hashchange', route);
+    homeBtn.addEventListener('click', () => { location.href = location.pathname; });
+
+    // ===== PWA: SW + install prompt =====
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw-admin.js')
+      .then(reg => {
+        // listen for updates
+        reg.addEventListener('updatefound', () => {
+          const installing = reg.installing;
+          installing?.addEventListener('statechange', () => {
+            if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+              // new version ready
+              const bar = document.createElement('div');
+              bar.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-4 py-2 rounded-lg shadow';
+              bar.textContent = 'Có bản cập nhật. Đang tự tải…';
+              document.body.appendChild(bar);
+              setTimeout(()=> bar.remove(), 3000);
+            }
+          });
+        });
+      })
+      .catch(console.error);
+    }
+
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      btnInstall.classList.remove('hidden');
+    });
+    btnInstall.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') btnInstall.classList.add('hidden');
+      deferredPrompt = null;
+    });
+    window.addEventListener('appinstalled', () => {
+      pwaBadge.classList.remove('hidden');
+      btnInstall.classList.add('hidden');
     });
 
-    // UI -> DB
-    toggleEl.addEventListener('change', () => {
-      refScreen.set(toggleEl.checked ? 'on' : 'off');
-    });
-    btnOn.addEventListener('click', () => refScreen.set('on'));
-    btnOff.addEventListener('click', () => refScreen.set('off'));
+    // ===== Firebase init + anonymous auth + wiring =====
+    (async function init() {
+      try {
+        firebase.initializeApp(firebaseConfig);
 
-    // Init
-    route();
+        // Kết nối
+        const db = firebase.database();
+        const refConnected = db.ref(".info/connected");
+        refConnected.on('value', (snap) => {
+          const online = !!snap.val();
+          connBadge.textContent = online ? 'Đã kết nối Firebase' : 'Mất kết nối Firebase';
+          connBadge.className = online ? 'text-xs text-emerald-600' : 'text-xs text-red-600';
+        });
+
+        // Ẩn danh
+        await firebase.auth().signInAnonymously().catch(e => {
+          console.error('Anonymous sign-in failed:', e);
+          showError('Không đăng nhập ẩn danh được: ' + (e?.message||e));
+        });
+        await new Promise(r => { const un = firebase.auth().onAuthStateChanged(()=>{ un(); r(); }); });
+
+        // DB refs
+        const refScreen = db.ref('control/screen'); // "on" | "off"
+
+        // Subscribe
+        refScreen.on('value', (snap) => {
+          showError('');
+          if (!snap.exists()) {
+            statusEl.textContent = 'Chưa có giá trị. Nhấn "Khởi tạo giá trị".';
+            toggleEl.checked = true;
+            return;
+          }
+          const v = snap.val();
+          const isOn = String(v).toLowerCase() === 'on';
+          toggleEl.checked = isOn;
+          statusEl.textContent = isOn ? 'Đang bật màn hình' : 'Đang tắt (phủ đen)';
+        }, (err) => showError('Lỗi subscribe: ' + (err?.message||err)));
+
+        async function setScreen(val) {
+          showError('');
+          const prev = toggleEl.checked;
+          try { toggleEl.checked = (val === 'on'); await refScreen.set(val); }
+          catch (e) { toggleEl.checked = prev; showError('Ghi thất bại: ' + (e?.message||e)); }
+        }
+
+        toggleEl.addEventListener('change', () => setScreen(toggleEl.checked ? 'on' : 'off'));
+        btnOn.addEventListener('click', () => setScreen('on'));
+        btnOff.addEventListener('click', () => setScreen('off'));
+        btnInit.addEventListener('click', async () => {
+          showError('');
+          try { await refScreen.transaction(cur => cur ?? 'on'); }
+          catch (e) { showError('Khởi tạo thất bại: ' + (e?.message||e)); }
+        });
+
+        route();
+      } catch (e) {
+        console.error(e);
+        showError('Lỗi khởi chạy: ' + (e?.message||e));
+      }
+    })();
   </script>
 </body>
 </html>
