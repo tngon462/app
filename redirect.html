@@ -1,54 +1,304 @@
-## T-NGON
 
-Vui lòng chọn bàn của bạn
+<!-- Firebase SDK (compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
-## T-NGON
+<style>
+@@ -49,12 +50,12 @@
+.tap-overlay { position:absolute; inset:0; z-index:10; cursor:pointer; }
+.slide-status { position:absolute; top:10px; right:10px; z-index:20; background: rgba(220, 38, 38, 0.9); color:#fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; display:none; max-width: 70vw; line-height: 1.3; }
 
-Nhấn nút bên dưới để bắt đầu đặt món
+    /* === LỚP PHỦ ĐEN: điều khiển từ xa qua Firebase control/screen === */
+    /* LỚP PHỦ ĐEN (điều khiển từ xa) */
+#tngon-sleep {
+position: fixed;
+inset: 0;
+background: #000;
+      z-index: 2147483647; /* rất cao để che mọi thứ */
+      z-index: 2147483647;
+display: none;
+-webkit-tap-highlight-color: transparent;
+touch-action: none;
+@@ -121,10 +122,23 @@ <h2 class="text-5xl font-bold">T-NGON</h2>
 
-️ BẮT ĐẦU
+function connectFirebase() {
+if (!fbApp) fbApp = firebase.initializeApp(firebaseConfig);
+      if (!rtdb) rtdb = firebase.database();
+      rtdb.ref(".info/serverTimeOffset").on("value", snap => {
+        serverOffsetMs = Number(snap.val()||0);
+        serverClockReady = true;
 
-<!-- ===== Sleep Overlay inject (KHÔNG ĐỤNG CODE CŨ) ===== -->
+      // Đăng nhập ẩn danh
+      if (!firebase.auth().currentUser) {
+        firebase.auth().signInAnonymously().catch(e => {
+          console.error('Anonymous sign-in failed:', e);
+        });
+      }
+
+      // Chỉ init DB sau khi có user
+      firebase.auth().onAuthStateChanged(() => {
+        if (!rtdb) {
+          rtdb = firebase.database();
+          rtdb.ref(".info/serverTimeOffset").on("value", snap => {
+            serverOffsetMs = Number(snap.val()||0);
+            serverClockReady = true;
+          });
+        }
+});
+}
+
+@@ -258,12 +272,12 @@ <h2 class="text-5xl font-bold">T-NGON</h2>
+const GH_FOLDER = "slides";
+const DEFAULT_DUR = 8; // giây/slide mặc định
+
+    // EPOCH cố định toàn cục (không cần startTs)
+    // EPOCH cố định toàn cục
+const SLIDES_EPOCH_MS = Date.UTC(2024,0,1,0,0,0); // 2024-01-01T00:00:00Z
+
+    let slides = [];     // [{type:'image'|'video', src, duration}]
+    let edgesMs = [];    // mốc kết thúc (ms) tính từ đầu chu kỳ
+    let periodMs = 0;    // tổng chu kỳ
+    let slides = [];
+    let edgesMs = [];
+    let periodMs = 0;
+let currentIndex = -1;
+let loopTimer = null, kickTimer = null;
+let manifestChecked = false;
+@@ -330,7 +344,7 @@ <h2 class="text-5xl font-bold">T-NGON</h2>
+function renderByEpoch(){
+if (!slides.length || !periodMs) return;
+const t = nowServerMs() - SLIDES_EPOCH_MS;
+      const offset = ((t % periodMs) + periodMs) % periodMs; // ms trong chu kỳ
+      const offset = ((t % periodMs) + periodMs) % periodMs;
+const { idx, inside } = indexFromOffset(offset);
+if (idx !== currentIndex){
+currentIndex = idx;
+@@ -342,8 +356,8 @@ <h2 class="text-5xl font-bold">T-NGON</h2>
+
+function startSlideLoop(){
+stopSlideLoop();
+      loopTimer = setInterval(renderByEpoch, 200);                          // tick 200ms
+      kickTimer = setInterval(()=>{ currentIndex = -1; renderByEpoch(); }, 5000); // ép render 5s
+      loopTimer = setInterval(renderByEpoch, 200);
+      kickTimer = setInterval(()=>{ currentIndex = -1; renderByEpoch(); }, 5000);
+}
+
+function stopSlideLoop(){
+@@ -388,7 +402,6 @@ <h2 class="text-5xl font-bold">T-NGON</h2>
+}
+
+async function initSlidesThenMaybeShow(){
+      // tải manifest 1 lần, có → bật slideshow; không → giữ CTA
+let ok = false;
+if (!manifestChecked) {
+ok = await loadSlidesFromManifest();
+@@ -397,7 +410,7 @@ <h2 class="text-5xl font-bold">T-NGON</h2>
+} else ok = slidesAvailable;
+
+if (ok) {
+        if (!serverClockReady) await new Promise(r=>setTimeout(r,300)); // đợi offset về
+        if (!serverClockReady) await new Promise(r=>setTimeout(r,300));
+startSlideLoop();
+showScreen("start-slideshow-screen");
+} else {
+@@ -426,7 +439,7 @@ <h2 class="text-5xl font-bold">T-NGON</h2>
+document.addEventListener("DOMContentLoaded", () => {
+connectFirebase();
+
+      // Tạo nút bàn sau khi DOM sẵn sàng (giữ nguyên UI cũ)
+      // Tạo nút bàn
+const wrap = document.getElementById("table-buttons");
+for (let i = 1; i <= 15; i++) {
+const btn = document.createElement("button");
+@@ -436,72 +449,90 @@ <h2 class="text-5xl font-bold">T-NGON</h2>
+wrap.appendChild(btn);
+}
+
+      // Hỗ trợ ?ban=10 auto-chọn và tự start (giữ hành vi cũ)
+      // Hỗ trợ ?ban=10 auto-chọn và tự start
+const qBan = getQueryParam("ban");
+if (qBan) {
+const n = parseInt(qBan, 10);
+if (!isNaN(n)) setTimeout(() => {
+selectTable(n);
+          startOrder(); // hành vi gốc: vào luôn POS khi gọi bằng ?ban=
+          startOrder();
+}, 100);
+}
+
+      // Phòng khi mất selectedBan mà iframe còn
+setInterval(backfillSelectedBanFromIframe, 1000);
+      // Màn đầu tiên là chọn bàn (giữ nguyên do CSS #table-selection-screen { display: flex; })
+});
+</script>
+
+  <!-- ============== BỔ SUNG: Lắng nghe điều khiển ON/OFF màn hình ============== -->
+  <!-- ============== Lắng nghe điều khiển ON/OFF (global + per-table) ============== -->
+<script>
+    (function () {
+      // Tạo lớp phủ đen 1 lần
+      const sleepLayer = document.createElement('div');
+      sleepLayer.id = 'tngon-sleep';
+      document.body.appendChild(sleepLayer);
+
+      function sleepOn() {
+  (function () {
+    const sleepLayer = document.createElement('div');
+    sleepLayer.id = 'tngon-sleep';
+    document.body.appendChild(sleepLayer);
+
+    let globalScreen = 'on';
+    let tableScreen  = 'on';
+    let tableRef = null;
+
+    function applyEffective() {
+      const off = (globalScreen === 'off') || (tableScreen === 'off');
+      if (off) {
+sleepLayer.classList.add('on');
+document.documentElement.style.overflow = 'hidden';
+document.body.style.overflow = 'hidden';
+      }
+      function sleepOff() {
+      } else {
+sleepLayer.classList.remove('on');
+document.documentElement.style.overflow = '';
+document.body.style.overflow = '';
+}
+    }
+
+      // Cho phép test qua hash URL: #sleep / #wake (không ảnh hưởng logic cũ)
+      function applyHashControl() {
+        const h = (location.hash || '').toLowerCase();
+        if (h.includes('sleep')) sleepOn();
+        if (h.includes('wake'))  sleepOff();
+      }
+      window.addEventListener('hashchange', applyHashControl);
+    function applyHashControl() {
+      const h = (location.hash || '').toLowerCase();
+      if (h.includes('sleep')) { globalScreen = 'off'; applyEffective(); }
+      if (h.includes('wake'))  { globalScreen = 'on';  applyEffective(); }
+    }
+    window.addEventListener('hashchange', applyHashControl);
+
+    function listenGlobal() {
+      try {
+        const db = firebase.database();
+        db.ref('control/screen').on('value', (snap) => {
+          globalScreen = (snap && snap.val()) ? String(snap.val()).toLowerCase() : 'on';
+          if (!['on','off'].includes(globalScreen)) globalScreen = 'on';
+          applyEffective();
+        });
+      } catch (_) {}
+    }
+
+      // Lắng nghe từ Firebase: control/screen = "on" | "off"
+      function listenGlobalScreenToggle() {
+        try {
+          if (!firebase || !firebase.database) return;
+          const db = firebase.database();
+          const ctrlRef = db.ref('control/screen');
+          ctrlRef.on('value', (snap) => {
+            const v = (snap && snap.val()) || 'on';
+            if (String(v).toLowerCase() === 'off') sleepOn();
+            else sleepOff();
+          });
+        } catch (_e) {}
+      }
+    function listenPerTable(ban) {
+      try {
+        const db = firebase.database();
+        if (tableRef) tableRef.off();
+        if (!ban) { tableScreen = 'on'; applyEffective(); return; }
+        tableRef = db.ref('control/tables/' + ban + '/screen');
+        tableRef.on('value', (snap) => {
+          tableScreen = (snap && snap.val()) ? String(snap.val()).toLowerCase() : 'on';
+          if (!['on','off'].includes(tableScreen)) tableScreen = 'on';
+          applyEffective();
+        });
+      } catch (_) {}
+    }
+
+      // Khởi động khi DOM sẵn sàng (sau khi file gốc đã gọi connectFirebase())
+      document.addEventListener('DOMContentLoaded', () => {
+        // Trường hợp Firebase chưa kịp init, đợi 1 nhịp ngắn
+        setTimeout(() => {
+          listenGlobalScreenToggle();
+          applyHashControl();
+        }, 50);
+      });
+    })();
+    const _selectTableOrig = window.selectTable;
+    window.selectTable = function(banNumber){
+      _selectTableOrig.call(this, banNumber);
+      listenPerTable(banNumber);
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        listenGlobal();
+        applyHashControl();
+        if (window.selectedBan) listenPerTable(window.selectedBan);
+      }, 50);
+    });
+  })();
+</script>
+</body>
+</html>
+<!-- ==== BLACKOUT SENDER (append-only, no break change) ==== -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script>
 (function(){
-  // ==== Inject CSS ====
-  const css = `
-  #sleepOverlay{position:fixed;inset:0;background:#000;z-index:2147483000;display:none;align-items:center;justify-content:center;overscroll-behavior:none;touch-action:none}
-  #sleepOverlay img{max-width:100vw;max-height:100vh;width:100%;height:100%;object-fit:cover;user-select:none;-webkit-user-drag:none;pointer-events:none}
-  #sleepOverlay .hot-corner{position:absolute;left:0;top:0;width:20vw;height:20vh}
-  `;
-  const style = document.createElement('style'); style.textContent = css; document.head.appendChild(style);
+  // ===== Firebase init (tự dùng config đang có) =====
+  const CONFIG = window.FB_CONFIG || window.firebaseConfig || {
+    // Nếu CHƯA có ở nơi khác, dán config vào đây (giống bên redirect.html)
+    // apiKey: "...",
+    // authDomain: "...",
+    // databaseURL: "https://<project-id>.firebaseio.com",
+    // projectId: "...",
+    // storageBucket: "...",
+    // messagingSenderId: "...",
+    // appId: "..."
+  };
+  if (!window.firebase?.apps?.length && CONFIG?.apiKey) firebase.initializeApp(CONFIG);
+  const db = firebase?.apps?.length ? firebase.database() : null;
+  if (!db) { console.warn('[blackout-admin] Firebase chưa cấu hình.'); return; }
 
-  // ==== Create overlay ====
-  const overlay = document.createElement('div'); overlay.id='sleepOverlay';
-  const img = document.createElement('img'); img.alt=''; img.src = './assets/black.png';  // nhớ có assets/black.png
-  const hot = document.createElement('div'); hot.className='hot-corner';
-  overlay.appendChild(img); overlay.appendChild(hot); document.body.appendChild(overlay);
+  // ===== API ghi trạng thái =====
+  async function setGlobalBlackout(on){
+    await db.ref('blackout/global').set(!!on);
+    // Khi bật lại màn hình toàn quán, dọn cờ lẻ
+    if (!on) await db.ref('blackout/devices').set(null);
+  }
 
-  const cfg = { idleMs: 60000, reShowMsAfterExit: 60000 };
-  let idleTimer=null, reShowTimer=null, visible=false;
+  // ===== Gắn vào 2 nút hiện có theo text =====
+  function findBtnByText(txt){
+    txt = txt.toLowerCase();
+    const all = Array.from(document.querySelectorAll('button, a, [role="button"], .btn, .button'));
+    return all.find(el => (el.innerText||'').trim().toLowerCase().includes(txt));
+  }
 
-  function show(){ if(visible) return; clearTimeout(idleTimer); overlay.style.display='flex'; visible=true; }
-  function hide(){ if(!visible) return; overlay.style.display='none'; visible=false; }
-  function clrIdle(){ if(idleTimer){clearTimeout(idleTimer); idleTimer=null;} }
-  function clrRe(){ if(reShowTimer){clearTimeout(reShowTimer); reShowTimer=null;} }
-  function scheduleRe(){ clrRe(); reShowTimer=setTimeout(show, cfg.reShowMsAfterExit); }
-  function resetIdle(){ if(visible) return; clrIdle(); idleTimer=setTimeout(show, cfg.idleMs); }
+  const btnOffAll = findBtnByText('Tắt (màn đen)');         // tắt toàn quán = bật màn đen
+  const btnOnAll  = findBtnByText('Bật tất cả') ||          // bật lại toàn quán
+                    findBtnByText('Bật màn hình');
 
-  // Events
-  overlay.addEventListener('touchmove', e=>e.preventDefault(), {passive:false});
-  overlay.addEventListener('wheel', e=>e.preventDefault(), {passive:false});
-  hot.addEventListener('pointerdown', ()=>{ if(!visible) return; hide(); scheduleRe(); });
-  ['pointerdown','pointermove','keydown','wheel','touchstart'].forEach(ev =>
-    window.addEventListener(ev, resetIdle, {passive:true})
-  );
-  document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ clrIdle(); } else { resetIdle(); } });
+  if (btnOffAll) {
+    btnOffAll.addEventListener('click', () => { try{ setGlobalBlackout(true); }catch(e){console.error(e);} }, {capture:true});
+  } else {
+    console.warn('[blackout-admin] Không tìm thấy nút "Tắt (màn đen)".');
+  }
 
-  // Public API (tuỳ cần)
-  window.SleepOverlay = { show, hide, resetIdle, config: cfg };
+  if (btnOnAll) {
+    btnOnAll.addEventListener('click', () => { try{ setGlobalBlackout(false); }catch(e){console.error(e);} }, {capture:true});
+  } else {
+    console.warn('[blackout-admin] Không tìm thấy nút "Bật tất cả/Bật màn hình".');
+  }
 
-  // Start
-  resetIdle();
+  // (Tuỳ chọn) Nếu sếp có phần “Điều khiển từng tablet”, có thể gọi:
+  // db.ref('blackout/devices/<tabletId>').set(true/false)
+  // để tắt/bật riêng từng máy.
 })();
 </script>
-<!-- ===== /Sleep Overlay inject ===== -->
+<!-- ==== /BLACKOUT SENDER ==== -->
+  
