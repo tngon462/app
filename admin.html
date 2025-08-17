@@ -1,141 +1,95 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html>
 <head>
   <meta charset="UTF-8" />
-  <title>T-NGON Admin</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#da251d" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="T-NGON Admin" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>T-NGON</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Icons / Manifest -->
-  <link rel="icon" sizes="192x192" href="./icons/icon-192.png" />
-  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
-  <link rel="manifest" href="./admin.webmanifest" />
+  <!-- PWA meta -->
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="https://placehold.co/192x192/da251d/fff?text=TN" />
+  <link rel="apple-touch-icon" href="https://placehold.co/192x192/da251d/fff?text=TN" />
+  <meta name="apple-mobile-web-app-title" content="T-NGON" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#da251d" />
 
   <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Firebase (compat) -->
+  <!-- Firebase SDK (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
   <style>
-    html, body { height: 100%; background:#f6f7f9; }
-    .nav-link { display:block; padding:.5rem .75rem; border-radius:.5rem; font-weight:600; color:#374151; }
-    .nav-link:hover { background:#f3f4f6; }
-    .nav-link.active { background:rgba(218,37,29,.12); color:#da251d; }
-    .toggle input { display:none; }
-    .toggle label {
-      width:56px; height:32px; border-radius:999px; display:inline-block; position:relative;
-      background:#e5e7eb; transition:.2s;
+    body { font-family: "Inter", system-ui, sans-serif; margin: 0; padding: 0; background: #f3f4f6; }
+    .main-container { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; width: 100vw; padding: 1rem; box-sizing: border-box; }
+    .screen { display: none; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; }
+    #table-selection-screen { display: flex; }
+    .button-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; max-width: 600px; margin: 2rem auto 0; }
+    .table-button { font-size: 2rem; font-weight: 700; padding: 2rem 1rem; background: #007aff; color: #fff; border: 2px solid #007aff; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -1px rgba(0,0,0,.06); cursor: pointer; transition: all .2s ease; }
+    .table-button:active { transform: translateY(1px); }
+    .start-button { font-size: 2.5rem; padding: 1.25rem 2.5rem; background: #007aff; color: #fff; border: none; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -1px rgba(0,0,0,.06); cursor: pointer; transition: all .2s ease; }
+    .start-button:active { transform: translateY(1px); }
+    .iframe-container { width: 100%; height: 100%; border: none; overflow: hidden; }
+    .loading-indicator { font-size: 1.5rem; color: #6b7280; margin-top: 1rem; }
+    .error-message { color: #ef4444; font-size: 1.2rem; margin-top: 1rem; }
+    @media (max-width: 640px) {
+      .button-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+      .table-button { font-size: 1.5rem; padding: 1.5rem .5rem; }
+      .start-button { font-size: 2rem; padding: 1rem 2rem; }
     }
-    .toggle label::after{
-      content:""; position:absolute; top:4px; left:4px; width:24px; height:24px; border-radius:999px;
-      background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:.2s;
-    }
-    .toggle input:checked + label { background:#10b981; }
-    .toggle input:checked + label::after { transform:translateX(24px); }
-    #ads-iframe { width:100%; height:calc(100vh - 64px); border:0; background:#fff; }
-    .app-badge { font-size:12px; padding:2px 6px; border-radius:6px; border:1px solid #e5e7eb; color:#6b7280; }
+    .return-button { position: absolute; bottom: 10px; left: 10px; width: 24px; height: 24px; padding: 0; background: transparent; border: none; cursor: pointer; z-index: 100; }
 
-    /* Off-canvas sidebar (mobile) */
-    .drawer { position:fixed; top:64px; left:0; height:calc(100vh - 64px); width:260px; background:#fff;
-      border-right:1px solid #e5e7eb; transform:translateX(-100%); transition:transform .2s ease; z-index:40; }
-    .drawer.open { transform:translateX(0); }
-    .drawer-mask { position:fixed; inset:0; background:rgba(0,0,0,.25); display:none; z-index:30; }
-    .drawer-mask.show { display:block; }
-
-    /* On md+ keep static sidebar */
-    @media (min-width:768px){
-      .drawer { position:static; transform:none; height:auto; width:260px; z-index:auto; }
-      .drawer-mask { display:none !important; }
-      .layout { display:flex; }
-      .content { min-height:calc(100vh - 64px); }
-    }
+    /* Slideshow (nền trắng, không caption) */
+    #start-slideshow-screen { position: relative; width:100%; height:100%; background:#ffffff; overflow:hidden; }
+    .slide-stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#ffffff; }
+    .slide-stage img, .slide-stage video { max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; background:#ffffff; }
+    .tap-overlay { position:absolute; inset:0; z-index:10; cursor:pointer; }
+    .slide-status { position:absolute; top:10px; right:10px; z-index:20; background: rgba(220, 38, 38, 0.9); color:#fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; display:none; max-width: 70vw; line-height: 1.3; }
   </style>
 </head>
-<body class="bg-gray-50">
-  <!-- Topbar -->
-  <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-3 md:px-6">
-    <div class="flex items-center gap-3">
-      <button id="btnMenu" class="md:hidden p-2 -ml-1 rounded hover:bg-gray-100" aria-label="Mở menu">☰</button>
-      <img src="./icons/icon-72.png" alt="logo" class="w-8 h-8 rounded-md" />
-      <button id="homeBtn" class="text-xl font-extrabold tracking-wide text-[#da251d]">T-NGON Admin</button>
-      <span id="pwaBadge" class="app-badge hidden">Installed</span>
+<body class="bg-gray-100">
+  <div class="main-container" id="main-container">
+    <!-- Màn chọn bàn -->
+    <div class="screen" id="table-selection-screen">
+      <h2 class="text-5xl font-bold text-gray-800">T-NGON</h2>
+      <p class="text-lg text-gray-600 mt-2">Vui lòng chọn bàn của bạn</p>
+      <div class="button-grid" id="table-buttons"></div>
     </div>
-    <div class="flex items-center gap-2">
-      <button id="btnInstall" class="px-3 py-1.5 rounded-md bg-[#da251d] text-white text-sm hidden">Cài đặt ứng dụng</button>
-      <div id="connBadge" class="text-xs text-gray-500">Đang kiểm tra kết nối…</div>
-    </div>
-  </header>
 
-  <!-- Drawer mask (mobile) -->
-  <div id="drawerMask" class="drawer-mask"></div>
-
-  <div class="layout">
-    <!-- Sidebar / Drawer -->
-    <aside id="drawer" class="drawer">
-      <nav class="p-3 space-y-1">
-        <a href="#screen" id="navScreen" class="nav-link">Tắt/Bật màn hình</a>
-        <a href="#ads" id="navAds" class="nav-link">Up ảnh quảng cáo</a>
-      </nav>
-      <div class="p-3 text-xs text-gray-400 border-t">
-        Phiên bản <span id="ver">—</span>
-      </div>
-    </aside>
-
-    <!-- Main content -->
-    <main class="content flex-1">
-      <!-- View: Screen control -->
-      <section id="viewScreen" class="p-4 md:p-6 hidden">
-        <h2 class="text-2xl font-bold text-gray-800 mb-4">Điều khiển màn hình tablet</h2>
-
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-5 max-w-3xl">
-          <div class="flex items-center justify-between gap-3">
-            <div class="min-w-0">
-              <div class="text-lg font-semibold truncate">Bật màn hình (toàn quán)</div>
-              <div id="screenStatusText" class="text-sm text-gray-500 mt-0.5">Đang tải trạng thái…</div>
-            </div>
-            <div class="toggle shrink-0">
-              <input type="checkbox" id="screenToggle" />
-              <label for="screenToggle" aria-label="Bật/Tắt"></label>
-            </div>
-          </div>
-
-          <div class="mt-5 grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <button id="btnOn"  class="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">Bật tất cả</button>
-            <button id="btnOff" class="px-4 py-2 rounded-lg bg-gray-800 text-white hover:bg-black">Tắt (màn đen)</button>
-          </div>
-
-          <!-- Điều khiển từng tablet -->
-          <div class="mt-6">
-            <h3 class="text-lg font-semibold text-gray-800 mb-3">Điều khiển từng tablet</h3>
-            <div id="tablesGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"></div>
-            <p class="text-xs text-gray-400 mt-2">
-              Gợi ý: Nhấn “Bật tất cả” để xoá trạng thái tắt lẻ, sau đó tắt riêng những bàn cần.
-            </p>
-          </div>
-
-          <div id="errorBox" class="mt-4 hidden p-3 rounded-lg bg-red-50 text-red-700 text-sm"></div>
+    <!-- Màn BẮT ĐẦU -->
+    <div class="screen" id="start-screen">
+      <div class="space-y-4 text-gray-800 text-center">
+        <h2 class="text-5xl font-bold">T-NGON</h2>
+        <p class="text-lg">Nhấn nút bên dưới để bắt đầu đặt món</p>
+        <div class="button-container">
+          <button class="start-button" onclick="startOrder()">🍽️ BẮT ĐẦU</button>
         </div>
-      </section>
+        <p id="table-info" class="text-sm text-gray-500 mt-4"></p>
+      </div>
+    </div>
 
-      <!-- View: Ads (iframe) -->
-      <section id="viewAds" class="hidden">
-        <iframe id="ads-iframe" src="about:blank" referrerpolicy="no-referrer"></iframe>
-      </section>
-    </main>
+    <!-- Màn SLIDESHOW -->
+    <div class="screen" id="start-slideshow-screen">
+      <div class="tap-overlay" onclick="showScreen('start-screen')"></div>
+      <div class="slide-stage" id="slide-stage"></div>
+      <div id="slide-status" class="slide-status"></div>
+    </div>
+
+    <!-- Màn iframe -->
+    <div class="screen" id="iframe-screen">
+      <button class="return-button" onclick="clearPage()"></button>
+    </div>
   </div>
 
   <script>
-    // ===== App version =====
-    const APP_VERSION = "1.3.3";
-    document.getElementById('ver').textContent = APP_VERSION;
+    /* ----------------- Config chung ----------------- */
+    const LINKS_JSON_URL = "https://tngon462.github.io/QR/links.json";
+    let selectedBan = null;
 
-    // ===== Firebase config =====
+    /* ----------------- Firebase ----------------- */
     const firebaseConfig = {
       apiKey: "AIzaSyB4u2G41xdGkgBC0KltleRpcg5Lwru2RIU",
       authDomain: "tngon-b37d6.firebaseapp.com",
@@ -146,250 +100,360 @@
       appId: "1:580319242104:web:6922e4327bdc8286c30a8d",
       measurementId: "G-LHEH8ZC6SL"
     };
+    let fbApp = null, rtdb = null, currentRef = null, currentBanListening = null, lastTs = 0;
+    let pollInitTs = null;
 
-    // ===== UI refs =====
-    const views = { screen: document.getElementById('viewScreen'), ads: document.getElementById('viewAds') };
-    const navScreen = document.getElementById('navScreen');
-    const navAds = document.getElementById('navAds');
-    const homeBtn = document.getElementById('homeBtn');
-    const connBadge = document.getElementById('connBadge');
-    const pwaBadge = document.getElementById('pwaBadge');
-    const btnInstall = document.getElementById('btnInstall');
+    // Đồng hồ server
+    let serverOffsetMs = 0, serverClockReady = false;
+    function nowServerMs(){ return Date.now() + (Number(serverOffsetMs)||0); }
 
-    const toggleEl = document.getElementById('screenToggle');
-    const statusEl = document.getElementById('screenStatusText');
-    const btnOn = document.getElementById('btnOn');
-    const btnOff = document.getElementById('btnOff');
-    const errorBox = document.getElementById('errorBox');
-
-    // Drawer (mobile)
-    const drawer = document.getElementById('drawer');
-    const drawerMask = document.getElementById('drawerMask');
-    const btnMenu = document.getElementById('btnMenu');
-    function openDrawer(){ drawer.classList.add('open'); drawerMask.classList.add('show'); }
-    function closeDrawer(){ drawer.classList.remove('open'); drawerMask.classList.remove('show'); }
-    btnMenu.addEventListener('click', openDrawer);
-    drawerMask.addEventListener('click', closeDrawer);
-    [navScreen, navAds].forEach(a => a.addEventListener('click', () => { if (window.innerWidth < 768) closeDrawer(); }));
-
-    function showError(msg) { errorBox.textContent = msg||''; errorBox.classList.toggle('hidden', !msg); }
-
-    function setActive(hash) {
-      [navScreen, navAds].forEach(a => a.classList.remove('active'));
-      if (hash === '#ads') navAds.classList.add('active'); else navScreen.classList.add('active');
-      Object.values(views).forEach(v => v.classList.add('hidden'));
-      if (hash === '#ads') {
-        views.ads.classList.remove('hidden');
-        const ifr = document.getElementById('ads-iframe');
-        if (!ifr.src || ifr.src === 'about:blank') ifr.src = 'https://pic-flame.vercel.app/';
-      } else {
-        views.screen.classList.remove('hidden');
-      }
+    function connectFirebase() {
+      if (!fbApp) fbApp = firebase.initializeApp(firebaseConfig);
+      if (!rtdb) rtdb = firebase.database();
+      rtdb.ref(".info/serverTimeOffset").on("value", snap => {
+        serverOffsetMs = Number(snap.val()||0);
+        serverClockReady = true;
+      });
     }
-    function route() { setActive(location.hash || '#screen'); }
-    window.addEventListener('hashchange', route);
-    homeBtn.addEventListener('click', () => { location.href = location.pathname; });
 
-    // ===== PWA (Service Worker + Install Prompt) =====
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw-admin.js')
-        .then(reg => {
-          reg.addEventListener('updatefound', () => {
-            const installing = reg.installing;
-            installing?.addEventListener('statechange', () => {
-              if (installing.state === 'installed' && navigator.serviceWorker.controller) {
-                const bar = document.createElement('div');
-                bar.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-4 py-2 rounded-lg shadow';
-                bar.textContent = 'Có bản cập nhật. Đang tự tải…';
-                document.body.appendChild(bar);
-                setTimeout(()=> bar.remove(), 3000);
-              }
-            });
-          });
+    function attachListenerFor(ban) {
+      if (!rtdb || currentBanListening === ban) return;
+      if (currentRef) currentRef.off();
+      currentBanListening = ban;
+      currentRef = rtdb.ref("signals/" + ban);
+
+      let initialized = false, firstTs = 0;
+      currentRef.on("value", (snap) => {
+        const v = snap.val();
+        if (!v) return;
+        const ts = v.ts || 0;
+        if (!initialized) { initialized = true; firstTs = ts; if (ts>lastTs) lastTs=ts; return; }
+        if (v.status === "expired" && ts > lastTs && ts > firstTs) {
+          lastTs = ts;
+          reloadToStartForCurrentBan(); // << thay vì clearPage()
+        }
+      });
+    }
+
+    /* Fallback REST polling */
+    async function pollExpiredFallback(){
+      try{
+        if (!selectedBan) return;
+        const url = firebaseConfig.databaseURL.replace(/\/$/,"") + "/signals/" + selectedBan + ".json?cb=" + Date.now();
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) return;
+        const v = await res.json();
+        if (!v) return;
+
+        const ts = v.ts || 0;
+
+        if (pollInitTs === null) { pollInitTs = ts; if (ts>lastTs) lastTs=ts; return; }
+
+        if (v.status === "expired" && ts > lastTs && ts > pollInitTs) {
+          lastTs = ts;
+          reloadToStartForCurrentBan(); // << thay vì clearPage()
+        }
+      }catch(_){}
+    }
+    setInterval(pollExpiredFallback, 3000);
+
+    /* ----------------- UI helpers ----------------- */
+    function showScreen(id) {
+      document.querySelectorAll(".screen").forEach(s => s.style.display = "none");
+      const el = document.getElementById(id);
+      if (el) el.style.display = "flex";
+      if (id === "start-screen") resetIdleTimer();
+    }
+
+    function selectTable(banNumber) {
+      selectedBan = banNumber;
+      pollInitTs = null;
+      document.getElementById("table-info").textContent = `Bạn đang ở Bàn ${selectedBan}`;
+      showScreen("start-screen");
+      attachListenerFor(selectedBan);
+      // chỉ bật slideshow nếu có manifest
+      initSlidesThenMaybeShow();
+    }
+
+    function startOrder() {
+      if (!selectedBan) { return; }
+      stopSlideLoop();
+
+      document.getElementById("start-screen").style.display = "none";
+      const ss = document.getElementById("start-slideshow-screen");
+      if (ss) ss.style.display = "none";
+
+      const loading = document.createElement("div");
+      loading.className = "loading-indicator";
+      loading.textContent = "Đang tải trang gọi món...";
+      document.getElementById("main-container").appendChild(loading);
+
+      fetch(LINKS_JSON_URL)
+        .then(r => { if (!r.ok) throw new Error("Không thể tải links.json"); return r.json(); })
+        .then(data => {
+          const url = data[selectedBan] ?? data[String(selectedBan)];
+          loading.remove();
+          if (url) createIframe(url); else showScreen("start-screen");
         })
-        .catch(console.error);
+        .catch(_e => { loading.remove(); showScreen("start-screen"); });
     }
 
-    let deferredPrompt = null;
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      btnInstall.classList.remove('hidden');
-    });
-    btnInstall.addEventListener('click', async () => {
-      if (!deferredPrompt) return;
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') btnInstall.classList.add('hidden');
-      deferredPrompt = null;
-    });
-    window.addEventListener('appinstalled', () => {
-      pwaBadge.classList.remove('hidden');
-      btnInstall.classList.add('hidden');
-    });
+    function createIframe(url) {
+      const iframeScreen = document.getElementById("iframe-screen");
+      iframeScreen.innerHTML = `<button class="return-button" onclick="clearPage()"></button>`;
+      const iframe = document.createElement("iframe");
+      iframe.id = "pos-iframe";
+      iframe.className = "iframe-container";
+      iframe.src = url;
+      iframeScreen.appendChild(iframe);
+      showScreen("iframe-screen");
+    }
 
-    // ===== Firebase init + anonymous auth + wiring =====
-    (async function init() {
-      try {
-        firebase.initializeApp(firebaseConfig);
+    function clearPage() {
+      stopSlideLoop();
+      const iframeScreen = document.getElementById("iframe-screen");
+      if (iframeScreen) iframeScreen.innerHTML = "";
+      showScreen("start-screen");
+    }
 
-        const db = firebase.database();
-        const refConnected = db.ref(".info/connected");
-        refConnected.on('value', (snap) => {
-          const online = !!snap.val();
-          connBadge.textContent = online ? 'Đã kết nối Firebase' : 'Mất kết nối Firebase';
-          connBadge.className = online ? 'text-xs text-emerald-600' : 'text-xs text-red-600';
-        });
-
-        // Ẩn danh
-        await firebase.auth().signInAnonymously().catch(e => {
-          console.error('Anonymous sign-in failed:', e);
-          showError('Không đăng nhập ẩn danh được: ' + (e?.message||e));
-        });
-        await new Promise(r => { const un = firebase.auth().onAuthStateChanged(()=>{ un(); r(); }); });
-
-        // ===== Global control =====
-        const refScreen = db.ref('control/screen'); // "on" | "off"
-
-        // Nếu chưa có giá trị -> tự khởi tạo "on"
-        refScreen.once('value').then(snap => { if (!snap.exists()) refScreen.set('on'); });
-
-        // Subscribe trạng thái toàn quán
-        refScreen.on('value', (snap) => {
-          showError('');
-          const v = snap.exists() ? snap.val() : 'on';
-          const isOn = String(v).toLowerCase() === 'on';
-          toggleEl.checked = isOn;
-          statusEl.textContent = isOn ? 'Đang bật màn hình' : 'Đang tắt (phủ đen)';
-        }, (err) => showError('Lỗi subscribe: ' + (err?.message||err)));
-
-        async function setScreen(val) {
-          showError('');
-          const prev = toggleEl.checked;
-          try { toggleEl.checked = (val === 'on'); await refScreen.set(val); }
-          catch (e) { toggleEl.checked = prev; showError('Ghi thất bại: ' + (e?.message||e)); }
+    // >>> NEW: Reload lại trang và tự chọn lại bàn, nhưng KHÔNG auto vào POS
+    function reloadToStartForCurrentBan(){
+      try{
+        const base = window.location.origin + window.location.pathname;
+        if (selectedBan) {
+          const url = `${base}?ban=${encodeURIComponent(selectedBan)}&nostart=1`;
+          window.location.replace(url);
+        } else {
+          window.location.replace(base);
         }
-        toggleEl.addEventListener('change', () => setScreen(toggleEl.checked ? 'on' : 'off'));
-
-        // ===== Per-table controls =====
-        const TABLE_COUNT = 15;
-        const tablesGrid = document.getElementById('tablesGrid');
-        const tableRefs = {};
-        const tableStates = {};
-
-        // Card mỗi bàn: công tắc + nút "Làm mới" NẰM DƯỚI công tắc
-        function makeTableTile(i, onToggle, onRefresh) {
-          const card = document.createElement('div');
-          card.className = 'bg-white rounded-xl shadow-sm border border-gray-200 p-3 flex flex-col';
-
-          const head = document.createElement('div');
-          head.className = 'flex items-start justify-between gap-3';
-
-          const left = document.createElement('div');
-          left.className = 'min-w-0';
-          left.innerHTML = `<div class="font-semibold text-gray-800">Bàn ${i}</div>
-                            <div id="tb-status-${i}" class="text-xs text-gray-500">Đang tải…</div>`;
-
-          const wrapper = document.createElement('div');
-          wrapper.className = 'toggle';
-          const input = document.createElement('input');
-          input.type = 'checkbox';
-          input.id = `tb-toggle-${i}`;
-          const label = document.createElement('label');
-          label.setAttribute('for', input.id);
-          wrapper.appendChild(input);
-          wrapper.appendChild(label);
-          input.addEventListener('change', () => onToggle(i, input.checked ? 'on' : 'off'));
-
-          head.appendChild(left);
-          head.appendChild(wrapper);
-
-          const btnRefresh = document.createElement('button');
-          btnRefresh.textContent = 'Làm mới';
-          btnRefresh.className = 'mt-2 self-end px-3 py-1.5 text-xs rounded-md bg-blue-600 text-white hover:bg-blue-700';
-          btnRefresh.addEventListener('click', () => onRefresh(i));
-
-          card.appendChild(head);
-          card.appendChild(btnRefresh);
-          return { card, input };
-        }
-
-        function renderPerTableControls() {
-          tablesGrid.innerHTML = '';
-          for (let i = 1; i <= TABLE_COUNT; i++) {
-            const { card, input } = makeTableTile(i, setTableScreen, refreshTable);
-            tablesGrid.appendChild(card);
-
-            const statusElTb = document.getElementById(`tb-status-${i}`);
-            const ref = db.ref(`control/tables/${i}/screen`);
-            tableRefs[i] = ref;
-
-            ref.on('value', async (snap) => {
-              if (!snap.exists()) {
-                try { await ref.set('on'); } catch(_) {}
-                statusElTb.textContent = 'Đang bật (khởi tạo)';
-                input.checked = true;
-                tableStates[i] = 'on';
-                return;
-              }
-              const val = (snap.val() || 'on').toString().toLowerCase();
-              tableStates[i] = val;
-              statusElTb.textContent = (val === 'on') ? 'Đang bật' : 'Đang tắt';
-              if (input.checked !== (val === 'on')) input.checked = (val === 'on');
-            }, (err) => {
-              statusElTb.textContent = 'Lỗi: ' + (err?.message || err);
-            });
-          }
-        }
-
-        async function setTableScreen(i, val) {
-          try {
-            await tableRefs[i].set(val); // 'on' | 'off'
-          } catch (e) {
-            showError(`Ghi thất bại cho Bàn ${i}: ` + (e?.message || e));
-            const input = document.getElementById(`tb-toggle-${i}`);
-            if (input) input.checked = (tableStates[i] === 'on');
-          }
-        }
-
-        // Làm mới 1 bàn → ghi vào signals/<ban>
-        async function refreshTable(i) {
-          showError('');
-          try {
-            const refSig = db.ref(`signals/${i}`);
-            await refSig.set({
-              status: 'expired',
-              ts: firebase.database.ServerValue.TIMESTAMP
-            });
-          } catch (e) {
-            showError(`Làm mới Bàn ${i} thất bại: ` + (e?.message || e));
-          }
-        }
-
-        // Nút Bật/Tắt tất cả
-        btnOn.addEventListener('click', async () => {
-          try {
-            await refScreen.set('on');
-            const updates = {};
-            for (let i=1;i<=TABLE_COUNT;i++) updates[`control/tables/${i}/screen`] = 'on';
-            await db.ref().update(updates);
-          } catch (e) {
-            showError('Bật tất cả thất bại: ' + (e?.message||e));
-          }
-        });
-
-        btnOff.addEventListener('click', async () => {
-          try { await refScreen.set('off'); }
-          catch (e) { showError('Tắt tất cả thất bại: ' + (e?.message||e)); }
-        });
-
-        renderPerTableControls();
-        route();
-      } catch (e) {
-        console.error(e);
-        showError('Lỗi khởi chạy: ' + (e?.message||e));
+      }catch(_){
+        window.location.reload();
       }
-    })();
+    }
+
+    /* ----------------- Auto select bàn ----------------- */
+    function getQueryParam(name){
+      try { return new URL(window.location.href).searchParams.get(name); } catch { return null; }
+    }
+
+    async function backfillSelectedBanFromIframe(){
+      try{
+        if (selectedBan) return;
+        const iframe = document.getElementById("pos-iframe");
+        if (!iframe || !iframe.src) return;
+        const r = await fetch(LINKS_JSON_URL);
+        const data = await r.json();
+        for (const [ban, url] of Object.entries(data)) {
+          if (iframe.src === url) {
+            selectedBan = parseInt(ban, 10);
+            attachListenerFor(selectedBan);
+            break;
+          }
+        }
+      }catch(_){}
+    }
+    setInterval(backfillSelectedBanFromIframe, 1000);
+
+    /* ----------------- SLIDESHOW (EPOCH + server clock) ----------------- */
+    const GH_OWNER  = "tngon462";
+    const GH_REPO   = "slide";
+    const GH_BRANCH = "main";
+    const GH_FOLDER = "slides";
+    const DEFAULT_DUR = 8; // giây/slide mặc định
+
+    // EPOCH cố định toàn cục (không cần startTs)
+    const SLIDES_EPOCH_MS = Date.UTC(2024,0,1,0,0,0); // 2024-01-01T00:00:00Z
+
+    let slides = [];     // [{type:'image'|'video', src, duration}]
+    let edgesMs = [];    // mốc kết thúc (ms) tính từ đầu chu kỳ
+    let periodMs = 0;    // tổng chu kỳ
+    let currentIndex = -1;
+    let loopTimer = null, kickTimer = null;
+    let manifestChecked = false;
+    let slidesAvailable = false;
+
+    function setSlideStatus(msg){
+      const box = document.getElementById("slide-status");
+      if (!box) return;
+      if (msg && String(msg).trim()) { box.textContent = msg; box.style.display = "block"; }
+      else { box.textContent = ""; box.style.display = "none"; }
+    }
+    function msFromDur(d){
+      if (typeof d === "number") return Math.max(0, Math.round(d*1000));
+      if (typeof d === "string" && /s$/i.test(d)) return Math.max(0, Math.round(parseFloat(d)*1000));
+      return DEFAULT_DUR * 1000;
+    }
+    function isVideoUrl(u){
+      try { const ext = (new URL(u)).pathname.split('.').pop().toLowerCase();
+        return ['mp4','webm','ogg','mov','m4v'].includes(ext);
+      } catch { return false; }
+    }
+    function swapStage(el){
+      const stage = document.getElementById("slide-stage"); if (!stage) return;
+      while (stage.firstChild) stage.removeChild(stage.firstChild);
+      stage.appendChild(el);
+    }
+    function showImage(src){
+      const img = document.createElement("img");
+      img.decoding = "async"; img.loading = "eager";
+      img.onerror = () => setSlideStatus("Lỗi tải ảnh: " + src);
+      img.onload = () => setSlideStatus("");
+      img.src = src;
+      swapStage(img);
+    }
+    function showVideo(src, offsetMs){
+      const v = document.createElement("video");
+      v.src = src; v.muted = true; v.playsInline = true; v.autoplay = true; v.preload = "auto"; v.controls = false;
+      v.onerror = () => setSlideStatus("Lỗi tải video: " + src);
+      v.addEventListener("loadedmetadata", () => {
+        try {
+          const offSec = Math.min((offsetMs||0)/1000, Math.max(0,(v.duration||0)-0.05));
+          if (isFinite(offSec) && offSec > 0) v.currentTime = offSec;
+        } catch(_){}
+        v.play().catch(()=>{});
+        setSlideStatus("");
+      });
+      swapStage(v);
+    }
+
+    function buildTimeline(){
+      edgesMs = []; periodMs = 0;
+      for (const s of slides){ periodMs += msFromDur(s.duration); edgesMs.push(periodMs); }
+    }
+
+    function indexFromOffset(offsetMs){
+      let idx = edgesMs.findIndex(edge => offsetMs < edge);
+      if (idx < 0) idx = slides.length - 1;
+      const slideDur = msFromDur(slides[idx].duration);
+      const startOf = edgesMs[idx] - slideDur;
+      const inside = offsetMs - startOf;
+      return { idx, inside };
+    }
+
+    function renderByEpoch(){
+      if (!slides.length || !periodMs) return;
+      const t = nowServerMs() - SLIDES_EPOCH_MS;
+      const offset = ((t % periodMs) + periodMs) % periodMs; // ms trong chu kỳ
+      const { idx, inside } = indexFromOffset(offset);
+      if (idx !== currentIndex){
+        currentIndex = idx;
+        const it = slides[idx];
+        if (it.type === "video") showVideo(it.src, inside);
+        else showImage(it.src);
+      }
+    }
+
+    function startSlideLoop(){
+      stopSlideLoop();
+      loopTimer = setInterval(renderByEpoch, 200);                          // tick 200ms
+      kickTimer = setInterval(()=>{ currentIndex = -1; renderByEpoch(); }, 5000); // ép render 5s
+    }
+
+    function stopSlideLoop(){
+      if (loopTimer) { clearInterval(loopTimer); loopTimer = null; }
+      if (kickTimer) { clearInterval(kickTimer); kickTimer = null; }
+      currentIndex = -1;
+    }
+
+    async function loadSlidesFromManifest(){
+      const base = `https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/${GH_BRANCH}/${GH_FOLDER}/`;
+      const url  = base + "manifest.json?cb=" + Date.now();
+      try{
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) { setSlideStatus("Không tải được manifest.json (HTTP "+res.status+")"); return false; }
+        let arr = await res.json();
+        if (!Array.isArray(arr)) { setSlideStatus("manifest.json phải là mảng."); return false; }
+
+        const allowed = /\.(jpe?g|png|gif|mp4|webm|mov|m4v)$/i;
+        const items = arr
+          .map(item => {
+            if (typeof item === "string") {
+              const name = item.trim(); if (!name) return null;
+              return { src: base + name, name, duration: DEFAULT_DUR };
+            }
+            if (item && typeof item === "object" && item.src) {
+              const name = String(item.src).trim(); if (!name) return null;
+              const src = name.startsWith("http") ? name : (base + name);
+              const duration = Number(item.duration) > 0 ? Number(item.duration) : DEFAULT_DUR;
+              return { src, name, duration };
+            }
+            return null;
+          })
+          .filter(Boolean)
+          .filter(it => allowed.test(it.name));
+
+        if (!items.length) { setSlideStatus("manifest.json không có file hợp lệ."); return false; }
+
+        slides = items.map(it => ({ type: isVideoUrl(it.src) ? "video" : "image", src: it.src, duration: it.duration }));
+        buildTimeline(); setSlideStatus(""); return true;
+
+      } catch(_){ setSlideStatus("Lỗi khi tải/đọc manifest.json."); return false; }
+    }
+
+    async function initSlidesThenMaybeShow(){
+      // tải manifest 1 lần, có → bật slideshow; không → giữ CTA
+      let ok = false;
+      if (!manifestChecked) {
+        ok = await loadSlidesFromManifest();
+        if (!ok) { await new Promise(r=>setTimeout(r,800)); ok = await loadSlidesFromManifest(); }
+        manifestChecked = true; slidesAvailable = ok;
+      } else ok = slidesAvailable;
+
+      if (ok) {
+        if (!serverClockReady) await new Promise(r=>setTimeout(r,300)); // đợi offset về
+        startSlideLoop();
+        showScreen("start-slideshow-screen");
+      } else {
+        showScreen("start-screen");
+      }
+    }
+
+    /* ----------------- Idle 59s → tự bật slideshow ----------------- */
+    const IDLE_MS = 59000;
+    let idleTimer = null;
+    function isOnStartScreen(){
+      const el = document.getElementById("start-screen");
+      return el && el.style.display !== "none";
+    }
+    function resetIdleTimer(){
+      if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+      if (isOnStartScreen()) {
+        idleTimer = setTimeout(async () => { await initSlidesThenMaybeShow(); }, IDLE_MS);
+      }
+    }
+    ["touchstart","touchmove","mousedown","mousemove","keydown"].forEach(evt => {
+      window.addEventListener(evt, () => { resetIdleTimer(); }, { passive:true });
+    });
+
+    /* ----------------- Khởi động ----------------- */
+    document.addEventListener("DOMContentLoaded", () => {
+      connectFirebase();
+
+      // Tạo nút bàn sau khi DOM sẵn sàng (giữ nguyên UI cũ)
+      const wrap = document.getElementById("table-buttons");
+      for (let i = 1; i <= 15; i++) {
+        const btn = document.createElement("button");
+        btn.className = "table-button";
+        btn.textContent = "Bàn " + i;
+        btn.addEventListener("click", () => selectTable(i));
+        wrap.appendChild(btn);
+      }
+
+      // Hỗ trợ ?ban=10 ; nếu có &nostart=1 thì KHÔNG tự vào POS
+      const qBan = getQueryParam("ban");
+      const qNoStart = getQueryParam("nostart");
+      if (qBan) {
+        const n = parseInt(qBan, 10);
+        if (!isNaN(n)) setTimeout(() => {
+          selectTable(n);
+          if (!qNoStart) startOrder(); // chỉ auto vào POS khi KHÔNG có nostart
+        }, 100);
+      }
+
+      // Phòng khi mất selectedBan mà iframe còn
+      setInterval(backfillSelectedBanFromIframe, 1000);
+      // Màn đầu tiên là chọn bàn (giữ nguyên do CSS #table-selection-screen { display: flex; })
+    });
   </script>
 </body>
 </html>
