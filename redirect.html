@@ -20,7 +20,6 @@
 
   <!-- Firebase SDK (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
   <style>
@@ -49,18 +48,6 @@
     .slide-stage img, .slide-stage video { max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; background:#ffffff; }
     .tap-overlay { position:absolute; inset:0; z-index:10; cursor:pointer; }
     .slide-status { position:absolute; top:10px; right:10px; z-index:20; background: rgba(220, 38, 38, 0.9); color:#fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; display:none; max-width: 70vw; line-height: 1.3; }
-
-    /* LỚP PHỦ ĐEN (điều khiển từ xa) */
-    #tngon-sleep {
-      position: fixed;
-      inset: 0;
-      background: #000;
-      z-index: 2147483647;
-      display: none;
-      -webkit-tap-highlight-color: transparent;
-      touch-action: none;
-    }
-    #tngon-sleep.on { display: block; }
   </style>
 </head>
 <body class="bg-gray-100">
@@ -122,23 +109,10 @@
 
     function connectFirebase() {
       if (!fbApp) fbApp = firebase.initializeApp(firebaseConfig);
-
-      // Đăng nhập ẩn danh
-      if (!firebase.auth().currentUser) {
-        firebase.auth().signInAnonymously().catch(e => {
-          console.error('Anonymous sign-in failed:', e);
-        });
-      }
-
-      // Chỉ init DB sau khi có user
-      firebase.auth().onAuthStateChanged(() => {
-        if (!rtdb) {
-          rtdb = firebase.database();
-          rtdb.ref(".info/serverTimeOffset").on("value", snap => {
-            serverOffsetMs = Number(snap.val()||0);
-            serverClockReady = true;
-          });
-        }
+      if (!rtdb) rtdb = firebase.database();
+      rtdb.ref(".info/serverTimeOffset").on("value", snap => {
+        serverOffsetMs = Number(snap.val()||0);
+        serverClockReady = true;
       });
     }
 
@@ -156,7 +130,7 @@
         if (!initialized) { initialized = true; firstTs = ts; if (ts>lastTs) lastTs=ts; return; }
         if (v.status === "expired" && ts > lastTs && ts > firstTs) {
           lastTs = ts;
-          clearPage();
+          reloadToStartForCurrentBan(); // << thay vì clearPage()
         }
       });
     }
@@ -177,7 +151,7 @@
 
         if (v.status === "expired" && ts > lastTs && ts > pollInitTs) {
           lastTs = ts;
-          clearPage();
+          reloadToStartForCurrentBan(); // << thay vì clearPage()
         }
       }catch(_){}
     }
@@ -242,6 +216,21 @@
       showScreen("start-screen");
     }
 
+    // >>> NEW: Reload lại trang và tự chọn lại bàn, nhưng KHÔNG auto vào POS
+    function reloadToStartForCurrentBan(){
+      try{
+        const base = window.location.origin + window.location.pathname;
+        if (selectedBan) {
+          const url = `${base}?ban=${encodeURIComponent(selectedBan)}&nostart=1`;
+          window.location.replace(url);
+        } else {
+          window.location.replace(base);
+        }
+      }catch(_){
+        window.location.reload();
+      }
+    }
+
     /* ----------------- Auto select bàn ----------------- */
     function getQueryParam(name){
       try { return new URL(window.location.href).searchParams.get(name); } catch { return null; }
@@ -272,12 +261,12 @@
     const GH_FOLDER = "slides";
     const DEFAULT_DUR = 8; // giây/slide mặc định
 
-    // EPOCH cố định toàn cục
+    // EPOCH cố định toàn cục (không cần startTs)
     const SLIDES_EPOCH_MS = Date.UTC(2024,0,1,0,0,0); // 2024-01-01T00:00:00Z
 
-    let slides = [];
-    let edgesMs = [];
-    let periodMs = 0;
+    let slides = [];     // [{type:'image'|'video', src, duration}]
+    let edgesMs = [];    // mốc kết thúc (ms) tính từ đầu chu kỳ
+    let periodMs = 0;    // tổng chu kỳ
     let currentIndex = -1;
     let loopTimer = null, kickTimer = null;
     let manifestChecked = false;
@@ -344,7 +333,7 @@
     function renderByEpoch(){
       if (!slides.length || !periodMs) return;
       const t = nowServerMs() - SLIDES_EPOCH_MS;
-      const offset = ((t % periodMs) + periodMs) % periodMs;
+      const offset = ((t % periodMs) + periodMs) % periodMs; // ms trong chu kỳ
       const { idx, inside } = indexFromOffset(offset);
       if (idx !== currentIndex){
         currentIndex = idx;
@@ -356,8 +345,8 @@
 
     function startSlideLoop(){
       stopSlideLoop();
-      loopTimer = setInterval(renderByEpoch, 200);
-      kickTimer = setInterval(()=>{ currentIndex = -1; renderByEpoch(); }, 5000);
+      loopTimer = setInterval(renderByEpoch, 200);                          // tick 200ms
+      kickTimer = setInterval(()=>{ currentIndex = -1; renderByEpoch(); }, 5000); // ép render 5s
     }
 
     function stopSlideLoop(){
@@ -402,6 +391,7 @@
     }
 
     async function initSlidesThenMaybeShow(){
+      // tải manifest 1 lần, có → bật slideshow; không → giữ CTA
       let ok = false;
       if (!manifestChecked) {
         ok = await loadSlidesFromManifest();
@@ -410,7 +400,7 @@
       } else ok = slidesAvailable;
 
       if (ok) {
-        if (!serverClockReady) await new Promise(r=>setTimeout(r,300));
+        if (!serverClockReady) await new Promise(r=>setTimeout(r,300)); // đợi offset về
         startSlideLoop();
         showScreen("start-slideshow-screen");
       } else {
@@ -439,7 +429,7 @@
     document.addEventListener("DOMContentLoaded", () => {
       connectFirebase();
 
-      // Tạo nút bàn
+      // Tạo nút bàn sau khi DOM sẵn sàng (giữ nguyên UI cũ)
       const wrap = document.getElementById("table-buttons");
       for (let i = 1; i <= 15; i++) {
         const btn = document.createElement("button");
@@ -449,90 +439,21 @@
         wrap.appendChild(btn);
       }
 
-      // Hỗ trợ ?ban=10 auto-chọn và tự start
+      // Hỗ trợ ?ban=10 ; nếu có &nostart=1 thì KHÔNG tự vào POS
       const qBan = getQueryParam("ban");
+      const qNoStart = getQueryParam("nostart");
       if (qBan) {
         const n = parseInt(qBan, 10);
         if (!isNaN(n)) setTimeout(() => {
           selectTable(n);
-          startOrder();
+          if (!qNoStart) startOrder(); // chỉ auto vào POS khi KHÔNG có nostart
         }, 100);
       }
 
+      // Phòng khi mất selectedBan mà iframe còn
       setInterval(backfillSelectedBanFromIframe, 1000);
+      // Màn đầu tiên là chọn bàn (giữ nguyên do CSS #table-selection-screen { display: flex; })
     });
-  </script>
-
-  <!-- ============== Lắng nghe điều khiển ON/OFF (global + per-table) ============== -->
-  <script>
-  (function () {
-    const sleepLayer = document.createElement('div');
-    sleepLayer.id = 'tngon-sleep';
-    document.body.appendChild(sleepLayer);
-
-    let globalScreen = 'on';
-    let tableScreen  = 'on';
-    let tableRef = null;
-
-    function applyEffective() {
-      const off = (globalScreen === 'off') || (tableScreen === 'off');
-      if (off) {
-        sleepLayer.classList.add('on');
-        document.documentElement.style.overflow = 'hidden';
-        document.body.style.overflow = 'hidden';
-      } else {
-        sleepLayer.classList.remove('on');
-        document.documentElement.style.overflow = '';
-        document.body.style.overflow = '';
-      }
-    }
-
-    function applyHashControl() {
-      const h = (location.hash || '').toLowerCase();
-      if (h.includes('sleep')) { globalScreen = 'off'; applyEffective(); }
-      if (h.includes('wake'))  { globalScreen = 'on';  applyEffective(); }
-    }
-    window.addEventListener('hashchange', applyHashControl);
-
-    function listenGlobal() {
-      try {
-        const db = firebase.database();
-        db.ref('control/screen').on('value', (snap) => {
-          globalScreen = (snap && snap.val()) ? String(snap.val()).toLowerCase() : 'on';
-          if (!['on','off'].includes(globalScreen)) globalScreen = 'on';
-          applyEffective();
-        });
-      } catch (_) {}
-    }
-
-    function listenPerTable(ban) {
-      try {
-        const db = firebase.database();
-        if (tableRef) tableRef.off();
-        if (!ban) { tableScreen = 'on'; applyEffective(); return; }
-        tableRef = db.ref('control/tables/' + ban + '/screen');
-        tableRef.on('value', (snap) => {
-          tableScreen = (snap && snap.val()) ? String(snap.val()).toLowerCase() : 'on';
-          if (!['on','off'].includes(tableScreen)) tableScreen = 'on';
-          applyEffective();
-        });
-      } catch (_) {}
-    }
-
-    const _selectTableOrig = window.selectTable;
-    window.selectTable = function(banNumber){
-      _selectTableOrig.call(this, banNumber);
-      listenPerTable(banNumber);
-    };
-
-    document.addEventListener('DOMContentLoaded', () => {
-      setTimeout(() => {
-        listenGlobal();
-        applyHashControl();
-        if (window.selectedBan) listenPerTable(window.selectedBan);
-      }, 50);
-    });
-  })();
   </script>
 </body>
 </html>
