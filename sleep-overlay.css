@@ -1,0 +1,30 @@
+/* ========== Sleep Overlay (Ảnh đen toàn màn) ========== */
+#sleepOverlay {
+  position: fixed;
+  inset: 0;
+  background: #000;             /* fallback nếu ảnh lỗi */
+  z-index: 2147483000;          /* cao hơn mọi thứ */
+  display: none;                /* ẩn mặc định */
+  align-items: center;
+  justify-content: center;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+#sleepOverlay img {
+  max-width: 100vw;
+  max-height: 100vh;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;            /* phủ kín, không méo */
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;         /* ảnh không nhận sự kiện, overlay nhận */
+}
+
+/* Vùng “thoát tạm thời” ở góc trái trên (ẩn) – click/tap để ẩn overlay 60s */
+#sleepOverlay .hot-corner {
+  position: absolute;
+  left: 0; top: 0;
+  width: 20vw; height: 20vh;    /* to dễ bấm, vẫn vô hình */
+}
