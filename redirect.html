@@ -48,6 +48,27 @@
     .slide-stage img, .slide-stage video { max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; background:#ffffff; }
     .tap-overlay { position:absolute; inset:0; z-index:10; cursor:pointer; }
     .slide-status { position:absolute; top:10px; right:10px; z-index:20; background: rgba(220, 38, 38, 0.9); color:#fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; display:none; max-width: 70vw; line-height: 1.3; }
+
+    /* ===================== SLIDE ĐEN (điều khiển từ admin) ===================== */
+    #blackout {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647; /* che tất cả */
+      display: none;       /* bật/tắt bằng JS */
+      background: #000;    /* fallback nếu ảnh lỗi */
+      -webkit-tap-highlight-color: transparent;
+      touch-action: none;
+    }
+    #blackout img {
+      width: 100%;
+      height: 100%;
+      max-width: 100vw;
+      max-height: 100vh;
+      object-fit: cover;    /* phủ kín, không méo */
+      user-select: none;
+      -webkit-user-drag: none;
+      pointer-events: none; /* sự kiện nhận ở lớp #blackout */
+    }
   </style>
 </head>
 <body class="bg-gray-100">
@@ -438,6 +459,100 @@
       setInterval(backfillSelectedBanFromIframe, 1000);
       // Màn đầu tiên là chọn bàn (giữ nguyên do CSS #table-selection-screen { display: flex; })
     });
+  </script>
+
+  <!-- ================== SLIDE ĐEN: Listener nhận lệnh từ admin ================== -->
+  <script>
+    (function(){
+      // Tạo DOM cho “slide đen”
+      const blackout = document.createElement('div');
+      blackout.id = 'blackout';
+      const img = document.createElement('img');
+      img.alt = '';
+      img.src = './assets/black.png'; // đổi nếu để ảnh ở nơi khác
+      blackout.appendChild(img);
+      document.body.appendChild(blackout);
+
+      // Trạng thái hiện hành
+      let globalScreen = 'on';   // "on" | "off"
+      let tableScreen  = 'on';   // "on" | "off"
+      let perTableRef  = null;
+      let reShowTimer  = null;
+      const RE_SHOW_MS = 60_000; // 60s sau chạm thì bật lại nếu vẫn đang off
+
+      function isOffEffective(){
+        return (globalScreen === 'off') || (tableScreen === 'off');
+      }
+
+      function applyBlackout(){
+        const shouldShow = isOffEffective();
+        if (shouldShow) {
+          blackout.style.display = 'block';
+          document.documentElement.style.overflow = 'hidden';
+          document.body.style.overflow = 'hidden';
+        } else {
+          blackout.style.display = 'none';
+          document.documentElement.style.overflow = '';
+          document.body.style.overflow = '';
+          if (reShowTimer) { clearTimeout(reShowTimer); reShowTimer = null; }
+        }
+      }
+
+      // Chạm vào màn đen -> ẩn tạm, 60s sau tự bật lại nếu admin vẫn đang "off"
+      blackout.addEventListener('pointerdown', () => {
+        if (!isOffEffective()) return;           // nếu admin đã "on" thì bỏ qua
+        blackout.style.display = 'none';         // ẩn tạm để thao tác
+        document.documentElement.style.overflow = '';
+        document.body.style.overflow = '';
+        if (reShowTimer) clearTimeout(reShowTimer);
+        reShowTimer = setTimeout(() => {
+          if (isOffEffective()) applyBlackout(); // chỉ bật lại nếu admin vẫn "off"
+        }, RE_SHOW_MS);
+      }, { passive: true });
+
+      // Lắng nghe global toggle: control/screen = "on" | "off"
+      function listenGlobal(){
+        try{
+          const db = firebase.database();
+          db.ref('control/screen').on('value', (snap) => {
+            const v = (snap && snap.val()) ? String(snap.val()).toLowerCase() : 'on';
+            globalScreen = (v === 'off') ? 'off' : 'on';
+            applyBlackout();
+          });
+        }catch(e){ console.warn('[blackout] listenGlobal error', e); }
+      }
+
+      // Lắng nghe theo từng bàn (nếu cần): control/tables/<ban>/screen
+      function listenPerTable(ban){
+        try{
+          const db = firebase.database();
+          if (perTableRef) perTableRef.off();
+          if (!ban) { tableScreen = 'on'; applyBlackout(); return; }
+          perTableRef = db.ref('control/tables/' + ban + '/screen');
+          perTableRef.on('value', (snap) => {
+            const v = (snap && snap.val()) ? String(snap.val()).toLowerCase() : 'on';
+            tableScreen = (v === 'off') ? 'off' : 'on';
+            applyBlackout();
+          });
+        }catch(e){ console.warn('[blackout] listenPerTable error', e); }
+      }
+
+      // Hook vào selectTable hiện có để theo dõi per-table (nếu sếp dùng)
+      const _origSelectTable = window.selectTable;
+      window.selectTable = function(banNumber){
+        _origSelectTable.call(this, banNumber);
+        listenPerTable(banNumber);
+      };
+
+      // Khởi động listener sau khi Firebase đã init ở trên
+      document.addEventListener('DOMContentLoaded', () => {
+        // Đợi connectFirebase() chạy xong 1 nhịp
+        setTimeout(() => {
+          listenGlobal();
+          if (window.selectedBan) listenPerTable(window.selectedBan);
+        }, 80);
+      });
+    })();
   </script>
 </body>
 </html>
