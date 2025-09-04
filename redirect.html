@@ -218,7 +218,7 @@
         .catch(_e => { loading.remove(); showScreen("start-screen"); });
     }
 
-    /* ===== createIframe (có sửa) ===== */
+    /* ===== createIframe (đã bỏ attachIframeActivityListener) ===== */
     function createIframe(url) {
       const iframeScreen = document.getElementById("iframe-screen");
       iframeScreen.innerHTML = `<button class="return-button" onclick="clearPage()"></button>`;
@@ -226,7 +226,7 @@
       iframe.id = "pos-iframe";
       iframe.className = "iframe-container";
       iframe.src = url;
-      iframe.onload = () => { attachIframeActivityListener(iframe); resetIdleTimer(); };
+      iframe.onload = () => { resetIdleTimer(); };
       iframeScreen.appendChild(iframe);
       showScreen("iframe-screen");
     }
@@ -262,7 +262,7 @@
     setInterval(backfillSelectedBanFromIframe, 1000);
 
     /* ----------------- SLIDESHOW (EPOCH + server clock) ----------------- */
-    // (giữ nguyên toàn bộ code slideshow từ bản cũ, không đổi gì)
+    // (toàn bộ code slideshow giữ nguyên như bản cũ)
 
     /* ----------------- Idle auto return ----------------- */
     const IDLE_MS_START  = 59000;   // 59s ở màn start-screen → slideshow
@@ -295,17 +295,6 @@
     ["touchstart","touchmove","mousedown","mousemove","keydown"].forEach(evt => {
       window.addEventListener(evt, () => { resetIdleTimer(); }, { passive:true });
     });
-
-    function attachIframeActivityListener(iframe){
-      try {
-        const doc = iframe.contentWindow.document;
-        ["touchstart","touchmove","mousedown","mousemove","keydown","scroll"].forEach(evt => {
-          doc.addEventListener(evt, () => { resetIdleTimer(); }, { passive:true });
-        });
-      } catch(e) {
-        console.warn("Không thể attach listener trong iframe:", e);
-      }
-    }
 
     /* ----------------- Khởi động ----------------- */
     document.addEventListener("DOMContentLoaded", () => {
