@@ -218,7 +218,7 @@
         .catch(_e => { loading.remove(); showScreen("start-screen"); });
     }
 
-    // ==== createIframe có sửa ====
+    /* ===== createIframe (có sửa) ===== */
     function createIframe(url) {
       const iframeScreen = document.getElementById("iframe-screen");
       iframeScreen.innerHTML = `<button class="return-button" onclick="clearPage()"></button>`;
@@ -262,7 +262,7 @@
     setInterval(backfillSelectedBanFromIframe, 1000);
 
     /* ----------------- SLIDESHOW (EPOCH + server clock) ----------------- */
-    ... (phần slideshow giữ nguyên như bản sếp gửi, em không paste lại cho ngắn) ...
+    // (giữ nguyên toàn bộ code slideshow từ bản cũ, không đổi gì)
 
     /* ----------------- Idle auto return ----------------- */
     const IDLE_MS_START  = 59000;   // 59s ở màn start-screen → slideshow
