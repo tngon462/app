@@ -1,53 +1,53 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>T-NGON</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta charset="UTF-8" />
+<title>T-NGON</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- PWA meta -->
-  <link rel="manifest" href="manifest.json" />
-  <link rel="icon" href="https://placehold.co/192x192/da251d/fff?text=TN" />
-  <link rel="apple-touch-icon" href="https://placehold.co/192x192/da251d/fff?text=TN" />
-  <meta name="apple-mobile-web-app-title" content="T-NGON" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="theme-color" content="#da251d" />
+<!-- PWA meta -->
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="https://placehold.co/192x192/da251d/fff?text=TN" />
+<link rel="apple-touch-icon" href="https://placehold.co/192x192/da251d/fff?text=TN" />
+<meta name="apple-mobile-web-app-title" content="T-NGON" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#da251d" />
 
-  <!-- Tailwind -->
-  <script src="https://cdn.tailwindcss.com"></script>
+<!-- Tailwind -->
+<script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Firebase SDK (compat) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<!-- Firebase SDK (compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
-  <style>
-    body { font-family: "Inter", system-ui, sans-serif; margin: 0; padding: 0; background: #f3f4f6; }
-    .main-container { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; width: 100vw; padding: 1rem; box-sizing: border-box; }
-    .screen { display: none; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; }
-    #table-selection-screen { display: flex; } /* màn đầu tiên */
-    .button-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; max-width: 600px; margin: 2rem auto 0; }
-    .table-button { font-size: 2rem; font-weight: 700; padding: 2rem 1rem; background: #007aff; color: #fff; border: 2px solid #007aff; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -1px rgba(0,0,0,.06); cursor: pointer; transition: all .2s ease; }
-    .table-button:active { transform: translateY(1px); }
-    .start-button { font-size: 2.5rem; padding: 1.25rem 2.5rem; background: #007aff; color: #fff; border: none; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -1px rgba(0,0,0,.06); cursor: pointer; transition: all .2s ease; }
-    .start-button:active { transform: translateY(1px); }
-    .iframe-container { width: 100%; height: 100%; border: none; overflow: hidden; }
-    .loading-indicator { font-size: 1.5rem; color: #6b7280; margin-top: 1rem; }
-    .error-message { color: #ef4444; font-size: 1.2rem; margin-top: 1rem; }
-    @media (max-width: 640px) {
-      .button-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
-      .table-button { font-size: 1.5rem; padding: 1.5rem .5rem; }
-      .start-button { font-size: 2rem; padding: 1rem 2rem; }
-    }
-    .return-button { position: absolute; bottom: 10px; left: 10px; width: 24px; height: 24px; padding: 0; background: transparent; border: none; cursor: pointer; z-index: 100; }
+<style>
+body { font-family: "Inter", system-ui, sans-serif; margin: 0; padding: 0; background: #f3f4f6; }
+.main-container { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; width: 100vw; padding: 1rem; box-sizing: border-box; }
+.screen { display: none; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; }
+#table-selection-screen { display: flex; }
+.button-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; max-width: 600px; margin: 2rem auto 0; }
+.table-button { font-size: 2rem; font-weight: 700; padding: 2rem 1rem; background: #007aff; color: #fff; border: 2px solid #007aff; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -1px rgba(0,0,0,.06); cursor: pointer; transition: all .2s ease; }
+.table-button:active { transform: translateY(1px); }
+.start-button { font-size: 2.5rem; padding: 1.25rem 2.5rem; background: #007aff; color: #fff; border: none; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -1px rgba(0,0,0,.06); cursor: pointer; transition: all .2s ease; }
+.start-button:active { transform: translateY(1px); }
+.iframe-container { width: 100%; height: 100%; border: none; overflow: hidden; }
+.loading-indicator { font-size: 1.5rem; color: #6b7280; margin-top: 1rem; }
+.error-message { color: #ef4444; font-size: 1.2rem; margin-top: 1rem; }
+@media (max-width: 640px) {
+.button-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+.table-button { font-size: 1.5rem; padding: 1.5rem .5rem; }
+.start-button { font-size: 2rem; padding: 1rem 2rem; }
+}
+.return-button { position: absolute; bottom: 10px; left: 10px; width: 24px; height: 24px; padding: 0; background: transparent; border: none; cursor: pointer; z-index: 100; }
 
-    /* Slideshow (nếu sếp dùng ở nơi khác – giữ nguyên style, không thay đổi) */
-    #start-slideshow-screen { position: relative; width:100%; height:100%; background:#ffffff; overflow:hidden; }
-    .slide-stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#ffffff; }
-    .slide-stage img, .slide-stage video { max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; background:#ffffff; }
-    .tap-overlay { position:absolute; inset:0; z-index:10; cursor:pointer; }
-    .slide-status { position:absolute; top:10px; right:10px; z-index:20; background: rgba(220, 38, 38, 0.9); color:#fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; display:none; max-width: 70vw; line-height: 1.3; }
+/* Slideshow (nền trắng, không caption) */
+#start-slideshow-screen { position: relative; width:100%; height:100%; background:#ffffff; overflow:hidden; }
+.slide-stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#ffffff; }
+.slide-stage img, .slide-stage video { max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; background:#ffffff; }
+.tap-overlay { position:absolute; inset:0; z-index:10; cursor:pointer; }
+.slide-status { position:absolute; top:10px; right:10px; z-index:20; background: rgba(220, 38, 38, 0.9); color:#fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; display:none; max-width: 70vw; line-height: 1.3; }
 
     /* ===================== SLIDE ĐEN (điều khiển từ admin) ===================== */
     #blackout {
@@ -69,111 +69,15 @@
       -webkit-user-drag: none;
       pointer-events: none; /* sự kiện nhận ở lớp #blackout */
     }
-  </style>
+</style>
 </head>
 <body class="bg-gray-100">
+@@ -439,5 +460,99 @@
+// Màn đầu tiên là chọn bàn (giữ nguyên do CSS #table-selection-screen { display: flex; })
+});
+</script>
 
-  <!-- ========== MÀN 1: CHỌN BÀN ========== -->
-  <section id="table-selection-screen" class="main-container screen">
-    <div class="text-center">
-      <h1 class="text-4xl font-bold text-gray-800">Chọn bàn</h1>
-      <div class="button-grid">
-        <!-- Sếp chỉnh số bàn tùy ý -->
-        <button class="table-button" onclick="selectTable(1)">Bàn 1</button>
-        <button class="table-button" onclick="selectTable(2)">Bàn 2</button>
-        <button class="table-button" onclick="selectTable(3)">Bàn 3</button>
-        <button class="table-button" onclick="selectTable(4)">Bàn 4</button>
-        <button class="table-button" onclick="selectTable(5)">Bàn 5</button>
-        <button class="table-button" onclick="selectTable(6)">Bàn 6</button>
-        <button class="table-button" onclick="selectTable(7)">Bàn 7</button>
-        <button class="table-button" onclick="selectTable(8)">Bàn 8</button>
-        <button class="table-button" onclick="selectTable(9)">Bàn 9</button>
-        <button class="table-button" onclick="selectTable(10)">Bàn 10</button>
-        <button class="table-button" onclick="selectTable(11)">Bàn 11</button>
-        <button class="table-button" onclick="selectTable(12)">Bàn 12</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- ========== MÀN 2: BẮT ĐẦU (HIỂN THỊ SỐ BÀN + NÚT START) ========== -->
-  <section id="start-screen" class="main-container screen">
-    <div class="text-center">
-      <h2 class="text-3xl font-semibold text-gray-800">Bàn <span id="selected-table-label">-</span></h2>
-      <p class="text-gray-500 mt-2">Nhấn "Bắt đầu" để vào menu gọi món</p>
-      <div class="mt-6">
-        <button class="start-button" onclick="startOrdering()">Bắt đầu</button>
-      </div>
-    </div>
-    <button class="return-button" aria-label="Quay lại chọn bàn" title="Quay lại chọn bàn" onclick="showScreen('table-selection-screen')">
-      ⬅️
-    </button>
-  </section>
-
-  <!-- ========== MÀN 3: POS (IFRAME GỌI MÓN) ========== -->
-  <section id="pos-screen" class="screen" style="display:none;">
-    <iframe id="pos-iframe" class="iframe-container" src="about:blank" allow="fullscreen"></iframe>
-    <button class="return-button" aria-label="Quay lại" title="Quay lại" onclick="showScreen('start-screen')">⬅️</button>
-  </section>
-
-  <!-- ========== SCRIPT ỨNG DỤNG CHÍNH ========== -->
-  <script>
-    // ====== CẤU HÌNH TÙY BIẾN ======
-    // Đặt đường dẫn POS thật: có thể là 1 URL khác hệ thống, iframe sẽ load URL này kèm query table
-    const POS_URL = 'https://example.com/pos/'; // <-- ĐỔI LINK NÀY
-
-    // ====== TRẠNG THÁI ỨNG DỤNG ======
-    window.selectedBan = null;
-
-    function showScreen(id) {
-      document.querySelectorAll('.screen').forEach(s => s.style.display = 'none');
-      const el = document.getElementById(id);
-      if (el) el.style.display = 'flex';
-    }
-
-    // Hàm selectTable bị overlay hooking theo dõi -> giữ đúng tên & hành vi
-    function selectTable(banNumber) {
-      window.selectedBan = banNumber;
-      const lb = document.getElementById('selected-table-label');
-      if (lb) lb.textContent = String(banNumber);
-      showScreen('start-screen');
-    }
-
-    function startOrdering() {
-      if (!window.selectedBan) {
-        showScreen('table-selection-screen');
-        return;
-      }
-      const iframe = document.getElementById('pos-iframe');
-      // Gán URL POS: nếu POS hỗ trợ query ?table=, thêm vào; nếu không thì chỉ dùng POS_URL
-      try {
-        const url = new URL(POS_URL, window.location.origin);
-        url.searchParams.set('table', String(window.selectedBan));
-        iframe.src = url.toString();
-      } catch(e) {
-        // Trường hợp POS_URL là absolute khác origin, vẫn set được
-        const sep = POS_URL.includes('?') ? '&' : '?';
-        iframe.src = POS_URL + sep + 'table=' + encodeURIComponent(String(window.selectedBan));
-      }
-      showScreen('pos-screen');
-    }
-
-    // Mặc định hiển thị màn chọn bàn
-    document.addEventListener('DOMContentLoaded', () => {
-      showScreen('table-selection-screen');
-    });
-
-    // (TÙY CHỌN) Firebase init nếu sếp dùng điều khiển từ xa
-    function connectFirebase() {
-      // Điền cấu hình thật vào đây nếu đang dùng
-      const firebaseConfig = null; // <-- THAY bằng object cấu hình, hoặc để null nếu không dùng
-      if (!firebaseConfig) return null;
-      if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-      return firebase;
-    }
-    connectFirebase();
-  </script>
-
-  <!-- ========== SLIDE ĐEN: LISTENER NHẬN LỆNH TỪ ADMIN ========== -->
+  <!-- ================== SLIDE ĐEN: Listener nhận lệnh từ admin ================== -->
   <script>
     (function(){
       // Tạo DOM cho “slide đen”
@@ -210,8 +114,7 @@
         }
       }
 
-      // ✅ SỬA LỖI: Chạm vào màn đen -> ẩn tạm, 60s sau CHỈ hiện lại overlay nếu admin vẫn "off"
-      // Không gọi applyBlackout() để tránh mọi side-effect có thể làm “văng” UI.
+      // Chạm vào màn đen -> ẩn tạm, 60s sau tự bật lại nếu admin vẫn đang "off"
       blackout.addEventListener('pointerdown', () => {
         if (!isOffEffective()) return;           // nếu admin đã "on" thì bỏ qua
         blackout.style.display = 'none';         // ẩn tạm để thao tác
@@ -219,18 +122,13 @@
         document.body.style.overflow = '';
         if (reShowTimer) clearTimeout(reShowTimer);
         reShowTimer = setTimeout(() => {
-          if (isOffEffective()) {
-            blackout.style.display = 'block';    // chỉ hiện lại overlay đen
-            document.documentElement.style.overflow = 'hidden';
-            document.body.style.overflow = 'hidden';
-          }
+          if (isOffEffective()) applyBlackout(); // chỉ bật lại nếu admin vẫn "off"
         }, RE_SHOW_MS);
       }, { passive: true });
 
       // Lắng nghe global toggle: control/screen = "on" | "off"
       function listenGlobal(){
         try{
-          if (!window.firebase || !firebase.apps.length) return;
           const db = firebase.database();
           db.ref('control/screen').on('value', (snap) => {
             const v = (snap && snap.val()) ? String(snap.val()).toLowerCase() : 'on';
@@ -240,10 +138,9 @@
         }catch(e){ console.warn('[blackout] listenGlobal error', e); }
       }
 
-      // Lắng nghe theo từng bàn: control/tables/<ban>/screen
+      // Lắng nghe theo từng bàn (nếu cần): control/tables/<ban>/screen
       function listenPerTable(ban){
         try{
-          if (!window.firebase || !firebase.apps.length) return;
           const db = firebase.database();
           if (perTableRef) perTableRef.off();
           if (!ban) { tableScreen = 'on'; applyBlackout(); return; }
@@ -256,15 +153,16 @@
         }catch(e){ console.warn('[blackout] listenPerTable error', e); }
       }
 
-      // Hook vào selectTable hiện có để theo dõi per-table
-      const _origSelectTable = window.selectTable || function(b){ window.selectedBan = b; };
+      // Hook vào selectTable hiện có để theo dõi per-table (nếu sếp dùng)
+      const _origSelectTable = window.selectTable;
       window.selectTable = function(banNumber){
         _origSelectTable.call(this, banNumber);
         listenPerTable(banNumber);
       };
 
-      // Khởi động listener sau khi Firebase (nếu có) đã init
+      // Khởi động listener sau khi Firebase đã init ở trên
       document.addEventListener('DOMContentLoaded', () => {
+        // Đợi connectFirebase() chạy xong 1 nhịp
         setTimeout(() => {
           listenGlobal();
           if (window.selectedBan) listenPerTable(window.selectedBan);
