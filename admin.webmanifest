@@ -1,6 +1,6 @@
 {
-  "name": "T-NGON appp",
-  "short_name": "T-NGON",
+  "name": "T-NGON APP",
+  "short_name": "T-NGON APP",
   "start_url": "/QR/redirect.html?pwa=1",
   "scope": "/QR/",
   "display": "standalone",
@@ -15,7 +15,7 @@
       "purpose": "any"
     },
     {
-      "src": "./icons/icon-512.png",
+      "src": "./icons/icon-192.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
