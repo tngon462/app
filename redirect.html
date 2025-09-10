@@ -10,8 +10,8 @@
 
   <!-- PWA meta -->
   <link rel="manifest" href="manifest.json" />
-  <link rel="icon" href="https://placehold.co/192x192/da251d/fff?text=TN" />
-  <link rel="apple-touch-icon" href="https://placehold.co/192x192/da251d/fff?text=TN" />
+  <link rel="icon" href="https://placehold.co/192x192/22c55e/fff?text=TN" />
+  <link rel="apple-touch-icon" href="https://placehold.co/192x192/22c55e/fff?text=TN" />
   <meta name="apple-mobile-web-app-title" content="T-NGON" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
@@ -37,8 +37,23 @@
   <!-- Bước 3: POS iframe -->
   <div id="pos-container" class="hidden w-full h-screen relative">
     <iframe id="pos-frame" class="w-full h-full border-0"></iframe>
-    <!-- Nút quay lại (ẩn) -->
+    <!-- Nút ẩn quay lại -->
     <button id="back-btn" class="absolute bottom-1 left-1 w-4 h-4 bg-transparent"></button>
+  </div>
+
+  <!-- Popup nhập mật mã -->
+  <div id="password-popup" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white p-6 rounded-lg shadow-lg text-center">
+      <h3 class="text-lg font-semibold mb-4">Nhập mật mã</h3>
+      <input id="password-input" type="password" maxlength="4" 
+             class="border p-2 rounded text-center tracking-widest text-xl"
+             placeholder="****" />
+      <div class="mt-4 flex justify-center space-x-4">
+        <button id="password-ok" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">OK</button>
+        <button id="password-cancel" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Hủy</button>
+      </div>
+      <p id="password-error" class="text-red-500 mt-2 hidden">Sai mật mã!</p>
+    </div>
   </div>
 
   <!-- Script -->
