@@ -121,10 +121,11 @@ async function loadTables(){
   });
 }
 
-/***** Nút bí mật: NHẤN 7 LẦN TRONG 5S -> hỏi mật mã -> về màn CHỌN BÀN *****/
+/***** Nút bí mật: NHẤN 7 LẦN TRONG 2.5S -> hỏi mật mã -> về màn CHỌN BÀN *****/
 function bindSecretBack(){
   const REQUIRED_TAPS = 7;
-  const WINDOW_MS = 5000;
+  const WINDOW_MS = 2500; // 2.5s
+
   let tapCount = 0;
   let timer = null;
 
@@ -150,7 +151,6 @@ function bindSecretBack(){
     }
   }
 
-  // click đủ dùng cho chuột lẫn chạm (mobile sẽ synthesize click)
   backBtn.addEventListener("click", handleTap);
 }
 
