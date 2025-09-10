@@ -1,4 +1,4 @@
-// ===== Firebase config (cùng với admin) =====
+// ===== Firebase config =====
 const firebaseConfig = {
   apiKey: "AIzaSyB4u2G41xdGkgBC0KltleRpcg5Lwru2RIU",
   authDomain: "tngon-b37d6.firebaseapp.com",
@@ -14,22 +14,57 @@ if (!firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
 }
 
-// ===== Overlay element =====
 const overlay = document.getElementById("screen-overlay");
 
-// ===== Login ẩn danh + lắng nghe trạng thái màn hình =====
+// ===== Helper: show/hide overlay =====
+function setOverlay(show) {
+  overlay.style.display = show ? "block" : "none";
+}
+
+// ===== Lắng nghe trạng thái màn hình =====
 firebase.auth().signInAnonymously()
   .then(() => {
     const db = firebase.database();
-    const refScreen = db.ref("control/screen");
+    const refGlobal = db.ref("control/screen");
 
-    refScreen.on("value", snap => {
-      const val = snap.val();
-      if (val === "off") {
-        overlay.style.display = "block"; // hiện màn đen
+    let globalState = "on";
+    let localState = "on";
+
+    // Lắng nghe toàn quán
+    refGlobal.on("value", snap => {
+      globalState = (snap.val() || "on").toLowerCase();
+      updateOverlay();
+    });
+
+    // Lắng nghe theo bàn (khi đã biết bàn)
+    function listenPerTable(tableId) {
+      const refLocal = db.ref(`control/tables/${tableId}/screen`);
+      refLocal.on("value", snap => {
+        localState = (snap.val() || "on").toLowerCase();
+        updateOverlay();
+      });
+    }
+
+    // Hàm cập nhật overlay
+    function updateOverlay() {
+      if (globalState === "off" || localState === "off") {
+        setOverlay(true);
       } else {
-        overlay.style.display = "none";  // tắt màn đen
+        setOverlay(false);
+      }
+    }
+
+    // Khi chọn bàn thì redirect.js có set #selected-table
+    const observer = new MutationObserver(() => {
+      const tableSpan = document.getElementById("selected-table");
+      if (tableSpan && tableSpan.textContent) {
+        const tableId = tableSpan.textContent.trim();
+        if (tableId) {
+          listenPerTable(tableId);
+          observer.disconnect(); // chỉ cần chạy 1 lần khi đã biết bàn
+        }
       }
     });
+    observer.observe(document.body, { childList: true, subtree: true });
   })
   .catch(err => console.error("Firebase auth error:", err));
