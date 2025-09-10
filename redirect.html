@@ -1,56 +1,32 @@
 <!DOCTYPE html>
-<html>
+<html lang="vi">
 <head>
   <meta charset="UTF-8" />
-  <title>T-NGON</title>
+  <title>T-NGON - Chọn bàn</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
 
   <!-- PWA meta -->
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="https://placehold.co/192x192/da251d/fff?text=TN" />
   <link rel="apple-touch-icon" href="https://placehold.co/192x192/da251d/fff?text=TN" />
+  <meta name="apple-mobile-web-app-title" content="T-NGON" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#da251d" />
-
-  <!-- Tailwind -->
-  <script src="https://cdn.tailwindcss.com"></script>
-
-  <!-- CSS -->
-  <link rel="stylesheet" href="assets/css/style.css" />
 </head>
-<body class="bg-gray-100">
-  <div class="main-container">
-    <div id="table-selection-screen" class="screen">
-      <h1 class="text-2xl font-bold">Chọn bàn</h1>
-      <div class="button-grid">
-        <button class="table-button" onclick="selectTable(1)">1</button>
-        <button class="table-button" onclick="selectTable(2)">2</button>
-        <button class="table-button" onclick="selectTable(3)">3</button>
-      </div>
-    </div>
+<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen">
 
-    <div id="start-screen" class="screen">
-      <button class="start-button" onclick="startOrder()">Bắt đầu</button>
-    </div>
+  <!-- Tiêu đề -->
+  <h1 class="text-2xl font-bold text-red-600 mb-6">Vui lòng chọn bàn</h1>
 
-    <div id="menu-screen" class="screen">
-      <iframe id="menu-iframe" class="iframe-container"></iframe>
-    </div>
+  <!-- Nơi load danh sách bàn -->
+  <div id="table-container" class="grid grid-cols-3 gap-4 p-4 w-full max-w-2xl"></div>
 
-    <div id="start-slideshow-screen" class="screen">
-      <div class="slide-stage"></div>
-      <div class="tap-overlay"></div>
-      <div class="slide-status"></div>
-    </div>
-  </div>
-
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-
-  <!-- JS theo tính năng -->
-  <script src="assets/js/firebase.js"></script>
-  <script src="assets/js/table.js"></script>
-  <script src="assets/js/slideshow.js"></script>
-  <script src="assets/js/blackout.js"></script>
+  <!-- Script load từ file riêng -->
+  <script src="assets/js/redirect.js"></script>
 </body>
 </html>
