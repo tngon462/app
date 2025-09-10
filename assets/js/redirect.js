@@ -110,7 +110,7 @@ async function loadTables(){
     const btn = document.createElement("button");
     btn.textContent = "Bàn " + key;
     btn.className =
-      "px-4 py-2 m-2 rounded-lg bg-green-500 text-white font-bold hover:bg-green-600 w-24 h-16 text-lg";
+      "px-4 py-2 m-2 rounded-lg bg-blue-500 text-white font-bold hover:bg-blue-600 w-32 h-20 text-lg";
     btn.onclick = () => {
       currentTable = key;
       currentLink  = link;
