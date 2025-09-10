@@ -10,13 +10,23 @@
 
   <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    #screen-overlay {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      opacity: 1;
+      z-index: 2000;
+      display: none; /* mặc định ẩn */
+    }
+  </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center">
 
   <!-- Bước 1: Chọn bàn -->
   <div id="select-table" class="flex flex-col items-center">
     <h1 class="text-3xl font-bold text-blue-600 mb-6">Vui lòng chọn bàn</h1>
-    <!-- ✅ Grid responsive -->
     <div id="table-container"
          class="grid justify-center gap-4
                 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5
@@ -61,28 +71,15 @@
           class="fixed bottom-3 left-3 w-6 h-6 rounded-full bg-transparent text-transparent opacity-0 select-none z-[2000] focus:outline-none"
           aria-label="hidden-back">◀</button>
 
-  <!-- Logic -->
-  <script src="./assets/js/redirect.js?v=grid1"></script>
+  <!-- Logic chính -->
+  <script src="./assets/js/redirect.js?v=grid2"></script>
 
-<!-- Màn đen -->
-<div id="screen-overlay"></div>
+  <!-- Firebase & blackout -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <script src="./assets/js/blackout.js?v=2"></script>
 
-<style>
-#screen-overlay {
-  position: fixed;
-  inset: 0;
-  background: #000;
-  opacity: 1;
-  z-index: 2000;
-  display: none; /* mặc định ẩn */
-}
-</style>
-
-<!-- Script blackout -->
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="./assets/js/blackout.js?v=1"></script>
   <!-- Service Worker -->
   <script>
     if ('serviceWorker' in navigator) {
