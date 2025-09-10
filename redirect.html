@@ -16,17 +16,32 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="theme-color" content="#da251d" />
+  <meta name="theme-color" content="#22c55e" />
 </head>
 <body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen">
 
-  <!-- Tiêu đề -->
-  <h1 class="text-2xl font-bold text-red-600 mb-6">Vui lòng chọn bàn</h1>
+  <!-- Bước 1: Chọn bàn -->
+  <div id="select-table" class="flex flex-col items-center">
+    <h1 class="text-2xl font-bold text-green-600 mb-6">Vui lòng chọn bàn</h1>
+    <div id="table-container" class="grid grid-cols-3 gap-4 p-4 w-full max-w-2xl"></div>
+  </div>
 
-  <!-- Nơi load danh sách bàn -->
-  <div id="table-container" class="grid grid-cols-3 gap-4 p-4 w-full max-w-2xl"></div>
+  <!-- Bước 2: Màn bắt đầu -->
+  <div id="start-screen" class="hidden flex flex-col items-center justify-center min-h-screen">
+    <h2 class="text-xl font-semibold mb-6">Bàn <span id="selected-table"></span></h2>
+    <button id="start-order" class="px-6 py-3 rounded-lg bg-green-500 text-white font-bold hover:bg-green-600 text-lg">
+      Bắt đầu gọi món
+    </button>
+  </div>
 
-  <!-- Script load từ file riêng -->
+  <!-- Bước 3: POS iframe -->
+  <div id="pos-container" class="hidden w-full h-screen relative">
+    <iframe id="pos-frame" class="w-full h-full border-0"></iframe>
+    <!-- Nút quay lại (ẩn) -->
+    <button id="back-btn" class="absolute bottom-1 left-1 w-4 h-4 bg-transparent"></button>
+  </div>
+
+  <!-- Script -->
   <script src="assets/js/redirect.js"></script>
 </body>
 </html>
