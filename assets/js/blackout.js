@@ -1,4 +1,4 @@
-// ===== Firebase config (cùng project với admin) =====
+// ===== Firebase config (giống bên Admin) =====
 const firebaseConfig = {
   apiKey: "AIzaSyB4u2G41xdGkgBC0KltleRpcg5Lwru2RIU",
   authDomain: "tngon-b37d6.firebaseapp.com",
@@ -9,86 +9,98 @@ const firebaseConfig = {
   appId: "1:580319242104:web:6922e4327bdc8286c30a8d"
 };
 
+// ===== Debug overlay =====
+const debugBox = document.createElement("div");
+debugBox.style.position = "fixed";
+debugBox.style.bottom = "5px";
+debugBox.style.right = "5px";
+debugBox.style.background = "rgba(0,0,0,0.7)";
+debugBox.style.color = "#0f0";
+debugBox.style.fontSize = "12px";
+debugBox.style.padding = "4px 6px";
+debugBox.style.borderRadius = "4px";
+debugBox.style.zIndex = "3000";
+debugBox.textContent = "Debug init...";
+document.body.appendChild(debugBox);
+
+function logDebug(msg) {
+  debugBox.textContent = msg;
+  console.log(msg); // vẫn log nếu mở trên PC
+}
+
 // ===== Init Firebase =====
 if (!firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
 }
 
 const overlay = document.getElementById("screen-overlay");
-
-// ===== Helper: show/hide overlay =====
 function setOverlay(show) {
   overlay.style.display = show ? "block" : "none";
 }
 
-// ===== Trạng thái màn hình =====
 let globalState = "on";
 let localState = "on";
 
-// ===== Reset về màn hình bắt đầu gọi món =====
 function resetToStart() {
-  const posContainer = document.getElementById("pos-container");
-  const posFrame = document.getElementById("pos-frame");
-  const startScreen = document.getElementById("start-screen");
-
-  if (posContainer) posContainer.classList.add("hidden");
-  if (posFrame) posFrame.src = "about:blank";
-  if (startScreen) startScreen.classList.remove("hidden");
+  logDebug("🔄 Reset về màn hình bắt đầu");
+  document.getElementById("pos-container").classList.add("hidden");
+  document.getElementById("pos-frame").src = "about:blank";
+  document.getElementById("start-screen").classList.remove("hidden");
 }
 
-// ===== Firebase login & lắng nghe =====
 firebase.auth().signInAnonymously()
   .then(() => {
+    logDebug("✅ Firebase login ok");
     const db = firebase.database();
-    const refGlobal = db.ref("control/screen");
 
-    // Lắng nghe toàn quán
-    refGlobal.on("value", snap => {
+    // Toàn quán
+    db.ref("control/screen").on("value", snap => {
       globalState = (snap.val() || "on").toLowerCase();
+      logDebug("🌐 Global=" + globalState);
       updateOverlay();
     });
 
-    // Hàm cập nhật overlay
     function updateOverlay() {
       if (globalState === "off" || localState === "off") {
         setOverlay(true);
+        logDebug("⬛ Overlay ON");
       } else {
         setOverlay(false);
+        logDebug("⬜ Overlay OFF");
       }
     }
 
-    // Lắng nghe theo bàn (gắn khi đã chọn bàn)
+    // Nghe riêng từng bàn
     function listenPerTable(tableId) {
-      // Điều khiển bật/tắt màn hình riêng bàn
-      const refLocal = db.ref(`control/tables/${tableId}/screen`);
-      refLocal.on("value", snap => {
+      logDebug("👂 Listen table " + tableId);
+
+      db.ref(`control/tables/${tableId}/screen`).on("value", snap => {
         localState = (snap.val() || "on").toLowerCase();
+        logDebug(`🪑 Table ${tableId}=${localState}`);
         updateOverlay();
       });
 
-      // Tín hiệu làm mới
-      const refSig = db.ref(`signals/${tableId}`);
-      refSig.on("value", snap => {
+      db.ref(`signals/${tableId}`).on("value", snap => {
         if (!snap.exists()) return;
         const val = snap.val();
+        logDebug(`🪧 Signal ${tableId}=${JSON.stringify(val)}`);
         if (val.status === "expired") {
-          console.log(`Bàn ${tableId}: Nhận tín hiệu refresh`);
           resetToStart();
         }
       });
     }
 
-    // Theo dõi khi người dùng chọn bàn (DOM thay đổi)
+    // Bắt bàn khi chọn
     const observer = new MutationObserver(() => {
       const tableSpan = document.getElementById("selected-table");
       if (tableSpan && tableSpan.textContent) {
         const tableId = tableSpan.textContent.trim();
         if (tableId) {
           listenPerTable(tableId);
-          observer.disconnect(); // chỉ chạy 1 lần
+          observer.disconnect();
         }
       }
     });
     observer.observe(document.body, { childList: true, subtree: true });
   })
-  .catch(err => console.error("Firebase auth error:", err));
+  .catch(err => logDebug("❌ Firebase auth error: " + err));
