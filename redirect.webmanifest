@@ -1,20 +1,20 @@
 {
   "name": "T-NGON - Gọi món",
-  "short_name": "Gọi món",
+  "short_name": "T-NGON APP",
   "start_url": "https://tngon462.github.io/QR/redirect.html",
-  "scope": "https://tngon462.github.io/QR/",
+  "scope": "https://tngon462.github.io/QR/redirect.html",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "theme_color": "#22c55e",
+  "theme_color": "#3b82f6",
   "background_color": "#f6f7f9",
   "icons": [
     {
-      "src": "https://tngon462.github.io/QR/icons/icon-192.png",
+      "src": "./icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "https://tngon462.github.io/QR/icons/icon-512.png",
+      "src": "./icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }
