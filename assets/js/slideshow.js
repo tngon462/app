@@ -1,9 +1,9 @@
 // assets/js/slideshow.js
 
-// Đường dẫn GitHub Pages repo "slide"
+// Đường dẫn GitHub Pages của repo slide
 const basePath = "https://tngon462.github.io/slide/slides/";
 
-// Đường dẫn tới manifest.json
+// Link manifest.json (phải nằm trong thư mục /slides/)
 const manifestUrl = basePath + "manifest.json";
 
 // Container hiển thị slideshow
@@ -17,13 +17,14 @@ function showSlide(index) {
   slideshowContainer.innerHTML = "";
 
   const img = document.createElement("img");
-  img.src = basePath + imageList[index];
+  img.src = basePath + imageList[index]; // nối đúng path ảnh
   img.alt = "slide";
   img.style.maxWidth = "100%";
   img.style.maxHeight = "100%";
+
   img.onerror = function () {
     slideshowContainer.innerHTML =
-      "<p style='color:red'>Không tải được ảnh: " + imageList[index] + "</p>";
+      "<p style='color:red'>Không tải được ảnh: " + img.src + "</p>";
   };
 
   slideshowContainer.appendChild(img);
@@ -41,17 +42,20 @@ function startSlideshow() {
   setInterval(() => {
     currentIndex = (currentIndex + 1) % imageList.length;
     showSlide(currentIndex);
-  }, 5000); // đổi ảnh sau 5 giây
+  }, 5000); // đổi ảnh mỗi 5 giây
 }
 
 // Tải manifest.json
 async function loadManifest() {
   try {
+    console.log("Đang tải manifest:", manifestUrl);
     const res = await fetch(manifestUrl);
     if (!res.ok) throw new Error("HTTP " + res.status);
     imageList = await res.json();
+    console.log("Danh sách ảnh:", imageList);
     startSlideshow();
   } catch (err) {
+    console.error("Lỗi tải manifest:", err);
     slideshowContainer.innerHTML =
       "<p style='color:red'>Lỗi tải manifest.json: " + err + "</p>";
   }
