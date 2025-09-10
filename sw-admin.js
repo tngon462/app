@@ -1,14 +1,14 @@
-// sw-admin.js
-const CACHE_NAME = 'tngon-qr-v1';
+const CACHE_NAME = 'tngon-qr-v2';
 const CORE_ASSETS = [
   './',
   './redirect.html',
+  './admin.html',
   './assets/js/redirect.js',
+  './redirect.webmanifest',
   './admin.webmanifest',
   './links.json'
 ];
 
-// Install: cache core
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME)
@@ -17,7 +17,6 @@ self.addEventListener('install', (e) => {
   );
 });
 
-// Activate: clear old cache
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) =>
@@ -26,10 +25,8 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Fetch handler
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-
   // Cache-first cho core assets
   if (CORE_ASSETS.some((path) => req.url.includes(path.replace('./','')))) {
     e.respondWith(
