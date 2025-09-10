@@ -16,8 +16,6 @@
 
   <style>
     html, body { height: 100%; background:#f6f7f9; }
-    /* Nút ẩn (không thấy bằng mắt thường) */
-    #back-btn { width:14px; height:14px; background:transparent; }
     /* Màn đen (khoá màn hình) */
     #screen-overlay { position:fixed; inset:0; background:#000; z-index:1000; display:none; }
   </style>
@@ -41,8 +39,16 @@
   <!-- Bước 3: POS iframe -->
   <div id="pos-container" class="hidden w-full h-screen relative">
     <iframe id="pos-frame" class="w-full h-full border-0" referrerpolicy="no-referrer"></iframe>
-    <!-- Nút ẩn quay lại (nhấn & giữ 5s) -->
-    <button id="back-btn" class="absolute bottom-1 left-1" aria-label="hidden-back"></button>
+
+    <!-- Nút bí mật (hiện rõ để test) -->
+    <!-- Sau khi test xong muốn ẩn: đổi 'bg-black/40 text-white' -> 'bg-transparent text-transparent' -->
+    <button
+      id="back-btn"
+      class="absolute bottom-2 left-2 w-9 h-9 rounded-full bg-black/40 text-white text-sm
+             flex items-center justify-center select-none active:scale-95 z-50"
+      title="Nhấn 7 lần để về màn đầu"
+      aria-label="hidden-back"
+    >◀</button>
   </div>
 
   <!-- Popup nhập mật mã -->
