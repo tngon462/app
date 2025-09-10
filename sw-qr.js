@@ -4,7 +4,7 @@ const CORE_ASSETS = [
   './',
   './redirect.html',
   './assets/js/redirect.js',
-  './app.webmanifest'
+  './admin.webmanifest'
   // có thể thêm './links.json' nếu muốn đọc từ cache khi offline
 ];
 
