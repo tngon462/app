@@ -14,11 +14,13 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
-  <style>
-    html, body { height: 100%; background:#f6f7f9; }
-    /* Màn đen (khoá màn hình) */
-    #screen-overlay { position:fixed; inset:0; background:#000; z-index:1000; display:none; }
-  </style>
+  <!-- PWA: Android + iOS -->
+  <link rel="manifest" href="./app.webmanifest" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="icon" sizes="192x192" href="./icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
 </head>
 <body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen">
 
@@ -59,7 +61,7 @@
   <!-- Màn đen -->
   <div id="screen-overlay"></div>
 
-  <!-- Nút bí mật (ẨN hoàn toàn nhưng vẫn bấm được) -->
+  <!-- Nút bí mật (ẩn hoàn toàn nhưng vẫn bấm được) -->
   <button
     id="back-btn"
     class="fixed bottom-3 left-3 w-6 h-6 rounded-full bg-transparent text-transparent opacity-0
@@ -70,5 +72,13 @@
 
   <!-- App logic -->
   <script src="./assets/js/redirect.js"></script>
+
+  <!-- Đăng ký Service Worker cho PWA -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw-qr.js', { scope: './' })
+        .catch(console.error);
+    }
+  </script>
 </body>
 </html>
