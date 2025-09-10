@@ -1,4 +1,4 @@
-// ===== Firebase config =====
+// ===== Firebase config (cùng project với admin) =====
 const firebaseConfig = {
   apiKey: "AIzaSyB4u2G41xdGkgBC0KltleRpcg5Lwru2RIU",
   authDomain: "tngon-b37d6.firebaseapp.com",
@@ -21,29 +21,32 @@ function setOverlay(show) {
   overlay.style.display = show ? "block" : "none";
 }
 
-// ===== Lắng nghe trạng thái màn hình =====
+// ===== Trạng thái màn hình =====
+let globalState = "on";
+let localState = "on";
+
+// ===== Reset về màn hình bắt đầu gọi món =====
+function resetToStart() {
+  const posContainer = document.getElementById("pos-container");
+  const posFrame = document.getElementById("pos-frame");
+  const startScreen = document.getElementById("start-screen");
+
+  if (posContainer) posContainer.classList.add("hidden");
+  if (posFrame) posFrame.src = "about:blank";
+  if (startScreen) startScreen.classList.remove("hidden");
+}
+
+// ===== Firebase login & lắng nghe =====
 firebase.auth().signInAnonymously()
   .then(() => {
     const db = firebase.database();
     const refGlobal = db.ref("control/screen");
-
-    let globalState = "on";
-    let localState = "on";
 
     // Lắng nghe toàn quán
     refGlobal.on("value", snap => {
       globalState = (snap.val() || "on").toLowerCase();
       updateOverlay();
     });
-
-    // Lắng nghe theo bàn (khi đã biết bàn)
-    function listenPerTable(tableId) {
-      const refLocal = db.ref(`control/tables/${tableId}/screen`);
-      refLocal.on("value", snap => {
-        localState = (snap.val() || "on").toLowerCase();
-        updateOverlay();
-      });
-    }
 
     // Hàm cập nhật overlay
     function updateOverlay() {
@@ -54,14 +57,35 @@ firebase.auth().signInAnonymously()
       }
     }
 
-    // Khi chọn bàn thì redirect.js có set #selected-table
+    // Lắng nghe theo bàn (gắn khi đã chọn bàn)
+    function listenPerTable(tableId) {
+      // Điều khiển bật/tắt màn hình riêng bàn
+      const refLocal = db.ref(`control/tables/${tableId}/screen`);
+      refLocal.on("value", snap => {
+        localState = (snap.val() || "on").toLowerCase();
+        updateOverlay();
+      });
+
+      // Tín hiệu làm mới
+      const refSig = db.ref(`signals/${tableId}`);
+      refSig.on("value", snap => {
+        if (!snap.exists()) return;
+        const val = snap.val();
+        if (val.status === "expired") {
+          console.log(`Bàn ${tableId}: Nhận tín hiệu refresh`);
+          resetToStart();
+        }
+      });
+    }
+
+    // Theo dõi khi người dùng chọn bàn (DOM thay đổi)
     const observer = new MutationObserver(() => {
       const tableSpan = document.getElementById("selected-table");
       if (tableSpan && tableSpan.textContent) {
         const tableId = tableSpan.textContent.trim();
         if (tableId) {
           listenPerTable(tableId);
-          observer.disconnect(); // chỉ cần chạy 1 lần khi đã biết bàn
+          observer.disconnect(); // chỉ chạy 1 lần
         }
       }
     });
