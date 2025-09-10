@@ -78,4 +78,4 @@ firebase.auth().signInAnonymously()
   .catch(() => {
     // Nếu đăng nhập ẩn danh lỗi → overlay luôn off để không chặn người dùng
     setOverlay(false);
-  });
+  }); 
