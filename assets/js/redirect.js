@@ -20,6 +20,8 @@ const linksUrl = "./links.json";
 const secretCode = "6868";
 const STORAGE_KEY_TABLE = "TNGON_TABLE";
 const STORAGE_KEY_LINK  = "TNGON_TABLE_LINK";
+// Tắt tự khôi phục bàn đã lưu
+const AUTO_RESUME = false;
 
 /***** State *****/
 let currentTable = null;
@@ -196,7 +198,7 @@ function subscribePerTable(){
     if (status === "expired") {
       posFrame.src = "";
       gotoStart(true);
-      // refSig.set(null).catch(()=>{}); // tuỳ chọn, nếu muốn clear tín hiệu
+      // refSig.set(null).catch(()=>{}); // tuỳ chọn
     }
   };
   refSig.on("value", onSig);
@@ -206,18 +208,25 @@ function subscribePerTable(){
 /***** Main *****/
 document.addEventListener("DOMContentLoaded", async () => {
   try {
+    // Luôn xoá bàn đã lưu để không auto-jump
+    localStorage.removeItem(STORAGE_KEY_TABLE);
+    localStorage.removeItem(STORAGE_KEY_LINK);
+
     await loadTables();
     bindSecretBack();
     await initFirebase();
 
-    const savedTable = localStorage.getItem(STORAGE_KEY_TABLE);
-    const savedLink  = localStorage.getItem(STORAGE_KEY_LINK);
-    if (savedTable && savedLink) {
-      currentTable = savedTable;
-      currentLink  = savedLink;
-      subscribePerTable();
-      gotoStart(true);
-    }
+    // Không tự resume. Nếu muốn cho phép resume sau này:
+    // if (AUTO_RESUME) {
+    //   const savedTable = localStorage.getItem(STORAGE_KEY_TABLE);
+    //   const savedLink  = localStorage.getItem(STORAGE_KEY_LINK);
+    //   if (savedTable && savedLink) {
+    //     currentTable = savedTable;
+    //     currentLink  = savedLink;
+    //     subscribePerTable();
+    //     gotoStart(true);
+    //   }
+    // }
   } catch (e) {
     console.error(e);
   }
