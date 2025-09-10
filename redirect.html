@@ -4,42 +4,37 @@
   <meta charset="UTF-8" />
   <title>T-NGON - Gọi món</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#22c55e" />
+  <meta name="theme-color" content="#3b82f6" />
+  <link rel="manifest" href="./redirect.webmanifest" />
+  <link rel="icon" href="./icons/icon-192.png" />
 
   <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
-
-  <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-
-  <!-- PWA manifest -->
-  <link rel="manifest" href="./redirect.webmanifest" type="application/manifest+json">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="icon" sizes="192x192" href="./icons/icon-192.png">
-  <link rel="apple-touch-icon" href="./icons/icon-192.png">
 </head>
-<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen">
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center">
 
   <!-- Bước 1: Chọn bàn -->
   <div id="select-table" class="flex flex-col items-center">
-    <h1 class="text-4xl font-bold text-blue-600 mb-6">Vui lòng chọn bàn</h1>
-    <div id="table-container" class="grid grid-cols-3 gap-4 p-4 w-full max-w-2xl"></div>
+    <h1 class="text-3xl font-bold text-blue-600 mb-6">Vui lòng chọn bàn</h1>
+    <!-- ✅ Grid responsive -->
+    <div id="table-container"
+         class="grid justify-center gap-4
+                grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5
+                px-4">
+    </div>
   </div>
 
   <!-- Bước 2: Màn bắt đầu -->
   <div id="start-screen" class="hidden flex flex-col items-center justify-center min-h-screen">
-    <h2 class="text-8xl font-semibold mb-14">Bàn <span id="selected-table"></span></h2>
-    <button id="start-order" class="px-10 py-5 rounded-lg bg-blue-500 text-white font-bold hover:bg-blue-700 text-lg">
-      注文
+    <h2 class="text-2xl font-semibold mb-6">Bàn <span id="selected-table"></span></h2>
+    <button id="start-order"
+            class="px-8 py-4 rounded-lg bg-blue-500 text-white font-bold hover:bg-blue-600 text-xl shadow">
+      Bắt đầu gọi món
     </button>
   </div>
 
   <!-- Bước 3: POS iframe -->
-  <div id="pos-container" class="hidden w-full h-screen relative">
+  <div id="pos-container" class="hidden w-full h-screen">
     <iframe id="pos-frame" class="w-full h-full border-0" referrerpolicy="no-referrer"></iframe>
   </div>
 
@@ -62,16 +57,12 @@
   <div id="screen-overlay"></div>
 
   <!-- Nút bí mật (ẩn hoàn toàn nhưng vẫn bấm được) -->
-  <button
-    id="back-btn"
-    class="fixed bottom-3 left-3 w-6 h-6 rounded-full bg-transparent text-transparent opacity-0
-           select-none z-[2000] focus:outline-none"
-    aria-label="hidden-back">
-    ◀
-  </button>
+  <button id="back-btn"
+          class="fixed bottom-3 left-3 w-6 h-6 rounded-full bg-transparent text-transparent opacity-0 select-none z-[2000] focus:outline-none"
+          aria-label="hidden-back">◀</button>
 
   <!-- Logic -->
-  <script src="./assets/js/redirect.js?v=blue1"></script>
+  <script src="./assets/js/redirect.js?v=grid1"></script>
 
   <!-- Service Worker -->
   <script>
