@@ -1,15 +1,61 @@
-let slideIndex = 0;
-const slides = ["./assets/slides/Sting.jpg","./assets/slides/PhoGa.jpg"];
-function showSlide(i) {
-  const stage = document.querySelector(".slide-stage");
-  if (stage) stage.innerHTML = `<img src="${slides[i]}" alt="slide"/>`;
+// assets/js/slideshow.js
+
+// Đường dẫn GitHub Pages repo "slide"
+const basePath = "https://tngon462.github.io/slide/slides/";
+
+// Đường dẫn tới manifest.json
+const manifestUrl = basePath + "manifest.json";
+
+// Container hiển thị slideshow
+const slideshowContainer = document.getElementById("slideshow");
+
+let imageList = [];
+let currentIndex = 0;
+
+// Hiển thị 1 ảnh
+function showSlide(index) {
+  slideshowContainer.innerHTML = "";
+
+  const img = document.createElement("img");
+  img.src = basePath + imageList[index];
+  img.alt = "slide";
+  img.style.maxWidth = "100%";
+  img.style.maxHeight = "100%";
+  img.onerror = function () {
+    slideshowContainer.innerHTML =
+      "<p style='color:red'>Không tải được ảnh: " + imageList[index] + "</p>";
+  };
+
+  slideshowContainer.appendChild(img);
 }
-function nextSlide() {
-  slideIndex = (slideIndex + 1) % slides.length;
-  showSlide(slideIndex);
+
+// Chạy tự động
+function startSlideshow() {
+  if (imageList.length === 0) {
+    slideshowContainer.innerHTML =
+      "<p style='color:red'>Danh sách ảnh trống</p>";
+    return;
+  }
+
+  showSlide(currentIndex);
+  setInterval(() => {
+    currentIndex = (currentIndex + 1) % imageList.length;
+    showSlide(currentIndex);
+  }, 5000); // đổi ảnh sau 5 giây
 }
-document.addEventListener("DOMContentLoaded", () => {
-  showScreen("start-slideshow-screen");
-  showSlide(slideIndex);
-  setInterval(nextSlide, 5000);
-});
+
+// Tải manifest.json
+async function loadManifest() {
+  try {
+    const res = await fetch(manifestUrl);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    imageList = await res.json();
+    startSlideshow();
+  } catch (err) {
+    slideshowContainer.innerHTML =
+      "<p style='color:red'>Lỗi tải manifest.json: " + err + "</p>";
+  }
+}
+
+// Khởi động
+document.addEventListener("DOMContentLoaded", loadManifest);
