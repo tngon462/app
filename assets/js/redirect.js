@@ -7,10 +7,18 @@ const posContainer = document.getElementById("pos-container");
 const posFrame = document.getElementById("pos-frame");
 const backBtn = document.getElementById("back-btn");
 
+const popup = document.getElementById("password-popup");
+const passwordInput = document.getElementById("password-input");
+const passwordOk = document.getElementById("password-ok");
+const passwordCancel = document.getElementById("password-cancel");
+const passwordError = document.getElementById("password-error");
+
 const linksUrl = "links.json";
+const secretCode = "6868";
 
 let currentTable = null;
 let currentLink = null;
+let pressTimer = null;
 
 async function loadTables() {
   try {
@@ -30,7 +38,6 @@ async function loadTables() {
         currentTable = key;
         currentLink = link;
 
-        // Sang màn start
         selectTableDiv.classList.add("hidden");
         startScreen.classList.remove("hidden");
         selectedTableSpan.textContent = key;
@@ -54,14 +61,35 @@ startOrderBtn.onclick = () => {
   }
 };
 
-// Nút ẩn để quay lại bước 1
-backBtn.onclick = () => {
-  posFrame.src = ""; // clear iframe
-  posContainer.classList.add("hidden");
-  startScreen.classList.add("hidden");
-  selectTableDiv.classList.remove("hidden");
-  currentTable = null;
-  currentLink = null;
+// Nút ẩn: nhấn giữ 5s mới hiện popup
+backBtn.addEventListener("mousedown", () => {
+  pressTimer = setTimeout(() => {
+    popup.classList.remove("hidden");
+    passwordInput.value = "";
+    passwordError.classList.add("hidden");
+    passwordInput.focus();
+  }, 5000);
+});
+
+backBtn.addEventListener("mouseup", () => clearTimeout(pressTimer));
+backBtn.addEventListener("mouseleave", () => clearTimeout(pressTimer));
+
+// Xử lý mật mã
+passwordOk.onclick = () => {
+  if (passwordInput.value === secretCode) {
+    // Reset về màn chọn bàn
+    posFrame.src = "";
+    posContainer.classList.add("hidden");
+    startScreen.classList.add("hidden");
+    selectTableDiv.classList.remove("hidden");
+    currentTable = null;
+    currentLink = null;
+    popup.classList.add("hidden");
+  } else {
+    passwordError.classList.remove("hidden");
+  }
 };
 
-document.addEventListener("DOMContentLoaded", loadTables);
+passwordCancel.onclick = () => {
+  popup.classList.add("hidden");
+};
