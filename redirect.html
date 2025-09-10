@@ -73,10 +73,10 @@
   <!-- App logic -->
   <script src="./assets/js/redirect.js"></script>
 
-  <!-- Đăng ký Service Worker cho PWA -->
+  <!-- Đăng ký Service Worker -->
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw-qr.js', { scope: './' })
+      navigator.serviceWorker.register('./sw-admin.js', { scope: './' })
         .catch(console.error);
     }
   </script>
