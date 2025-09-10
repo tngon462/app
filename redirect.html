@@ -64,6 +64,25 @@
   <!-- Logic -->
   <script src="./assets/js/redirect.js?v=grid1"></script>
 
+<!-- Màn đen -->
+<div id="screen-overlay"></div>
+
+<style>
+#screen-overlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  opacity: 1;
+  z-index: 2000;
+  display: none; /* mặc định ẩn */
+}
+</style>
+
+<!-- Script blackout -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="./assets/js/blackout.js?v=1"></script>
   <!-- Service Worker -->
   <script>
     if ('serviceWorker' in navigator) {
