@@ -2,11 +2,25 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
-  <title>T-NGON - Chọn bàn</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>T-NGON - Gọi món</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#22c55e" />
 
-  <!-- Tailwind CSS -->
+  <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Firebase (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+  <style>
+    html, body { height: 100%; background:#f6f7f9; }
+    /* Nút ẩn (không thấy bằng mắt thường) */
+    #back-btn { width:14px; height:14px; background:transparent; }
+    /* Màn đen (khoá màn hình) */
+    #screen-overlay { position:fixed; inset:0; background:#000; z-index:1000; display:none; }
+  </style>
 </head>
 <body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen">
 
@@ -26,18 +40,18 @@
 
   <!-- Bước 3: POS iframe -->
   <div id="pos-container" class="hidden w-full h-screen relative">
-    <iframe id="pos-frame" class="w-full h-full border-0"></iframe>
-    <!-- Nút quay lại ẩn -->
-    <button id="back-btn" class="absolute bottom-1 left-1 w-4 h-4 bg-transparent"></button>
+    <iframe id="pos-frame" class="w-full h-full border-0" referrerpolicy="no-referrer"></iframe>
+    <!-- Nút ẩn quay lại (nhấn & giữ 5s) -->
+    <button id="back-btn" class="absolute bottom-1 left-1" aria-label="hidden-back"></button>
   </div>
 
   <!-- Popup nhập mật mã -->
-  <div id="password-popup" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+  <div id="password-popup" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-[1100]">
     <div class="bg-white p-6 rounded-lg shadow-lg text-center">
       <h3 class="text-lg font-semibold mb-4">Nhập mật mã</h3>
-      <input id="password-input" type="password" maxlength="4" 
+      <input id="password-input" type="password" maxlength="4"
              class="border p-2 rounded text-center tracking-widest text-xl"
-             placeholder="****" />
+             placeholder="****" inputmode="numeric" />
       <div class="mt-4 flex justify-center space-x-4">
         <button id="password-ok" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">OK</button>
         <button id="password-cancel" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Hủy</button>
@@ -46,7 +60,10 @@
     </div>
   </div>
 
-  <!-- Script -->
-  <script src="assets/js/redirect.js"></script>
+  <!-- Màn đen -->
+  <div id="screen-overlay"></div>
+
+  <!-- App logic -->
+  <script src="./assets/js/redirect.js"></script>
 </body>
 </html>
