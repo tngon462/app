@@ -24,7 +24,6 @@ const STORAGE_KEY_LINK  = "TNGON_TABLE_LINK";
 /***** State *****/
 let currentTable = null;
 let currentLink  = null;
-let pressTimer   = null;
 
 // Firebase
 let app, db;
@@ -64,7 +63,6 @@ function gotoSelect(){
   hide(startScreen);
   show(selectTableDiv);
 
-  // Hủy subscribe theo bàn cũ
   if (unsubTable)  { unsubTable();  unsubTable = null; }
   if (unsubSignal) { unsubSignal(); unsubSignal = null; }
 
@@ -77,7 +75,6 @@ function gotoSelect(){
 }
 
 function gotoStart(keepTable){
-  // Nếu đã có table rồi thì giữ lại, ngược lại đọc từ storage
   if (!keepTable) {
     currentTable = localStorage.getItem(STORAGE_KEY_TABLE);
     currentLink  = localStorage.getItem(STORAGE_KEY_LINK);
@@ -117,54 +114,51 @@ async function loadTables(){
       currentLink  = link;
       localStorage.setItem(STORAGE_KEY_TABLE, key);
       localStorage.setItem(STORAGE_KEY_LINK,  link);
-      subscribePerTable(); // đăng ký lắng nghe cho bàn mới
+      subscribePerTable();
       gotoStart(true);
     };
     tableContainer.appendChild(btn);
   });
 }
 
-/***** Long-press 5s -> yêu cầu mật mã -> quay về màn CHỌN BÀN *****/
+/***** Nút bí mật: NHẤN 7 LẦN TRONG 5S -> hỏi mật mã -> về màn CHỌN BÀN *****/
 function bindSecretBack(){
-  const startTimer = () => {
-    clearTimeout(pressTimer);
-    pressTimer = setTimeout(() => {
+  const REQUIRED_TAPS = 7;
+  const WINDOW_MS = 5000;
+  let tapCount = 0;
+  let timer = null;
+
+  function reset() {
+    tapCount = 0;
+    if (timer) { clearTimeout(timer); timer = null; }
+  }
+
+  function handleTap(e){
+    e.preventDefault();
+    tapCount += 1;
+
+    if (!timer) {
+      timer = setTimeout(() => reset(), WINDOW_MS);
+    }
+
+    if (tapCount >= REQUIRED_TAPS) {
+      reset();
       show(popup);
       passwordInput.value = "";
       passwordError.classList.add("hidden");
-      // Trễ 50ms để iOS đảm bảo focus
       setTimeout(()=> passwordInput.focus(), 50);
-    }, 5000);
-  };
-  const clearTimer = () => clearTimeout(pressTimer);
-
-  // Hỗ trợ chuột & cảm ứng
-  backBtn.addEventListener("mousedown", startTimer);
-  backBtn.addEventListener("mouseup", clearTimer);
-  backBtn.addEventListener("mouseleave", clearTimer);
-
-  backBtn.addEventListener("touchstart", (e)=>{ e.preventDefault(); startTimer(); }, {passive:false});
-  backBtn.addEventListener("touchend",   (e)=>{ e.preventDefault(); clearTimer(); }, {passive:false});
-  backBtn.addEventListener("touchcancel",(e)=>{ e.preventDefault(); clearTimer(); }, {passive:false});
-
-  passwordOk.onclick = () => {
-    if (passwordInput.value === secretCode) {
-      hide(popup);
-      gotoSelect();
-    } else {
-      passwordError.classList.remove("hidden");
     }
-  };
-  passwordCancel.onclick = () => hide(popup);
+  }
+
+  // click đủ dùng cho chuột lẫn chạm (mobile sẽ synthesize click)
+  backBtn.addEventListener("click", handleTap);
 }
 
 /***** Firebase wiring *****/
 async function initFirebase(){
   app = firebase.initializeApp(firebaseConfig);
   db  = firebase.database();
-  // Anonymous
-  try { await firebase.auth().signInAnonymously(); }
-  catch(e){ /* ignore */ }
+  try { await firebase.auth().signInAnonymously(); } catch(e){ /* ignore */ }
   await new Promise(r => { const un = firebase.auth().onAuthStateChanged(()=>{ un(); r(); }); });
 
   // Global screen
@@ -178,7 +172,6 @@ async function initFirebase(){
 }
 
 function subscribePerTable(){
-  // Hủy subscribe cũ
   if (unsubTable)  { unsubTable();  unsubTable = null; }
   if (unsubSignal) { unsubSignal(); unsubSignal = null; }
 
@@ -201,11 +194,9 @@ function subscribePerTable(){
     if (!v) return;
     const status = String(v.status || "").toLowerCase();
     if (status === "expired") {
-      // Quay về màn BẮT ĐẦU (giữ bàn)
       posFrame.src = "";
       gotoStart(true);
-      // Tuỳ chọn: clear tín hiệu (nếu muốn)
-      // refSig.set(null).catch(()=>{});
+      // refSig.set(null).catch(()=>{}); // tuỳ chọn, nếu muốn clear tín hiệu
     }
   };
   refSig.on("value", onSig);
@@ -219,7 +210,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     bindSecretBack();
     await initFirebase();
 
-    // Nếu đã từng chọn bàn trước đó -> vào ngay màn BẮT ĐẦU
     const savedTable = localStorage.getItem(STORAGE_KEY_TABLE);
     const savedLink  = localStorage.getItem(STORAGE_KEY_LINK);
     if (savedTable && savedLink) {
@@ -229,7 +219,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       gotoStart(true);
     }
   } catch (e) {
-    // Nếu có lỗi vẫn hiển thị chọn bàn
     console.error(e);
   }
 });
@@ -239,3 +228,14 @@ startOrderBtn.onclick = () => {
   if (!currentLink) return;
   gotoPOS();
 };
+
+// Popup password
+passwordOk.onclick = () => {
+  if (passwordInput.value === secretCode) {
+    hide(popup);
+    gotoSelect();
+  } else {
+    passwordError.classList.remove("hidden");
+  }
+};
+passwordCancel.onclick = () => hide(popup);
