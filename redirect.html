@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>T-NGON</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- PWA meta -->
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="https://placehold.co/192x192/da251d/fff?text=TN" />
+  <link rel="apple-touch-icon" href="https://placehold.co/192x192/da251d/fff?text=TN" />
+  <meta name="theme-color" content="#da251d" />
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body class="bg-gray-100">
+  <div class="main-container">
+    <div id="table-selection-screen" class="screen">
+      <h1 class="text-2xl font-bold">Chọn bàn</h1>
+      <div class="button-grid">
+        <button class="table-button" onclick="selectTable(1)">1</button>
+        <button class="table-button" onclick="selectTable(2)">2</button>
+        <button class="table-button" onclick="selectTable(3)">3</button>
+      </div>
+    </div>
+
+    <div id="start-screen" class="screen">
+      <button class="start-button" onclick="startOrder()">Bắt đầu</button>
+    </div>
+
+    <div id="menu-screen" class="screen">
+      <iframe id="menu-iframe" class="iframe-container"></iframe>
+    </div>
+
+    <div id="start-slideshow-screen" class="screen">
+      <div class="slide-stage"></div>
+      <div class="tap-overlay"></div>
+      <div class="slide-status"></div>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+  <!-- JS theo tính năng -->
+  <script src="assets/js/firebase.js"></script>
+  <script src="assets/js/table.js"></script>
+  <script src="assets/js/slideshow.js"></script>
+  <script src="assets/js/blackout.js"></script>
+</body>
+</html>
