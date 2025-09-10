@@ -1,25 +1,22 @@
 {
   "name": "T-NGON APP",
-  "short_name": "T-NGON APP",
-  "start_url": "/QR/redirect.html?pwa=1",
-  "scope": "/QR/",
+  "short_name": "T-NGON",
+  "start_url": "https://tngon462.github.io/QR/redirect.html?pwa=1",
+  "scope": "https://tngon462.github.io/QR/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "theme_color": "#22c55e",
   "background_color": "#f6f7f9",
   "icons": [
     {
-      "src": "./icons/icon-192.png",
+      "src": "https://tngon462.github.io/QR/icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
+      "type": "image/png"
     },
     {
-      "src": "./icons/icon-192.png",
+      "src": "https://tngon462.github.io/QR/icons/icon-192.png",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
+      "type": "image/png"
     }
-  ],
-  "prefer_related_applications": false
+  ]
 }
