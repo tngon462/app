@@ -28,11 +28,12 @@ function resetToStart() {
   document.getElementById("start-screen").classList.remove("hidden");
 }
 
+// ===== Firebase login & lắng nghe =====
 firebase.auth().signInAnonymously()
   .then(() => {
     const db = firebase.database();
 
-    // Toàn quán
+    // Lắng nghe toàn quán
     db.ref("control/screen").on("value", snap => {
       globalState = (snap.val() || "on").toLowerCase();
       updateOverlay();
@@ -47,12 +48,17 @@ firebase.auth().signInAnonymously()
     }
 
     // Nghe riêng từng bàn
-    function listenPerTable(tableId) {
+    function initPerTableListener() {
+      const tableId = window.tableId || localStorage.getItem("tableId");
+      if (!tableId) return;
+
+      // Điều khiển riêng
       db.ref(`control/tables/${tableId}/screen`).on("value", snap => {
         localState = (snap.val() || "on").toLowerCase();
         updateOverlay();
       });
 
+      // Tín hiệu làm mới
       db.ref(`signals/${tableId}`).on("value", snap => {
         if (!snap.exists()) return;
         const val = snap.val();
@@ -62,20 +68,12 @@ firebase.auth().signInAnonymously()
       });
     }
 
-    // Theo dõi khi chọn bàn
-    const observer = new MutationObserver(() => {
-      const tableSpan = document.getElementById("selected-table");
-      if (tableSpan && tableSpan.textContent) {
-        const tableId = tableSpan.textContent.trim();
-        if (tableId) {
-          listenPerTable(tableId);
-          observer.disconnect();
-        }
-      }
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
+    // Khi vừa login xong thì lắng nghe ngay nếu đã chọn bàn
+    initPerTableListener();
+
+    // Nếu chọn bàn sau đó mới biết tableId → bắt sự kiện lưu
+    window.addEventListener("storage", () => initPerTableListener());
   })
   .catch(() => {
-    // Nếu đăng nhập ẩn danh lỗi → overlay luôn off để không chặn người dùng
-    setOverlay(false);
-  }); 
+    setOverlay(false); // fallback: không chặn nếu login lỗi
+  });
