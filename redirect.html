@@ -84,15 +84,22 @@
        style="pointer-events: auto;">
   </div>
 
-  <!-- Logic chính -->
-  <script src="./assets/js/redirect.js?v=grid2"></script>
-
-  <!-- Firebase & blackout -->
+  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-  <script src="./assets/js/blackout.js?v=4"></script>
-  <script src="./assets/js/blackout.js?v=6"></script>
+
+  <!-- Script local luôn load bản mới -->
+  <script>
+    (function() {
+      const files = ["redirect.js", "blackout.js"];
+      files.forEach(file => {
+        const s = document.createElement("script");
+        s.src = "./assets/js/" + file + "?v=" + Date.now();
+        document.head.appendChild(s);
+      });
+    })();
+  </script>
 
   <!-- Script nút bí mật -->
   <script>
@@ -108,7 +115,6 @@
       let leftClicks = [];
       let rightClicks = [];
 
-      // Hàm reset UI
       function showStart() {
         document.getElementById("pos-container").classList.add("hidden");
         document.getElementById("select-table").classList.add("hidden");
@@ -121,32 +127,25 @@
         document.getElementById("select-table").classList.remove("hidden");
       }
 
-      // Xử lý bấm 10 lần bên trái -> về màn bắt đầu
       leftBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         e.preventDefault();
-
         const now = Date.now();
         leftClicks.push(now);
         leftClicks = leftClicks.filter(t => now - t <= 3000);
-
         if (leftClicks.length >= 10) {
           showStart();
           leftClicks = [];
         }
       });
 
-      // Xử lý bấm 10 lần bên phải -> hiện nhập mật mã
       rightBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         e.preventDefault();
-
         const now = Date.now();
         rightClicks.push(now);
         rightClicks = rightClicks.filter(t => now - t <= 3000);
-
         if (rightClicks.length >= 10) {
-          // Hiện popup pass
           passPopup.classList.remove("hidden");
           passInput.value = "";
           passError.classList.add("hidden");
@@ -155,7 +154,6 @@
         }
       });
 
-      // Xác nhận pass
       passOk.addEventListener("click", () => {
         if (passInput.value === "6868") {
           passPopup.classList.add("hidden");
@@ -179,3 +177,4 @@
     }
   </script>
 </body>
+</html>
