@@ -56,13 +56,17 @@
   <div id="screen-overlay"
        class="fixed inset-0 bg-black opacity-100 z-[2000] hidden"></div>
 
-  <!-- Nút bí mật (ẩn hoàn toàn) -->
-  <button id="back-btn"
-          class="fixed bottom-3 left-3 w-6 h-6 rounded-full bg-transparent text-transparent opacity-0 select-none z-[2001] focus:outline-none"
-          aria-label="hidden-back">◀</button>
+  <!-- 2 nút bí mật -->
+  <button id="secret-left"
+          class="fixed bottom-3 left-3 w-12 h-12 rounded-full bg-transparent text-transparent opacity-0 select-none z-[2001]"
+          style="pointer-events:auto"></button>
+
+  <button id="secret-right"
+          class="fixed bottom-3 right-3 w-12 h-12 rounded-full bg-transparent text-transparent opacity-0 select-none z-[2001]"
+          style="pointer-events:auto"></button>
 
   <!-- Scripts -->
-  <script src="./assets/js/redirect.js?v=1.0"></script>
+  <script src="./assets/js/redirect.js?v=2.0"></script>
 
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -70,7 +74,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
   <!-- Blackout -->
-  <script src="./assets/js/blackout.js?v=1.0"></script>
+  <script src="./assets/js/blackout.js?v=2.0"></script>
 
   <!-- Service Worker -->
   <script>
