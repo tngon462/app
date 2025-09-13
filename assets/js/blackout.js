@@ -21,8 +21,8 @@ function setOverlay(show) {
 
 let globalState = "on";
 let localState = "on";
-let perTableInit = false;
 
+// Reset về màn bắt đầu
 function resetToStart() {
   document.getElementById("pos-container").classList.add("hidden");
   document.getElementById("pos-frame").src = "about:blank";
@@ -33,7 +33,7 @@ firebase.auth().signInAnonymously()
   .then(() => {
     const db = firebase.database();
 
-    // Toàn quán
+    // Lắng nghe toàn quán
     db.ref("control/screen").on("value", snap => {
       globalState = (snap.val() || "on").toLowerCase();
       updateOverlay();
@@ -47,16 +47,17 @@ firebase.auth().signInAnonymously()
       }
     }
 
-    // Gắn listener từng bàn
-    function initPerTableListener(tableId) {
-      if (perTableInit || !tableId) return;
-      perTableInit = true;
+    function initPerTableListener() {
+      const tableId = window.tableId || localStorage.getItem("tableId");
+      if (!tableId) return;
 
+      // Điều khiển riêng
       db.ref(`control/tables/${tableId}/screen`).on("value", snap => {
         localState = (snap.val() || "on").toLowerCase();
         updateOverlay();
       });
 
+      // Tín hiệu làm mới
       db.ref(`signals/${tableId}`).on("value", snap => {
         if (!snap.exists()) return;
         const val = snap.val();
@@ -66,14 +67,14 @@ firebase.auth().signInAnonymously()
       });
     }
 
-    const savedId = window.tableId || localStorage.getItem("tableId");
-    if (savedId) initPerTableListener(savedId);
+    // Ngay sau login
+    initPerTableListener();
 
-    window.addEventListener("tableSelected", (e) => {
-      const tid = e.detail;
-      if (tid) initPerTableListener(tid);
+    // Khi chọn bàn sau đó
+    window.addEventListener("tableSelected", () => {
+      initPerTableListener();
     });
   })
   .catch(() => {
-    setOverlay(false);
+    setOverlay(false); // fallback
   });
