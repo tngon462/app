@@ -15,12 +15,21 @@ if (!firebase.apps.length) {
 }
 
 const overlay = document.getElementById("screen-overlay");
+
 function setOverlay(show) {
   overlay.style.display = show ? "block" : "none";
 }
 
 let globalState = "on";
 let localState = "on";
+
+function updateOverlay() {
+  if (globalState === "off" || localState === "off") {
+    setOverlay(true);
+  } else {
+    setOverlay(false);
+  }
+}
 
 function resetToStart() {
   document.getElementById("pos-container").classList.add("hidden");
@@ -39,26 +48,16 @@ firebase.auth().signInAnonymously()
       updateOverlay();
     });
 
-    function updateOverlay() {
-      if (globalState === "off" || localState === "off") {
-        setOverlay(true);
-      } else {
-        setOverlay(false);
-      }
-    }
-
-    // Nghe riêng từng bàn
+    // Lắng nghe riêng từng bàn
     function initPerTableListener() {
       const tableId = window.tableId || localStorage.getItem("tableId");
       if (!tableId) return;
 
-      // Điều khiển riêng
       db.ref(`control/tables/${tableId}/screen`).on("value", snap => {
         localState = (snap.val() || "on").toLowerCase();
         updateOverlay();
       });
 
-      // Tín hiệu làm mới
       db.ref(`signals/${tableId}`).on("value", snap => {
         if (!snap.exists()) return;
         const val = snap.val();
@@ -68,12 +67,9 @@ firebase.auth().signInAnonymously()
       });
     }
 
-    // Khi vừa login xong thì lắng nghe ngay nếu đã chọn bàn
     initPerTableListener();
-
-    // Nếu chọn bàn sau đó mới biết tableId → bắt sự kiện lưu
     window.addEventListener("storage", () => initPerTableListener());
   })
   .catch(() => {
-    setOverlay(false); // fallback: không chặn nếu login lỗi
+    setOverlay(false); // fallback
   });
