@@ -3,23 +3,58 @@
 <head>
   <meta charset="UTF-8" />
   <title>T-NGON - Gọi món</title>
-
-  <!-- Viewport & PWA meta -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#3b82f6" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="mobile-web-app-capable" content="yes" />
 
-  <!-- Manifest & icon -->
+  <!-- PWA -->
   <link rel="manifest" href="./redirect.webmanifest" />
   <link rel="icon" href="./icons/icon-192.png" />
-  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
   <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #f3f4f6;
+    }
+    /* Safe-area hỗ trợ iOS tai thỏ */
+    body {
+      padding-top: env(safe-area-inset-top);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    #screen-overlay {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      opacity: 1;
+      z-index: 2000;
+      display: none; /* mặc định ẩn */
+    }
+    /* Nút bí mật (chạm xuyên qua) */
+    .secret-btn {
+      position: fixed;
+      bottom: 6px;
+      width: 48px;
+      height: 48px;
+      background: transparent;
+      color: transparent;
+      opacity: 0;
+      z-index: 2100;
+      pointer-events: auto; /* vẫn bấm được */
+    }
+    .secret-btn:focus { outline: none; }
+    #back-btn-start { left: 6px; }
+    #back-btn-select { right: 6px; }
+  </style>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center">
+<body class="flex flex-col items-center justify-center">
 
   <!-- Bước 1: Chọn bàn -->
   <div id="select-table" class="flex flex-col items-center">
@@ -46,7 +81,7 @@
   </div>
 
   <!-- Popup nhập mật mã -->
-  <div id="password-popup" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-[1100]">
+  <div id="password-popup" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-[2200]">
     <div class="bg-white p-6 rounded-lg shadow-lg text-center">
       <h3 class="text-lg font-semibold mb-4">Nhập mật mã</h3>
       <input id="password-input" type="password" maxlength="4"
@@ -61,28 +96,18 @@
   </div>
 
   <!-- Màn đen -->
-  <div id="screen-overlay"
-       class="fixed inset-0 bg-black opacity-100 z-[2000] hidden"></div>
+  <div id="screen-overlay"></div>
 
-  <!-- 2 nút bí mật -->
-  <button id="secret-left"
-          class="fixed bottom-3 left-3 w-12 h-12 rounded-full bg-transparent text-transparent opacity-0 select-none z-[2001]"
-          style="pointer-events:auto"></button>
+  <!-- Nút bí mật -->
+  <button id="back-btn-start" class="secret-btn" aria-label="hidden-back-start">◀</button>
+  <button id="back-btn-select" class="secret-btn" aria-label="hidden-back-select">▶</button>
 
-  <button id="secret-right"
-          class="fixed bottom-3 right-3 w-12 h-12 rounded-full bg-transparent text-transparent opacity-0 select-none z-[2001]"
-          style="pointer-events:auto"></button>
-
-  <!-- Scripts -->
-  <script src="./assets/js/redirect.js?v=2.1"></script>
-
-  <!-- Firebase -->
+  <!-- Script -->
+  <script src="./assets/js/redirect.js?v=fullsafe"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-
-  <!-- Blackout -->
-  <script src="./assets/js/blackout.js?v=2.1"></script>
+  <script src="./assets/js/blackout.js?v=fullsafe"></script>
 
   <!-- Service Worker -->
   <script>
