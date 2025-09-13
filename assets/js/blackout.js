@@ -21,6 +21,7 @@ function setOverlay(show) {
 
 let globalState = "on";
 let localState = "on";
+let perTableInit = false;
 
 function resetToStart() {
   document.getElementById("pos-container").classList.add("hidden");
@@ -47,12 +48,12 @@ firebase.auth().signInAnonymously()
       }
     }
 
-    // Nghe riêng từng bàn
-    function initPerTableListener() {
-      const tableId = window.tableId || localStorage.getItem("tableId");
-      if (!tableId) return;
+    // Gắn listener cho bàn cụ thể
+    function initPerTableListener(tableId) {
+      if (perTableInit || !tableId) return;
+      perTableInit = true;
 
-      // Điều khiển riêng
+      // Điều khiển riêng từng bàn
       db.ref(`control/tables/${tableId}/screen`).on("value", snap => {
         localState = (snap.val() || "on").toLowerCase();
         updateOverlay();
@@ -68,12 +69,16 @@ firebase.auth().signInAnonymously()
       });
     }
 
-    // Khi vừa login xong thì lắng nghe ngay nếu đã chọn bàn
-    initPerTableListener();
+    // Nếu đã có bàn lưu sẵn
+    const savedId = window.tableId || localStorage.getItem("tableId");
+    if (savedId) initPerTableListener(savedId);
 
-    // Nếu chọn bàn sau đó mới biết tableId → bắt sự kiện lưu
-    window.addEventListener("storage", () => initPerTableListener());
+    // Khi chọn bàn mới thì phát sự kiện
+    window.addEventListener("tableSelected", (e) => {
+      const tid = e.detail;
+      if (tid) initPerTableListener(tid);
+    });
   })
   .catch(() => {
-    setOverlay(false); // fallback: không chặn nếu login lỗi
+    setOverlay(false); // fallback nếu login lỗi
   });
