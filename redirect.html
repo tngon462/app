@@ -3,10 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <title>T-NGON - Gọi món</title>
+
+  <!-- Viewport & PWA meta -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#3b82f6" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
+  <!-- Manifest & icon -->
   <link rel="manifest" href="./redirect.webmanifest" />
   <link rel="icon" href="./icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
 
   <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -66,7 +74,7 @@
           style="pointer-events:auto"></button>
 
   <!-- Scripts -->
-  <script src="./assets/js/redirect.js?v=2.0"></script>
+  <script src="./assets/js/redirect.js?v=2.1"></script>
 
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -74,7 +82,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
   <!-- Blackout -->
-  <script src="./assets/js/blackout.js?v=2.0"></script>
+  <script src="./assets/js/blackout.js?v=2.1"></script>
 
   <!-- Service Worker -->
   <script>
