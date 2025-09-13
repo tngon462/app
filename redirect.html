@@ -72,9 +72,15 @@
   <!-- Màn đen -->
   <div id="screen-overlay"></div>
 
-  <!-- Nút bí mật (ẩn, to gấp 3, cho phép click xuyên qua) -->
-  <div id="back-btn"
+  <!-- Nút bí mật trái dưới (ẩn, về màn bắt đầu) -->
+  <div id="secret-left"
        class="fixed bottom-5 left-0 w-24 h-24 z-[2000] opacity-0 select-none"
+       style="pointer-events: auto;">
+  </div>
+
+  <!-- Nút bí mật phải dưới (ẩn, về màn chọn bàn - cần pass) -->
+  <div id="secret-right"
+       class="fixed bottom-5 right-0 w-24 h-24 z-[2000] opacity-0 select-none"
        style="pointer-events: auto;">
   </div>
 
@@ -90,35 +96,76 @@
   <!-- Script nút bí mật -->
   <script>
     (function() {
-      const backBtn = document.getElementById("back-btn");
-      let clickTimes = [];
+      const leftBtn = document.getElementById("secret-left");
+      const rightBtn = document.getElementById("secret-right");
+      const passPopup = document.getElementById("password-popup");
+      const passInput = document.getElementById("password-input");
+      const passOk = document.getElementById("password-ok");
+      const passCancel = document.getElementById("password-cancel");
+      const passError = document.getElementById("password-error");
 
-      backBtn.addEventListener("click", (e) => {
+      let leftClicks = [];
+      let rightClicks = [];
+
+      // Hàm reset UI
+      function showStart() {
+        document.getElementById("pos-container").classList.add("hidden");
+        document.getElementById("select-table").classList.add("hidden");
+        document.getElementById("start-screen").classList.remove("hidden");
+      }
+
+      function showSelect() {
+        document.getElementById("pos-container").classList.add("hidden");
+        document.getElementById("start-screen").classList.add("hidden");
+        document.getElementById("select-table").classList.remove("hidden");
+      }
+
+      // Xử lý bấm 10 lần bên trái -> về màn bắt đầu
+      leftBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         e.preventDefault();
 
         const now = Date.now();
-        clickTimes.push(now);
+        leftClicks.push(now);
+        leftClicks = leftClicks.filter(t => now - t <= 3000);
 
-        // Chỉ giữ click trong 3s gần nhất
-        clickTimes = clickTimes.filter(t => now - t <= 3000);
-
-        const count3s = clickTimes.filter(t => now - t <= 3000).length;
-        const count2s = clickTimes.filter(t => now - t <= 2000).length;
-
-        if (count3s >= 10) {
-          // Quay lại chọn bàn
-          document.getElementById("pos-container").classList.add("hidden");
-          document.getElementById("start-screen").classList.add("hidden");
-          document.getElementById("select-table").classList.remove("hidden");
-          clickTimes = [];
-        } else if (count2s >= 5) {
-          // Quay lại màn bắt đầu
-          document.getElementById("pos-container").classList.add("hidden");
-          document.getElementById("select-table").classList.add("hidden");
-          document.getElementById("start-screen").classList.remove("hidden");
-          clickTimes = [];
+        if (leftClicks.length >= 10) {
+          showStart();
+          leftClicks = [];
         }
+      });
+
+      // Xử lý bấm 10 lần bên phải -> hiện nhập mật mã
+      rightBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+
+        const now = Date.now();
+        rightClicks.push(now);
+        rightClicks = rightClicks.filter(t => now - t <= 3000);
+
+        if (rightClicks.length >= 10) {
+          // Hiện popup pass
+          passPopup.classList.remove("hidden");
+          passInput.value = "";
+          passError.classList.add("hidden");
+          passInput.focus();
+          rightClicks = [];
+        }
+      });
+
+      // Xác nhận pass
+      passOk.addEventListener("click", () => {
+        if (passInput.value === "6868") {
+          passPopup.classList.add("hidden");
+          showSelect();
+        } else {
+          passError.classList.remove("hidden");
+        }
+      });
+
+      passCancel.addEventListener("click", () => {
+        passPopup.classList.add("hidden");
       });
     })();
   </script>
