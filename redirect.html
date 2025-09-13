@@ -72,10 +72,11 @@
   <!-- Màn đen -->
   <div id="screen-overlay"></div>
 
-  <!-- Nút bí mật (ẩn hoàn toàn nhưng vẫn bấm được) -->
-  <button id="back-btn"
-          class="fixed bottom-5 left-0 w-8 h-8 rounded-full bg-transparent text-transparent opacity-0 select-none z-[2000] focus:outline-none"
-          aria-label="hidden-back">◀</button>
+  <!-- Nút bí mật (ẩn, to gấp 3, cho phép click xuyên qua) -->
+  <div id="back-btn"
+       class="fixed bottom-5 left-0 w-24 h-24 z-[2000] opacity-0 select-none"
+       style="pointer-events: auto;">
+  </div>
 
   <!-- Logic chính -->
   <script src="./assets/js/redirect.js?v=grid3"></script>
@@ -85,6 +86,42 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
   <script src="./assets/js/blackout.js?v=4"></script>
+
+  <!-- Script nút bí mật -->
+  <script>
+    (function() {
+      const backBtn = document.getElementById("back-btn");
+      let clickTimes = [];
+
+      backBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+
+        const now = Date.now();
+        clickTimes.push(now);
+
+        // Chỉ giữ click trong 3s gần nhất
+        clickTimes = clickTimes.filter(t => now - t <= 3000);
+
+        const count3s = clickTimes.filter(t => now - t <= 3000).length;
+        const count2s = clickTimes.filter(t => now - t <= 2000).length;
+
+        if (count3s >= 10) {
+          // Quay lại chọn bàn
+          document.getElementById("pos-container").classList.add("hidden");
+          document.getElementById("start-screen").classList.add("hidden");
+          document.getElementById("select-table").classList.remove("hidden");
+          clickTimes = [];
+        } else if (count2s >= 5) {
+          // Quay lại màn bắt đầu
+          document.getElementById("pos-container").classList.add("hidden");
+          document.getElementById("select-table").classList.add("hidden");
+          document.getElementById("start-screen").classList.remove("hidden");
+          clickTimes = [];
+        }
+      });
+    })();
+  </script>
 
   <!-- Service Worker -->
   <script>
