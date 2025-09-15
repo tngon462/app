@@ -1,8 +1,9 @@
 document.addEventListener("DOMContentLoaded", async () => {
   try {
-    // Load danh sách link bàn từ links.json
+    // Load links.json
     const res = await fetch("./links.json");
-    const links = await res.json();
+    const data = await res.json();
+    const links = data.links || {}; // ✅ đọc đúng key "links"
 
     const container = document.getElementById("table-container");
 
@@ -11,25 +12,22 @@ document.addEventListener("DOMContentLoaded", async () => {
       const btn = document.createElement("button");
       btn.textContent = "Bàn " + key;
 
-      // Style theo Tailwind
       btn.className =
         "px-6 py-4 rounded-lg bg-blue-500 text-white font-bold hover:bg-blue-600 shadow text-2xl w-32 h-24 flex items-center justify-center";
 
-      // Khi click → sang màn start screen
       btn.addEventListener("click", () => {
         document.getElementById("select-table").classList.add("hidden");
         document.getElementById("start-screen").classList.remove("hidden");
         document.getElementById("selected-table").textContent = key;
 
-        // Lưu link & tableId
+        // Lưu tableId + link
         localStorage.setItem("tableId", key);
         window.tableId = key;
-
         document
           .getElementById("start-order")
           .setAttribute("data-url", links[key]);
 
-        // Phát sự kiện để blackout.js bắt được
+        // Thông báo cho blackout.js
         window.dispatchEvent(new Event("tableSelected"));
       });
 
@@ -51,14 +49,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     const backStartBtn = document.getElementById("back-btn-start");
     const backSelectBtn = document.getElementById("back-btn-select");
 
-    // reset về start
     setupSecretButton(backStartBtn, () => {
       document.getElementById("pos-container").classList.add("hidden");
       document.getElementById("pos-frame").src = "about:blank";
       document.getElementById("start-screen").classList.remove("hidden");
     });
 
-    // reset về chọn bàn (cần mật khẩu)
     setupSecretButton(backSelectBtn, () => {
       showPasswordPopup(() => {
         document.getElementById("pos-container").classList.add("hidden");
