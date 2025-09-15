@@ -3,9 +3,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Load links.json
     const res = await fetch("./links.json");
     const data = await res.json();
-    const links = data.links || {}; // ✅ đọc đúng key "links"
+    const links = data.links || {};
 
     const container = document.getElementById("table-container");
+    const selectTable = document.getElementById("select-table");
+    const startScreen = document.getElementById("start-screen");
+    const posContainer = document.getElementById("pos-container");
+    const posFrame = document.getElementById("pos-frame");
+
+    // Luôn reset về màn chọn bàn khi load
+    localStorage.removeItem("tableId");
+    window.tableId = null;
+    selectTable.classList.remove("hidden");
+    startScreen.classList.add("hidden");
+    posContainer.classList.add("hidden");
+    posFrame.src = "about:blank";
 
     // Tạo nút cho từng bàn
     Object.keys(links).forEach((key) => {
@@ -16,8 +28,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         "px-6 py-4 rounded-lg bg-blue-500 text-white font-bold hover:bg-blue-600 shadow text-2xl w-32 h-24 flex items-center justify-center";
 
       btn.addEventListener("click", () => {
-        document.getElementById("select-table").classList.add("hidden");
-        document.getElementById("start-screen").classList.remove("hidden");
+        selectTable.classList.add("hidden");
+        startScreen.classList.remove("hidden");
         document.getElementById("selected-table").textContent = key;
 
         // Lưu tableId + link
@@ -40,9 +52,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       const url = e.target.getAttribute("data-url");
       if (!url) return;
 
-      document.getElementById("start-screen").classList.add("hidden");
-      document.getElementById("pos-container").classList.remove("hidden");
-      document.getElementById("pos-frame").src = url;
+      startScreen.classList.add("hidden");
+      posContainer.classList.remove("hidden");
+      posFrame.src = url;
     });
 
     // ===== Nút bí mật =====
@@ -50,18 +62,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     const backSelectBtn = document.getElementById("back-btn-select");
 
     setupSecretButton(backStartBtn, () => {
-      document.getElementById("pos-container").classList.add("hidden");
-      document.getElementById("pos-frame").src = "about:blank";
-      document.getElementById("start-screen").classList.remove("hidden");
+      posContainer.classList.add("hidden");
+      posFrame.src = "about:blank";
+      startScreen.classList.remove("hidden");
     });
 
     setupSecretButton(backSelectBtn, () => {
       showPasswordPopup(() => {
-        document.getElementById("pos-container").classList.add("hidden");
-        document.getElementById("pos-frame").src = "about:blank";
-        document.getElementById("start-screen").classList.add("hidden");
-        document.getElementById("select-table").classList.remove("hidden");
+        posContainer.classList.add("hidden");
+        posFrame.src = "about:blank";
+        startScreen.classList.add("hidden");
+        selectTable.classList.remove("hidden");
         localStorage.removeItem("tableId");
+        window.tableId = null;
       });
     });
 
