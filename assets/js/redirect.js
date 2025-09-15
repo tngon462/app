@@ -1,7 +1,8 @@
 document.addEventListener("DOMContentLoaded", async () => {
   try {
-    // Load links.json
-    const res = await fetch("./links.json");
+    // ===== Load links.json (có cache-bust) =====
+    const res = await fetch("./links.json?cb=" + Date.now());
+    if (!res.ok) throw new Error("Không tải được links.json");
     const data = await res.json();
     const links = data.links || {};
 
@@ -19,13 +20,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     posContainer.classList.add("hidden");
     posFrame.src = "about:blank";
 
-    // Tạo nút cho từng bàn
+    // Nếu không có bàn nào → báo lỗi
+    if (!Object.keys(links).length) {
+      container.innerHTML =
+        "<p class='text-red-500'>Không tìm thấy bàn nào trong links.json</p>";
+      return;
+    }
+
+    // ===== Tạo nút cho từng bàn =====
     Object.keys(links).forEach((key) => {
       const btn = document.createElement("button");
       btn.textContent = "Bàn " + key;
 
       btn.className =
-        "px-6 py-4 rounded-lg bg-blue-500 text-white font-bold hover:bg-blue-600 shadow text-2xl w-32 h-24 flex items-center justify-center";
+        "px-6 py-4 rounded-lg bg-blue-500 text-white font-bold hover:bg-blue-600 " +
+        "shadow text-2xl w-32 h-24 flex items-center justify-center";
 
       btn.addEventListener("click", () => {
         selectTable.classList.add("hidden");
@@ -39,14 +48,14 @@ document.addEventListener("DOMContentLoaded", async () => {
           .getElementById("start-order")
           .setAttribute("data-url", links[key]);
 
-        // Thông báo cho blackout.js
+        // Gửi sự kiện cho blackout.js
         window.dispatchEvent(new Event("tableSelected"));
       });
 
       container.appendChild(btn);
     });
 
-    // Nút bắt đầu gọi món
+    // ===== Nút bắt đầu gọi món =====
     const startBtn = document.getElementById("start-order");
     startBtn.addEventListener("click", (e) => {
       const url = e.target.getAttribute("data-url");
@@ -78,11 +87,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       });
     });
 
+    // ===== Helper: nhiều click nhanh =====
     function setupSecretButton(btn, callback) {
       let clicks = [];
       btn.addEventListener("click", () => {
         const now = Date.now();
-        clicks = clicks.filter((t) => now - t < 3000);
+        clicks = clicks.filter((t) => now - t < 3000); // trong 3s
         clicks.push(now);
         if (clicks.length >= 10) {
           clicks = [];
@@ -91,7 +101,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       });
     }
 
-    // Popup nhập mật mã
+    // ===== Popup nhập mật mã =====
     function showPasswordPopup(onSuccess) {
       const popup = document.getElementById("password-popup");
       const input = document.getElementById("password-input");
@@ -127,5 +137,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   } catch (err) {
     console.error("Lỗi khi load links.json:", err);
+    document.getElementById("table-container").innerHTML =
+      "<p class='text-red-500'>Không load được danh sách bàn</p>";
   }
 });
