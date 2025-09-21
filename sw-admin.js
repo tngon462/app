@@ -1,41 +1,60 @@
-const CACHE_NAME = 'tngon-qr-v2';
-const CORE_ASSETS = [
-  './',
-  './redirect.html',
-  './admin.html',
-  './assets/js/redirect.js',
-  './redirect.webmanifest',
-  './admin.webmanifest',
- // './links.json'
+const CACHE_NAME = "tngon-admin-v1";
+const CACHE_ASSETS = [
+  "./",
+  "./index.html",
+  "./redirect.html",
+  "./assets/js/redirect.js",
+  "./assets/js/blackout.js",
+  "./icons/icon-192.png",
+  "./icons/icon-72.png",
+  "./icons/icon-512.png",
+  "./redirect.webmanifest",
+  "./admin.webmanifest"
 ];
 
-self.addEventListener('install', (e) => {
+// Cài đặt service worker
+self.addEventListener("install", (e) => {
   e.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((c) => c.addAll(CORE_ASSETS))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(CACHE_ASSETS);
+    })
   );
 });
 
-self.addEventListener('activate', (e) => {
+// Kích hoạt và dọn cache cũ
+self.addEventListener("activate", (e) => {
   e.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches.keys().then((names) =>
+      Promise.all(
+        names.map((name) => {
+          if (name !== CACHE_NAME) {
+            return caches.delete(name);
+          }
+        })
+      )
+    )
   );
 });
 
-self.addEventListener('fetch', (e) => {
-  const req = e.request;
-  // Cache-first cho core assets
-  if (CORE_ASSETS.some((path) => req.url.includes(path.replace('./','')))) {
-    e.respondWith(
-      caches.match(req).then((res) => res || fetch(req))
-    );
-  } else {
-    // Network-first fallback to cache
-    e.respondWith(
-      fetch(req).catch(() => caches.match(req))
-    );
+// Fetch
+self.addEventListener("fetch", (e) => {
+  const url = new URL(e.request.url);
+
+  // ❌ Không cache links.json → luôn lấy mới từ server
+  if (url.pathname.endsWith("/links.json")) {
+    e.respondWith(fetch(e.request));
+    return;
   }
+
+  // Cache first, fallback network
+  e.respondWith(
+    caches.match(e.request).then((res) => {
+      return (
+        res ||
+        fetch(e.request).catch(() =>
+          new Response("Offline", { status: 503, statusText: "Offline" })
+        )
+      );
+    })
+  );
 });
