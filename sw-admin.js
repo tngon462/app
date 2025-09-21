@@ -6,7 +6,7 @@ const CORE_ASSETS = [
   './assets/js/redirect.js',
   './redirect.webmanifest',
   './admin.webmanifest',
-  './links.json'
+ // './links.json'
 ];
 
 self.addEventListener('install', (e) => {
