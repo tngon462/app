@@ -9,7 +9,7 @@ const firebaseConfig = {
   appId: "1:580319242104:web:6922e4327bdc8286c30a8d"
 };
 
-// Init Firebase
+// ===== Init Firebase =====
 if (!firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
 }
@@ -22,13 +22,14 @@ function setOverlay(show) {
 let globalState = "on";
 let localState = "on";
 
-// Reset về màn bắt đầu
+// Reset về màn hình bắt đầu
 function resetToStart() {
   document.getElementById("pos-container").classList.add("hidden");
   document.getElementById("pos-frame").src = "about:blank";
   document.getElementById("start-screen").classList.remove("hidden");
 }
 
+// ===== Firebase login & listeners =====
 firebase.auth().signInAnonymously()
   .then(() => {
     const db = firebase.database();
@@ -47,6 +48,7 @@ firebase.auth().signInAnonymously()
       }
     }
 
+    // Lắng nghe riêng từng bàn
     function initPerTableListener() {
       const tableId = window.tableId || localStorage.getItem("tableId");
       if (!tableId) return;
@@ -63,18 +65,18 @@ firebase.auth().signInAnonymously()
         const val = snap.val();
         if (val.status === "expired") {
           resetToStart();
+          // clear lại trạng thái để không lặp
+          db.ref(`signals/${tableId}`).set(null).catch(() => {});
         }
       });
     }
 
-    // Ngay sau login
+    // Khi vừa login xong thì lắng nghe ngay nếu đã chọn bàn
     initPerTableListener();
 
-    // Khi chọn bàn sau đó
-    window.addEventListener("tableSelected", () => {
-      initPerTableListener();
-    });
+    // Nếu chọn bàn sau đó mới biết tableId → bắt sự kiện lưu
+    window.addEventListener("storage", () => initPerTableListener());
   })
   .catch(() => {
-    setOverlay(false); // fallback
+    setOverlay(false); // fallback: không chặn nếu login lỗi
   });
