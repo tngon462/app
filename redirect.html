@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <title>T-NGON - Gọi món</title>
-<meta name="viewport" 
-      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#3b82f6" />
 
   <!-- PWA -->
@@ -23,7 +23,6 @@
       height: 100%;
       background: #f3f4f6;
     }
-    /* Safe-area hỗ trợ iOS tai thỏ */
     body {
       padding-top: env(safe-area-inset-top);
       padding-left: env(safe-area-inset-left);
@@ -36,9 +35,9 @@
       background: #000;
       opacity: 1;
       z-index: 2000;
-      display: none; /* mặc định ẩn */
+      display: none;
     }
-    /* Nút bí mật (chạm xuyên qua) */
+    /* Nút bí mật */
     .secret-btn {
       position: fixed;
       bottom: 6px;
@@ -48,7 +47,8 @@
       color: transparent;
       opacity: 0;
       z-index: 2100;
-      pointer-events: auto; /* vẫn bấm được */
+      pointer-events: auto;
+      display: none; /* mặc định ẩn */
     }
     .secret-btn:focus { outline: none; }
     #back-btn-start { left: 6px; }
@@ -87,7 +87,7 @@
       <h3 class="text-lg font-semibold mb-4">Nhập mật mã</h3>
       <input id="password-input" type="password" maxlength="4"
              class="border p-2 rounded text-center tracking-widest text-xl"
-             placeholder="****" inputmode="numeric" />
+             placeholder="****" inputmode="numeric" pattern="[0-9]*" />
       <div class="mt-4 flex justify-center space-x-4">
         <button id="password-ok" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">OK</button>
         <button id="password-cancel" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Hủy</button>
@@ -104,11 +104,11 @@
   <button id="back-btn-select" class="secret-btn" aria-label="hidden-back-select">▶</button>
 
   <!-- Script -->
-  <script src="./assets/js/redirect.js?v=fullsafe"></script>
+  <script src="./assets/js/redirect.js?v=secretexit"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-  <script src="./assets/js/blackout.js?v=fullsafe"></script>
+  <script src="./assets/js/blackout.js?v=secretexit"></script>
 
   <!-- Service Worker -->
   <script>
