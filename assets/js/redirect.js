@@ -1,7 +1,9 @@
 document.addEventListener("DOMContentLoaded", async () => {
   try {
-    // Load links.json
-    const res = await fetch("./links.json?_=" + Date.now());
+    // ===== Load links.json không cache =====
+    const res = await fetch("./links.json?cb=" + Date.now(), {
+      cache: "no-store"
+    });
     const data = await res.json();
     const links = data.links || {};
 
