@@ -55,11 +55,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     const passwordCancel = document.getElementById("password-cancel");
     const passwordError = document.getElementById("password-error");
 
-    function openPasswordPopup() {
+    function openPasswordPopup(e) {
       passwordPopup.classList.remove("hidden");
       passwordInput.value = "";
       passwordError.classList.add("hidden");
-      setTimeout(() => passwordInput.focus(), 100); // đảm bảo focus iPad
+
+      // ⚡ focus ngay trong sự kiện click cuối cùng
+      passwordInput.focus();
     }
     function closePasswordPopup() {
       passwordPopup.classList.add("hidden");
@@ -110,7 +112,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function setupSecretButton(btn, callback) {
       let count = 0;
       let timer = null;
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (e) => {
         if (!timer) {
           timer = setTimeout(() => {
             count = 0;
@@ -122,13 +124,13 @@ document.addEventListener("DOMContentLoaded", async () => {
           clearTimeout(timer);
           timer = null;
           count = 0;
-          callback();
+          callback(e); // truyền event click cuối
         }
       });
     }
 
-    setupSecretButton(backBtnStart, goToStart);
-    setupSecretButton(backBtnSelect, openPasswordPopup);
+    setupSecretButton(backBtnStart, () => goToStart());
+    setupSecretButton(backBtnSelect, (e) => openPasswordPopup(e));
 
     // khi load trang, chỉ hiển thị màn chọn bàn
     showSecretButtons(false);
