@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <title>T-NGON - Gọi món</title>
+
+  <!-- Viewport chống zoom + safe-area cho iOS -->
   <meta name="viewport"
         content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#3b82f6" />
@@ -48,7 +50,6 @@
       opacity: 0;
       z-index: 2100;
       pointer-events: auto;
-      display: none; /* mặc định ẩn */
     }
     .secret-btn:focus { outline: none; }
     #back-btn-start { left: 6px; }
@@ -87,7 +88,7 @@
       <h3 class="text-lg font-semibold mb-4">Nhập mật mã</h3>
       <input id="password-input" type="password" maxlength="4"
              class="border p-2 rounded text-center tracking-widest text-xl"
-             placeholder="****" inputmode="numeric" pattern="[0-9]*" />
+             placeholder="****" inputmode="numeric" />
       <div class="mt-4 flex justify-center space-x-4">
         <button id="password-ok" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">OK</button>
         <button id="password-cancel" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Hủy</button>
@@ -103,17 +104,17 @@
   <button id="back-btn-start" class="secret-btn" aria-label="hidden-back-start">◀</button>
   <button id="back-btn-select" class="secret-btn" aria-label="hidden-back-select">▶</button>
 
-  <!-- Script -->
-  <script src="./assets/js/redirect.js?v=secretexit"></script>
+  <!-- Scripts -->
+  <script src="./assets/js/redirect.js?v=noscale"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-  <script src="./assets/js/blackout.js?v=secretexit"></script>
+  <script src="./assets/js/blackout.js?v=noscale"></script>
 
   <!-- Service Worker -->
   <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw-admin.js', { scope: './' })
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./sw-admin.js", { scope: "./" })
         .catch(console.error);
     }
   </script>
