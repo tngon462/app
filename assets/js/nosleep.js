@@ -14,11 +14,11 @@ function enableWake() {
     nosleepVideo.style.position = 'fixed';
     nosleepVideo.style.bottom = '0';
     nosleepVideo.style.left = '0';
+    // TODO: thay src = file mp4 silent loop ngắn trong /assets/video/
     nosleepVideo.src = "data:video/mp4;base64,AAAA..."; 
-    // TODO: thay bằng 1 file mp4 siêu ngắn (1s silent) trong /assets/video nếu cần
     document.body.appendChild(nosleepVideo);
     nosleepVideo.play().catch(e => console.log("NoSleep play error:", e));
-    console.log("[NoSleep] Wake mode bật");
+    console.log("[NoSleep] Wake bật");
   }
 }
 
@@ -27,22 +27,16 @@ function disableWake() {
     try {
       nosleepVideo.pause();
       nosleepVideo.remove();
-    } catch (e) { console.log(e); }
+    } catch (e) {}
     nosleepVideo = null;
-    console.log("[NoSleep] Sleep mode bật (trở về Auto-Lock hệ thống)");
+    console.log("[NoSleep] Sleep bật (theo Auto-Lock hệ thống)");
   }
 }
 
-// Lắng nghe lệnh từ admin (giống blackout.js)
 function handleNoSleepCommand(cmd) {
-  if (cmd === "wake") {
-    enableWake();
-  } else if (cmd === "sleep") {
-    disableWake();
+  if (cmd === "blackout_on") {
+    disableWake(); // Khi tắt màn hình giả → cho phép sleep
+  } else if (cmd === "blackout_off") {
+    enableWake();  // Khi mở màn hình lại → giữ sáng
   }
 }
-
-// Ví dụ: nếu admin push lệnh qua Firebase/WebSocket
-// firebase.database().ref("nosleep").on("value", snap => {
-//   handleNoSleepCommand(snap.val());
-// });
