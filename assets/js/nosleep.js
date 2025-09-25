@@ -5,20 +5,30 @@ function enableWake() {
   if (!nosleepVideo) {
     nosleepVideo = document.createElement('video');
     nosleepVideo.setAttribute('playsinline', '');
-    nosleepVideo.muted = true;
+    nosleepVideo.setAttribute('webkit-playsinline', '');
+    nosleepVideo.muted = true;          // tắt tiếng
     nosleepVideo.loop = true;
     nosleepVideo.autoplay = true;
-    nosleepVideo.style.width = '1px';
-    nosleepVideo.style.height = '1px';
-    nosleepVideo.style.opacity = '0';
+    nosleepVideo.controls = true;       // hiện control để sếp dễ thấy khi test
+    nosleepVideo.style.width = '320px'; // hiện rõ
+    nosleepVideo.style.height = '180px';
     nosleepVideo.style.position = 'fixed';
-    nosleepVideo.style.bottom = '0';
-    nosleepVideo.style.left = '0';
-    // TODO: thay src = file mp4 silent loop ngắn trong /assets/video/
-    nosleepVideo.src = "data:video/mp4;base64,AAAA..."; 
+    nosleepVideo.style.bottom = '10px';
+    nosleepVideo.style.right = '10px';
+    nosleepVideo.style.zIndex = '9999';
+
+    // Video thật để test (sếp đặt file test.mp4 trong thư mục assets/video/)
+    nosleepVideo.src = "./assets/video/test.mp4";
+
     document.body.appendChild(nosleepVideo);
-    nosleepVideo.play().catch(e => console.log("NoSleep play error:", e));
-    console.log("[NoSleep] Wake bật");
+
+    nosleepVideo.play().then(() => {
+      console.log("[NoSleep] Wake mode: video đang phát, iPad sẽ KHÔNG sleep");
+    }).catch(err => {
+      console.log("[NoSleep] Lỗi khi phát video:", err);
+    });
+  } else {
+    console.log("[NoSleep] Wake mode đã bật rồi");
   }
 }
 
@@ -27,16 +37,33 @@ function disableWake() {
     try {
       nosleepVideo.pause();
       nosleepVideo.remove();
-    } catch (e) {}
+      console.log("[NoSleep] Sleep mode: video dừng, iPad sẽ auto-lock theo cài đặt (2 phút)");
+    } catch (e) {
+      console.log("[NoSleep] Lỗi khi dừng video:", e);
+    }
     nosleepVideo = null;
-    console.log("[NoSleep] Sleep bật (theo Auto-Lock hệ thống)");
+  } else {
+    console.log("[NoSleep] Sleep mode đã bật (không có video)");
   }
 }
 
-function handleNoSleepCommand(cmd) {
-  if (cmd === "blackout_on") {
-    disableWake(); // Khi tắt màn hình giả → cho phép sleep
-  } else if (cmd === "blackout_off") {
-    enableWake();  // Khi mở màn hình lại → giữ sáng
+function scheduleNoSleep() {
+  const now = new Date();
+  const hour = now.getHours();
+
+  if (hour >= 10 && hour < 22) {
+    console.log("[NoSleep] Giờ hiện tại:", hour, "→ Bật Wake mode (luôn sáng)");
+    enableWake();
+  } else {
+    console.log("[NoSleep] Giờ hiện tại:", hour, "→ Bật Sleep mode (theo Auto-Lock)");
+    disableWake();
   }
+
+  // Kiểm tra lại sau 5 phút
+  setTimeout(scheduleNoSleep, 5 * 60 * 1000);
 }
+
+document.addEventListener("DOMContentLoaded", () => {
+  console.log("[NoSleep] Khởi động nosleep.js (bản test video thật)");
+  scheduleNoSleep();
+});
