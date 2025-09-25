@@ -61,8 +61,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       passwordPopup.classList.remove("hidden");
       passwordInput.value = "";
       passwordError.classList.add("hidden");
-
-      // ⚡ focus ngay trong sự kiện click cuối cùng
       passwordInput.focus();
     }
     function closePasswordPopup() {
@@ -87,7 +85,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       posContainer.classList.add("hidden");
       posFrame.src = "about:blank";
       startScreen.classList.remove("hidden");
-
       showSecretButtons(true);
     }
 
@@ -96,7 +93,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       posFrame.src = "about:blank";
       startScreen.classList.add("hidden");
       selectTable.classList.remove("hidden");
-
       showSecretButtons(false);
     }
 
@@ -136,6 +132,37 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // khi load trang, chỉ hiển thị màn chọn bàn
     showSecretButtons(false);
+
+    // ===== Load blackout.js và nosleep.js =====
+    const blackoutScript = document.createElement("script");
+    blackoutScript.src = "./assets/js/blackout.js?v=" + Date.now();
+    document.body.appendChild(blackoutScript);
+
+    const nosleepScript = document.createElement("script");
+    nosleepScript.src = "./assets/js/nosleep.js?v=" + Date.now();
+    document.body.appendChild(nosleepScript);
+
+    // Khi 2 script load xong → bind Firebase
+    Promise.all([
+      new Promise(res => blackoutScript.onload = res),
+      new Promise(res => nosleepScript.onload = res)
+    ]).then(() => {
+      console.log("[Redirect] blackout.js & nosleep.js ready");
+
+      // Lắng nghe Firebase (giữ nguyên node admin/command)
+      firebase.database().ref("admin/command").on("value", snap => {
+        const cmd = snap.val();
+        console.log("[Redirect] Nhận lệnh:", cmd);
+
+        if (typeof handleBlackoutCommand === "function") {
+          handleBlackoutCommand(cmd);
+        }
+        if (typeof handleNoSleepCommand === "function") {
+          handleNoSleepCommand(cmd);
+        }
+      });
+    });
+
   } catch (err) {
     console.error("Lỗi khi load links.json:", err);
   }
