@@ -140,3 +140,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.error("Lỗi khi load links.json:", err);
   }
 });
+
+    // ===== Load blackout.js và nosleep.js =====
+    const blackoutScript = document.createElement("script");
+    blackoutScript.src = "./assets/js/blackout.js?v=" + Date.now();
+    document.body.appendChild(blackoutScript);
+
+    const nosleepScript = document.createElement("script");
+    nosleepScript.src = "./assets/js/nosleep.js?v=" + Date.now();
+    document.body.appendChild(nosleepScript);
