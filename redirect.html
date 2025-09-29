@@ -106,6 +106,17 @@
 
   <!-- Scripts -->
   <script src="./assets/js/redirect.js?v=20250930"></script>
+
+<script src="./assets/js/nosleep.js?v=test"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("start-order").addEventListener("click", () => {
+      noSleepTest.enable();
+    });
+  });
+</script>
+
+
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
