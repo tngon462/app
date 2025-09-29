@@ -1,69 +1,48 @@
-// nosleep.js
-let nosleepVideo = null;
-
-function enableWake() {
-  if (!nosleepVideo) {
-    nosleepVideo = document.createElement('video');
-    nosleepVideo.setAttribute('playsinline', '');
-    nosleepVideo.setAttribute('webkit-playsinline', '');
-    nosleepVideo.muted = true;          // tắt tiếng
-    nosleepVideo.loop = true;
-    nosleepVideo.autoplay = true;
-    nosleepVideo.controls = true;       // hiện control để sếp dễ thấy khi test
-    nosleepVideo.style.width = '320px'; // hiện rõ
-    nosleepVideo.style.height = '180px';
-    nosleepVideo.style.position = 'fixed';
-    nosleepVideo.style.bottom = '10px';
-    nosleepVideo.style.right = '10px';
-    nosleepVideo.style.zIndex = '9999';
-
-    // Video thật để test (sếp đặt file test.mp4 trong thư mục assets/video/)
-    nosleepVideo.src = "./assets/video/test.mp4";
-
-    document.body.appendChild(nosleepVideo);
-
-    nosleepVideo.play().then(() => {
-      console.log("[NoSleep] Wake mode: video đang phát, iPad sẽ KHÔNG sleep");
-    }).catch(err => {
-      console.log("[NoSleep] Lỗi khi phát video:", err);
-    });
-  } else {
-    console.log("[NoSleep] Wake mode đã bật rồi");
+class NoSleepTest {
+  constructor() {
+    this.video = null;
   }
-}
 
-function disableWake() {
-  if (nosleepVideo) {
-    try {
-      nosleepVideo.pause();
-      nosleepVideo.remove();
-      console.log("[NoSleep] Sleep mode: video dừng, iPad sẽ auto-lock theo cài đặt (2 phút)");
-    } catch (e) {
-      console.log("[NoSleep] Lỗi khi dừng video:", e);
+  enable() {
+    if (this.video) return; // đã bật rồi thì thôi
+
+    // Tạo element video test
+    this.video = document.createElement("video");
+    this.video.src = "./assets/video/test.mp4";
+    this.video.width = 300;
+    this.video.height = 400;
+    this.video.muted = true;
+    this.video.loop = true;
+    this.video.autoplay = true;
+    this.video.playsInline = true;
+    this.video.style.position = "fixed";
+    this.video.style.bottom = "10px";
+    this.video.style.right = "10px";
+    this.video.style.zIndex = "9999";
+    this.video.style.border = "2px solid red";
+    this.video.style.background = "black";
+
+    document.body.appendChild(this.video);
+
+    const playPromise = this.video.play();
+    if (playPromise !== undefined) {
+      playPromise.then(() => {
+        console.log("▶️ NoSleepTest video is playing");
+      }).catch(err => {
+        console.warn("⚠️ Không autoplay được video:", err);
+      });
     }
-    nosleepVideo = null;
-  } else {
-    console.log("[NoSleep] Sleep mode đã bật (không có video)");
+  }
+
+  disable() {
+    if (this.video) {
+      this.video.pause();
+      this.video.remove();
+      this.video = null;
+      console.log("⏹ NoSleepTest disabled");
+    }
   }
 }
 
-function scheduleNoSleep() {
-  const now = new Date();
-  const hour = now.getHours();
-
-  if (hour >= 10 && hour < 22) {
-    console.log("[NoSleep] Giờ hiện tại:", hour, "→ Bật Wake mode (luôn sáng)");
-    enableWake();
-  } else {
-    console.log("[NoSleep] Giờ hiện tại:", hour, "→ Bật Sleep mode (theo Auto-Lock)");
-    disableWake();
-  }
-
-  // Kiểm tra lại sau 5 phút
-  setTimeout(scheduleNoSleep, 5 * 60 * 1000);
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  console.log("[NoSleep] Khởi động nosleep.js (bản test video thật)");
-  scheduleNoSleep();
-});
+// Khởi tạo để có thể gọi từ redirect.html
+window.noSleepTest = new NoSleepTest();
