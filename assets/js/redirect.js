@@ -1,7 +1,6 @@
 document.addEventListener("DOMContentLoaded", async () => {
   try {
-    // ===== Load links.json =====
-    const res = await fetch("./links.json?cb=" + Date.now()); // tránh cache
+    const res = await fetch("./links.json?cb=" + Date.now());
     const data = await res.json();
     const links = data.links || {};
 
@@ -13,24 +12,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     const selectedTable = document.getElementById("selected-table");
     const startBtn = document.getElementById("start-order");
 
-    // ===== Tạo nút cho từng bàn =====
     Object.keys(links).forEach((key) => {
       const btn = document.createElement("button");
       btn.textContent = "Bàn " + key;
-
       btn.className =
         "px-6 py-4 rounded-lg bg-blue-500 text-white font-bold hover:bg-blue-600 " +
         "text-xl shadow w-full h-24 flex items-center justify-center";
 
       btn.addEventListener("click", () => {
-        // Ẩn màn chọn bàn, hiện màn bắt đầu
         selectTable.classList.add("hidden");
         startScreen.classList.remove("hidden");
-
         selectedTable.textContent = key;
         startBtn.setAttribute("data-url", links[key]);
-
-        // lưu tableId cho blackout.js dùng
         window.tableId = key;
         localStorage.setItem("tableId", key);
       });
@@ -38,17 +31,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       tableContainer.appendChild(btn);
     });
 
-    // ===== Nút bắt đầu gọi món =====
     startBtn.addEventListener("click", (e) => {
       const url = e.target.getAttribute("data-url");
       if (!url) return;
-
       startScreen.classList.add("hidden");
       posContainer.classList.remove("hidden");
       posFrame.src = url;
     });
 
-    // ===== Popup mật khẩu =====
+    // Popup mật mã
     const popup = document.getElementById("password-popup");
     const pwdInput = document.getElementById("password-input");
     const pwdOk = document.getElementById("password-ok");
@@ -59,7 +50,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       popup.classList.remove("hidden");
       pwdInput.value = "";
       pwdError.classList.add("hidden");
-      pwdInput.focus();
+      setTimeout(() => pwdInput.focus(), 100);
 
       pwdOk.onclick = () => {
         if (pwdInput.value === "6868") {
@@ -74,45 +65,35 @@ document.addEventListener("DOMContentLoaded", async () => {
       };
     }
 
-    // ===== Nút bí mật (multi-click detector) =====
     function setupSecretButton(id, action, requirePwd = false) {
       const btn = document.getElementById(id);
       let clicks = [];
       btn.addEventListener("click", () => {
         const now = Date.now();
-        clicks = clicks.filter((t) => now - t < 3000); // 3s
+        clicks = clicks.filter((t) => now - t < 3000);
         clicks.push(now);
 
         if (clicks.length >= 10) {
           clicks = [];
-          if (requirePwd) {
-            showPasswordPopup(action);
-          } else {
-            action();
-          }
+          if (requirePwd) showPasswordPopup(action);
+          else action();
         }
       });
     }
 
-    // Trái: về màn bắt đầu
     setupSecretButton("back-btn-start", () => {
       posContainer.classList.add("hidden");
       posFrame.src = "about:blank";
       startScreen.classList.remove("hidden");
     });
 
-    // Phải: về màn chọn bàn (có mật khẩu)
-    setupSecretButton(
-      "back-btn-select",
-      () => {
-        posContainer.classList.add("hidden");
-        posFrame.src = "about:blank";
-        startScreen.classList.add("hidden");
-        selectTable.classList.remove("hidden");
-        localStorage.removeItem("tableId");
-      },
-      true
-    );
+    setupSecretButton("back-btn-select", () => {
+      posContainer.classList.add("hidden");
+      posFrame.src = "about:blank";
+      startScreen.classList.add("hidden");
+      selectTable.classList.remove("hidden");
+      localStorage.removeItem("tableId");
+    }, true);
   } catch (err) {
     console.error("Lỗi khi load links.json:", err);
   }
