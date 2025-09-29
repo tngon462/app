@@ -3,8 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <title>T-NGON - Gọi món</title>
-
-  <!-- Viewport chống zoom + safe-area cho iOS -->
   <meta name="viewport"
         content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#3b82f6" />
@@ -25,21 +23,25 @@
       height: 100%;
       background: #f3f4f6;
     }
+
+    /* Safe-area hỗ trợ iOS tai thỏ */
     body {
       padding-top: env(safe-area-inset-top);
       padding-left: env(safe-area-inset-left);
       padding-right: env(safe-area-inset-right);
       padding-bottom: env(safe-area-inset-bottom);
     }
+
     #screen-overlay {
       position: fixed;
       inset: 0;
       background: #000;
       opacity: 1;
       z-index: 2000;
-      display: none;
+      display: none; /* mặc định ẩn */
     }
-    /* Nút bí mật */
+
+    /* Nút bí mật (chạm xuyên qua) */
     .secret-btn {
       position: fixed;
       bottom: 6px;
@@ -54,22 +56,27 @@
     .secret-btn:focus { outline: none; }
     #back-btn-start { left: 6px; }
     #back-btn-select { right: 6px; }
+
+    /* Scroll cho màn chọn bàn */
+    #select-table {
+      max-height: 100vh;
+      overflow-y: auto;
+    }
   </style>
 </head>
 <body class="flex flex-col items-center justify-center">
 
   <!-- Bước 1: Chọn bàn -->
-  <div id="select-table" class="flex flex-col items-center">
+  <div id="select-table" class="flex flex-col items-center w-full">
     <h1 class="text-3xl font-bold text-blue-600 mb-6">Vui lòng chọn bàn</h1>
     <div id="table-container"
-         class="grid justify-center gap-4
-                grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5
-                px-4">
+         class="grid gap-4 px-4 w-full
+                grid-cols-[repeat(auto-fit,minmax(6rem,1fr))]">
     </div>
   </div>
 
   <!-- Bước 2: Màn bắt đầu -->
-  <div id="start-screen" class="hidden flex flex-col items-center justify-center min-h-screen">
+  <div id="start-screen" class="hidden flex flex-col items-center justify-center min-h-screen safe-area">
     <h2 class="text-2xl font-semibold mb-6">Bàn <span id="selected-table"></span></h2>
     <button id="start-order"
             class="px-8 py-4 rounded-lg bg-blue-500 text-white font-bold hover:bg-blue-600 text-xl shadow">
@@ -104,30 +111,17 @@
   <button id="back-btn-start" class="secret-btn" aria-label="hidden-back-start">◀</button>
   <button id="back-btn-select" class="secret-btn" aria-label="hidden-back-select">▶</button>
 
-  <!-- Scripts -->
-  <script src="./assets/js/redirect.js?v=20250930"></script>
-
-<script src="./assets/js/nosleep.js?v=test"></script>
-<script>
-  document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById("start-order").addEventListener("click", () => {
-      noSleepTest.enable();
-    });
-  });
-</script>
-
-
+  <!-- Script -->
+  <script src="./assets/js/redirect.js?v=fullsafe"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-  <script src="./assets/js/blackout.js?v=20250930"></script>
-  <!-- Nếu cần chống sleep thì bật -->
-  <!-- <script src="./assets/js/nosleep.js?v=20250930"></script> -->
+  <script src="./assets/js/blackout.js?v=fullsafe"></script>
 
   <!-- Service Worker -->
   <script>
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./sw-admin.js", { scope: "./" })
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw-admin.js', { scope: './' })
         .catch(console.error);
     }
   </script>
