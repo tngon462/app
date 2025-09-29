@@ -1,35 +1,30 @@
-class NoSleepTest {
+class NoSleep {
   constructor() {
     this.video = null;
   }
 
   enable() {
-    if (this.video) return; // đã bật rồi thì thôi
+    if (this.video) return; // đã bật thì thôi
 
-    // Tạo element video test
+    // Tạo video siêu nhỏ, ẩn
     this.video = document.createElement("video");
-    this.video.src = "./assets/video/test.mp4";
-    this.video.width = 300;
-    this.video.height = 400;
+    this.video.src = "data:video/mp4;base64,AAAAIGZ0eXBpc29tAAAAAGlzb20yYXZjMQAAAAhmcmVlAAAAH21kYXQ=";
     this.video.muted = true;
     this.video.loop = true;
     this.video.autoplay = true;
     this.video.playsInline = true;
-    this.video.style.position = "fixed";
-    this.video.style.bottom = "10px";
-    this.video.style.right = "10px";
-    this.video.style.zIndex = "9999";
-    this.video.style.border = "2px solid red";
-    this.video.style.background = "black";
+    this.video.style.position = "absolute";
+    this.video.style.width = "1px";
+    this.video.style.height = "1px";
+    this.video.style.opacity = "0";
+    this.video.style.pointerEvents = "none";
 
     document.body.appendChild(this.video);
 
     const playPromise = this.video.play();
     if (playPromise !== undefined) {
-      playPromise.then(() => {
-        console.log("▶️ NoSleepTest video is playing");
-      }).catch(err => {
-        console.warn("⚠️ Không autoplay được video:", err);
+      playPromise.catch(err => {
+        console.warn("⚠️ Không autoplay được video NoSleep:", err);
       });
     }
   }
@@ -39,10 +34,8 @@ class NoSleepTest {
       this.video.pause();
       this.video.remove();
       this.video = null;
-      console.log("⏹ NoSleepTest disabled");
     }
   }
 }
 
-// Khởi tạo để có thể gọi từ redirect.html
-window.noSleepTest = new NoSleepTest();
+window.noSleep = new NoSleep();
