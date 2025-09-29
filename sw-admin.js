@@ -1,8 +1,7 @@
-const CACHE_NAME = "tngon-admin-v1";
+const CACHE_NAME = "tngon-admin-v3"; // tăng số mỗi lần sửa lớn
 const CACHE_ASSETS = [
   "./",
   "./index.html",
-  "./redirect.html",
   "./assets/js/redirect.js",
   "./assets/js/blackout.js",
   "./icons/icon-192.png",
@@ -36,23 +35,33 @@ self.addEventListener("activate", (e) => {
   );
 });
 
-// Fetch
+// Fetch handler
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
 
-  // ❌ Không cache links.json → luôn lấy mới từ server
+  // Luôn fetch bản mới của redirect.html
+  if (url.pathname.endsWith("/redirect.html")) {
+    e.respondWith(fetch(e.request).catch(() => caches.match("./redirect.html")));
+    return;
+  }
+
+  // Luôn fetch mới links.json (không cache)
   if (url.pathname.endsWith("/links.json")) {
     e.respondWith(fetch(e.request));
     return;
   }
 
-  // Cache first, fallback network
+  // Cache-first cho các file khác
   e.respondWith(
     caches.match(e.request).then((res) => {
       return (
         res ||
-        fetch(e.request).catch(() =>
-          new Response("Offline", { status: 503, statusText: "Offline" })
+        fetch(e.request).catch(
+          () =>
+            new Response("Offline", {
+              status: 503,
+              statusText: "Offline",
+            })
         )
       );
     })
