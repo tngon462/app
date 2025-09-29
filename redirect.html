@@ -109,6 +109,23 @@
   const ts = Date.now();
   document.write('<script src="./assets/js/redirect.js?v=' + ts + '"><\/script>');
 </script>
+
+<script src="./assets/js/nosleep.js"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // Bật NoSleep khi user nhấn "Bắt đầu gọi món"
+    document.getElementById("start-order").addEventListener("click", () => {
+      noSleepTest.enable();
+    });
+
+    // Nếu muốn tắt (ví dụ khi thoát về màn chọn bàn)
+    document.getElementById("back-btn-select").addEventListener("click", () => {
+      noSleepTest.disable();
+    });
+  });
+</script>
+
+
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
