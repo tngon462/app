@@ -22,14 +22,13 @@ function setOverlay(show) {
 let globalState = "on";
 let localState = "on";
 
-// Reset về màn hình bắt đầu
 function resetToStart() {
   document.getElementById("pos-container").classList.add("hidden");
   document.getElementById("pos-frame").src = "about:blank";
   document.getElementById("start-screen").classList.remove("hidden");
 }
 
-// ===== Firebase login & listeners =====
+// ===== Firebase login & lắng nghe =====
 firebase.auth().signInAnonymously()
   .then(() => {
     const db = firebase.database();
@@ -43,17 +42,19 @@ firebase.auth().signInAnonymously()
     function updateOverlay() {
       if (globalState === "off" || localState === "off") {
         setOverlay(true);
+        if (window.NoSleepControl) window.NoSleepControl.stop(); // tắt chống sleep
       } else {
         setOverlay(false);
+        if (window.NoSleepControl) window.NoSleepControl.start(); // bật lại chống sleep
       }
     }
 
-    // Lắng nghe riêng từng bàn
+    // Nghe riêng từng bàn
     function initPerTableListener() {
       const tableId = window.tableId || localStorage.getItem("tableId");
       if (!tableId) return;
 
-      // Điều khiển riêng
+      // Điều khiển riêng từng bàn
       db.ref(`control/tables/${tableId}/screen`).on("value", snap => {
         localState = (snap.val() || "on").toLowerCase();
         updateOverlay();
@@ -65,8 +66,6 @@ firebase.auth().signInAnonymously()
         const val = snap.val();
         if (val.status === "expired") {
           resetToStart();
-          // clear lại trạng thái để không lặp
-          db.ref(`signals/${tableId}`).set(null).catch(() => {});
         }
       });
     }
