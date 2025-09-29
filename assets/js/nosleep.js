@@ -1,40 +1,47 @@
-async function enableNoSleep() {
-  // Nếu có Wake Lock API
+let noSleepVideo = null;
+
+function startNoSleep() {
+  // Nếu trình duyệt hỗ trợ Wake Lock API
   if ('wakeLock' in navigator) {
-    try {
-      window.wakeLock = await navigator.wakeLock.request("screen");
-      console.log("✅ Wake Lock enabled");
-      // Tự động renew khi bị mất (ví dụ đổi tab)
-      document.addEventListener("visibilitychange", async () => {
-        if (document.visibilityState === "visible") {
-          try {
-            window.wakeLock = await navigator.wakeLock.request("screen");
-          } catch (err) {
-            console.error("WakeLock renew error:", err);
-          }
-        }
-      });
-      return;
-    } catch (err) {
-      console.warn("Wake Lock API lỗi, fallback video:", err);
+    navigator.wakeLock.request("screen").then(lock => {
+      window.wakeLock = lock;
+      console.log("✅ WakeLock enabled");
+    }).catch(err => {
+      console.warn("WakeLock error:", err);
+    });
+  } else {
+    // Fallback dùng video hack
+    if (!noSleepVideo) {
+      noSleepVideo = document.createElement("video");
+      noSleepVideo.src = "./assets/video/test.mp4"; // file video nhỏ
+      noSleepVideo.loop = true;
+      noSleepVideo.muted = true;
+      noSleepVideo.playsInline = true;
+      noSleepVideo.style.display = "none";
+      document.body.appendChild(noSleepVideo);
     }
+    noSleepVideo.play().then(() => {
+      console.log("▶ Video NoSleep chạy");
+    }).catch(err => {
+      console.warn("Không play được video NoSleep:", err);
+    });
   }
-
-  // Nếu không hỗ trợ → phát video hack
-  const video = document.createElement("video");
-  video.src = "./assets/video/test.mp4"; // file nhỏ 300x400
-  video.loop = true;
-  video.muted = true;
-  video.playsInline = true;
-  video.style.display = "none";
-  document.body.appendChild(video);
-
-  video.play().then(() => {
-    console.log("✅ Video NoSleep chạy để giữ màn hình sáng");
-  }).catch((err) => {
-    console.warn("Không play được video NoSleep:", err);
-  });
 }
 
-// Bật NoSleep ngay khi load
-document.addEventListener("DOMContentLoaded", enableNoSleep);
+function stopNoSleep() {
+  if (window.wakeLock) {
+    try { window.wakeLock.release(); } catch(_) {}
+    window.wakeLock = null;
+    console.log("❌ WakeLock released");
+  }
+  if (noSleepVideo) {
+    noSleepVideo.pause();
+    console.log("⏸ Video NoSleep paused");
+  }
+}
+
+// Tự động bật NoSleep khi load
+document.addEventListener("DOMContentLoaded", startNoSleep);
+
+// Cho blackout.js gọi
+window.NoSleepControl = { start: startNoSleep, stop: stopNoSleep };
