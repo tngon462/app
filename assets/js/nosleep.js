@@ -1,41 +1,40 @@
-class NoSleep {
-  constructor() {
-    this.video = null;
-  }
-
-  enable() {
-    if (this.video) return; // đã bật thì thôi
-
-    // Tạo video siêu nhỏ, ẩn
-    this.video = document.createElement("video");
-    this.video.src = "data:video/mp4;base64,AAAAIGZ0eXBpc29tAAAAAGlzb20yYXZjMQAAAAhmcmVlAAAAH21kYXQ=";
-    this.video.muted = true;
-    this.video.loop = true;
-    this.video.autoplay = true;
-    this.video.playsInline = true;
-    this.video.style.position = "absolute";
-    this.video.style.width = "1px";
-    this.video.style.height = "1px";
-    this.video.style.opacity = "0";
-    this.video.style.pointerEvents = "none";
-
-    document.body.appendChild(this.video);
-
-    const playPromise = this.video.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(err => {
-        console.warn("⚠️ Không autoplay được video NoSleep:", err);
+async function enableNoSleep() {
+  // Nếu có Wake Lock API
+  if ('wakeLock' in navigator) {
+    try {
+      window.wakeLock = await navigator.wakeLock.request("screen");
+      console.log("✅ Wake Lock enabled");
+      // Tự động renew khi bị mất (ví dụ đổi tab)
+      document.addEventListener("visibilitychange", async () => {
+        if (document.visibilityState === "visible") {
+          try {
+            window.wakeLock = await navigator.wakeLock.request("screen");
+          } catch (err) {
+            console.error("WakeLock renew error:", err);
+          }
+        }
       });
+      return;
+    } catch (err) {
+      console.warn("Wake Lock API lỗi, fallback video:", err);
     }
   }
 
-  disable() {
-    if (this.video) {
-      this.video.pause();
-      this.video.remove();
-      this.video = null;
-    }
-  }
+  // Nếu không hỗ trợ → phát video hack
+  const video = document.createElement("video");
+  video.src = "./assets/video/test.mp4"; // file nhỏ 300x400
+  video.loop = true;
+  video.muted = true;
+  video.playsInline = true;
+  video.style.display = "none";
+  document.body.appendChild(video);
+
+  video.play().then(() => {
+    console.log("✅ Video NoSleep chạy để giữ màn hình sáng");
+  }).catch((err) => {
+    console.warn("Không play được video NoSleep:", err);
+  });
 }
 
-window.noSleep = new NoSleep();
+// Bật NoSleep ngay khi load
+document.addEventListener("DOMContentLoaded", enableNoSleep);
