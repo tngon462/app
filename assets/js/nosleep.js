@@ -1,33 +1,30 @@
-let noSleepVideo = null;
+// assets/js/nosleep.js
 
-function startNoSleep() {
-  if ('wakeLock' in navigator) {
-    navigator.wakeLock.request("screen").then(lock => {
-      window.wakeLock = lock;
-    }).catch(err => {
-      console.warn("WakeLock error:", err);
-    });
-  } else {
-    if (!noSleepVideo) {
-      noSleepVideo = document.createElement("video");
-      noSleepVideo.src = "./assets/video/test.mp4";
-      noSleepVideo.loop = true;
-      noSleepVideo.muted = true;
-      noSleepVideo.playsInline = true;
-      noSleepVideo.style.display = "none";
-      document.body.appendChild(noSleepVideo);
+let wakeLock = null;
+
+// Hàm xin giữ màn hình sáng
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      console.log("✅ Wake Lock đã bật");
+      wakeLock.addEventListener("release", () => {
+        console.log("⚠️ Wake Lock đã tắt");
+      });
+    } else {
+      console.warn("❌ Trình duyệt không hỗ trợ Wake Lock API");
     }
-    noSleepVideo.play().catch(() => {});
+  } catch (err) {
+    console.error("Lỗi Wake Lock:", err);
   }
 }
 
-function stopNoSleep() {
-  if (window.wakeLock) {
-    try { window.wakeLock.release(); } catch(_) {}
-    window.wakeLock = null;
+// Khi người dùng chạm/mở lại tab → xin lại Wake Lock
+document.addEventListener("visibilitychange", () => {
+  if (wakeLock !== null && document.visibilityState === "visible") {
+    requestWakeLock();
   }
-  if (noSleepVideo) noSleepVideo.pause();
-}
+});
 
-document.addEventListener("DOMContentLoaded", startNoSleep);
-window.NoSleepControl = { start: startNoSleep, stop: stopNoSleep };
+// Gọi ngay khi load trang
+requestWakeLock();
