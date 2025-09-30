@@ -21,35 +21,40 @@ function setupSecretButton(btn, callback) {
 const backBtnStart = document.getElementById("back-btn-start");
 const backBtnSelect = document.getElementById("back-btn-select");
 
-// Quay lại màn bắt đầu
+// Trái: về màn BẮT ĐẦU
 setupSecretButton(backBtnStart, () => {
   document.getElementById("pos-container").classList.add("hidden");
   document.getElementById("pos-frame").src = "about:blank";
   document.getElementById("start-screen").classList.remove("hidden");
+  localStorage.setItem("appState", "start");
 });
 
-// Quay lại màn chọn bàn (cần mật mã)
+// Phải: về màn CHỌN BÀN (cần mật khẩu)
 setupSecretButton(backBtnSelect, () => {
   const popup = document.getElementById("password-popup");
   const input = document.getElementById("password-input");
   const error = document.getElementById("password-error");
 
   popup.classList.remove("hidden");
-  input.focus();
+  input.value = "";
+  error.classList.add("hidden");
+  setTimeout(() => input.focus(), 100);
 
   document.getElementById("password-ok").onclick = () => {
     if (input.value === "6868") {
       popup.classList.add("hidden");
-      input.value = "";
-      error.classList.add("hidden");
 
+      // Về chọn bàn
       document.getElementById("start-screen").classList.add("hidden");
       document.getElementById("pos-container").classList.add("hidden");
       document.getElementById("pos-frame").src = "about:blank";
       document.getElementById("select-table").classList.remove("hidden");
 
+      // Xoá toàn bộ trạng thái
       localStorage.removeItem("tableId");
       localStorage.removeItem("tableUrl");
+      localStorage.removeItem("appState");
+      delete window.tableId;
     } else {
       error.classList.remove("hidden");
     }
@@ -57,7 +62,5 @@ setupSecretButton(backBtnSelect, () => {
 
   document.getElementById("password-cancel").onclick = () => {
     popup.classList.add("hidden");
-    input.value = "";
-    error.classList.add("hidden");
   };
 });
