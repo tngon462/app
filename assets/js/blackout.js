@@ -1,3 +1,5 @@
+// blackout.js
+// ===== Firebase config =====
 const firebaseConfig = {
   apiKey: "AIzaSyB4u2G41xdGkgBC0KltleRpcg5Lwru2RIU",
   authDomain: "tngon-b37d6.firebaseapp.com",
@@ -8,6 +10,7 @@ const firebaseConfig = {
   appId: "1:580319242104:web:6922e4327bdc8286c30a8d"
 };
 
+// ===== Init Firebase =====
 if (!firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
 }
@@ -26,11 +29,15 @@ function resetToStart() {
   document.getElementById("start-screen").classList.remove("hidden");
 }
 
-firebase.auth().signInAnonymously()
+// ===== Firebase login & lắng nghe =====
+firebase
+  .auth()
+  .signInAnonymously()
   .then(() => {
     const db = firebase.database();
 
-    db.ref("control/screen").on("value", snap => {
+    // Lắng nghe toàn quán
+    db.ref("control/screen").on("value", (snap) => {
       globalState = (snap.val() || "on").toLowerCase();
       updateOverlay();
     });
@@ -38,32 +45,40 @@ firebase.auth().signInAnonymously()
     function updateOverlay() {
       if (globalState === "off" || localState === "off") {
         setOverlay(true);
-        if (window.NoSleepControl) window.NoSleepControl.stop();
       } else {
         setOverlay(false);
-        if (window.NoSleepControl) window.NoSleepControl.start();
       }
     }
 
+    // Nghe riêng từng bàn
     function initPerTableListener() {
       const tableId = window.tableId || localStorage.getItem("tableId");
       if (!tableId) return;
 
-      db.ref(`control/tables/${tableId}/screen`).on("value", snap => {
+      // Điều khiển riêng
+      db.ref(`control/tables/${tableId}/screen`).on("value", (snap) => {
         localState = (snap.val() || "on").toLowerCase();
         updateOverlay();
       });
 
-      db.ref(`signals/${tableId}`).on("value", snap => {
+      // Tín hiệu làm mới
+      db.ref(`signals/${tableId}`).on("value", (snap) => {
         if (!snap.exists()) return;
         const val = snap.val();
-        if (val.status === "expired") resetToStart();
+        if (val.status === "expired") {
+          resetToStart();
+          // ✅ xóa signal để tránh lặp lại
+          db.ref(`signals/${tableId}`).remove();
+        }
       });
     }
 
+    // Khi login xong thì lắng nghe ngay
     initPerTableListener();
+
+    // Nếu chọn bàn sau này mới có → cũng lắng nghe
     window.addEventListener("storage", () => initPerTableListener());
   })
   .catch(() => {
-    setOverlay(false);
+    setOverlay(false); // fallback
   });
