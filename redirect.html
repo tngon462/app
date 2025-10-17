@@ -3,63 +3,140 @@
 <head>
   <meta charset="UTF-8" />
   <title>T-NGON - Gọi món</title>
+
+  <!-- cố định scale, không cho zoom -->
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#3b82f6" />
-
-  <!-- disable text selection / long-press selection -->
-<style>
-  /* disable selection globally */
-  html, body, #select-table, #start-screen, #pos-container, .secret-btn, * {
-    -webkit-user-select: none !important; /* Safari/Chrome iOS/Android */
-    -moz-user-select: none !important;
-    -ms-user-select: none !important;
-    user-select: none !important;
-    -webkit-touch-callout: none !important; /* iOS long press menu */
-    -webkit-user-drag: none !important;
-    -ms-touch-action: manipulation;
-    touch-action: manipulation;
-  }
-
-  /* allow selection and normal behavior on form controls (password input etc.) */
-  input, textarea, select, [contenteditable="true"] {
-    -webkit-user-select: text !important;
-    user-select: text !important;
-    -webkit-touch-callout: default !important;
-    -webkit-user-drag: auto !important;
-  }
-
-  /* if you want to keep links clickable but not selectable */
-  a { -webkit-user-select: none !important; user-select: none !important; }
-
-  /* hide iOS context menu on long press of images */
-  img { -webkit-touch-callout: none !important; }
-
-  /* optional: avoid outline when tapping (but keep focus styles for accessibility if needed) */
-  :focus { outline: none !important; }
-</style>
-
-  <!-- PWA -->
-  <link rel="manifest" href="./redirect.webmanifest" />
-  <link rel="icon" href="./icons/icon-192.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <!-- Tailwind -->
+  <link rel="manifest" href="./redirect.webmanifest" />
+  <link rel="icon" href="./icons/icon-192.png" />
+
+  <!-- Tailwind (optional) -->
   <script src="https://cdn.tailwindcss.com"></script>
 
+  <!-- ===== CSS: safe-area + notch-aware vars ===== -->
   <style>
+    :root {
+      --pos-top: 0px;
+      --pos-height-calc: 100vh;
+    }
+
     html, body {
+      height: 100%;
       margin: 0;
       padding: 0;
-      height: 100%;
       background: #f3f4f6;
+      -webkit-font-smoothing:antialiased;
+      -webkit-touch-callout: none;
     }
-    body {
-      padding-top: env(safe-area-inset-top);
-      padding-left: env(safe-area-inset-left);
-      padding-right: env(safe-area-inset-right);
-      padding-bottom: env(safe-area-inset-bottom);
+
+    /* app-wide safe-area helper (dùng cho màn chọn / start) */
+    .use-safe-area {
+      padding-top: env(safe-area-inset-top, 12px);
+      padding-left: env(safe-area-inset-left, 12px);
+      padding-right: env(safe-area-inset-right, 12px);
+      padding-bottom: env(safe-area-inset-bottom, 12px);
+      box-sizing: border-box;
     }
+
+    /* POS iframe: mặc định full-bleed; biến --pos-top thay đổi nếu có notch */
+    #pos-container {
+      position: fixed;
+      top: var(--pos-top);
+      left: 0;
+      width: 100vw;
+      height: var(--pos-height-calc);
+      z-index: 1000;
+      background: #fff;
+      display: none;
+    }
+    #pos-container.is-shown { display: block; }
+    #pos-frame { width: 100%; height: 100%; border: 0; display: block; }
+
+    /* Khi đã detect có notch, state.js sẽ thêm class .has-notch lên body
+       và CSS biến --pos-top / --pos-height-calc sẽ dùng env(safe-area-inset-top) */
+    body.has-notch {
+      --pos-top: env(safe-area-inset-top, 20px);
+      --pos-height-calc: calc(100vh - env(safe-area-inset-top, 20px));
+    }
+
+    /* Select / Start screens layout */
+    #select-table, #start-screen {
+      width: 100%;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+    }
+    #start-screen { display: none; }
+    #start-screen.is-shown { display: flex; }
+
+    /* Big table number (responsive) */
+    #selected-table {
+      font-weight: 800;
+      color: #000;
+      line-height: 1;
+      margin-bottom: 1rem;
+      text-align: center;
+      font-size: min(60vw, 60vh); /* very big; tune as needed */
+    }
+
+    /* START button: 5:2 proportion (height = 15vh, width ~ 2.5 * height) */
+    #start-order {
+      height: 15vh;
+      width: min(80vw, 37.5vh);
+      border-radius: 1rem;
+      font-weight: 800;
+      font-size: clamp(20px, 5vh, 48px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0ea5e9; /* blue-500 */
+      color: white;
+      box-shadow: 0 6px 18px rgba(2,6,23,0.12);
+    }
+
+    /* Table grid */
+    #table-container {
+      display: grid;
+      justify-content: center;
+      gap: 1rem;
+      padding: 0 1rem;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+    }
+    @media(min-width:640px){ #table-container { grid-template-columns: repeat(3, 1fr); } }
+    @media(min-width:768px){ #table-container { grid-template-columns: repeat(4, 1fr); } }
+    @media(min-width:1024px){ #table-container { grid-template-columns: repeat(5, 1fr); } }
+
+    .table-btn {
+      display:flex; align-items:center; justify-content:center;
+      padding: 1rem; border-radius: 0.75rem; font-weight:800;
+      background: #0369a1; color:#fff; /* blue-800 -> use this for visible dark-blue */
+      font-size: clamp(18px, 3.5vw, 28px);
+      min-height: 5.25rem;
+      user-select: none;
+    }
+    .table-btn:active { transform: translateY(1px); }
+
+    /* Secret button left (transparent & click-through except pointer-events) */
+    .secret-btn {
+      position: fixed;
+      bottom: 10px;
+      left: 8px;
+      width: 96px;
+      height: 96px;
+      background: transparent;
+      border: 0;
+      z-index: 2200;
+      opacity: 0;
+      pointer-events: auto; /* clickable despite opacity */
+    }
+
+    /* Blackout overlay */
     #screen-overlay {
       position: fixed;
       inset: 0;
@@ -67,64 +144,36 @@
       z-index: 2000;
       display: none;
     }
-    .secret-btn {
-      position: fixed;
-      bottom: 6px;
-      width: 48px;
-      height: 48px;
-      background: transparent;
-      opacity: 0;
-      z-index: 2100;
-      pointer-events: auto;
-    }
-    #back-btn-start { left: 6px; }
-    #back-btn-select { right: 6px; }
+
+    /* Prevent selection/copy except inputs */
+    * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+    input, textarea, select, [contenteditable="true"] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
   </style>
 </head>
-<body class="flex flex-col items-center justify-center">
+<body class="use-safe-area">
 
   <!-- Bước 1: Chọn bàn -->
-  <div id="select-table" class="flex flex-col items-center">
-    <h1 class="text-3xl font-bold text-gray-900 mb-6">Vui lòng chọn bàn</h1>
-    <div id="table-container"
-         class="grid justify-center gap-4
-                grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5
-                px-4">
-    </div>
+  <div id="select-table" class="use-safe-area">
+    <h1 class="text-3xl font-bold text-blue-600">Vui lòng chọn bàn</h1>
+    <div id="table-container" class="mt-6"></div>
   </div>
 
-<!-- Bước 2: Màn bắt đầu -->
-<div id="start-screen" class="hidden flex flex-col items-center justify-center min-h-screen">
-
-  <!-- Số bàn siêu to: chiếm ~15–18% cạnh ngắn của màn hình -->
-  <div
-    id="selected-table"
-    class="leading-none font-extrabold text-gray-900 mb-10 text-[min(60vw,60vh)]">
+  <!-- Bước 2: Màn bắt đầu -->
+  <div id="start-screen" class="use-safe-area" aria-hidden="true">
+    <div id="selected-table" aria-live="polite"></div>
+    <button id="start-order">START ORDER</button>
   </div>
-
-  <!-- Nút START ORDER: cao = 15% chiều cao màn hình; rộng = 2.5 × cao -->
-  <button
-    id="start-order"
-    class="rounded-2xl bg-blue-500 text-white font-extrabold shadow-lg hover:bg-blue-600 flex items-center justify-center w-[min(80vw,37.5vh)] h-[15vh] text-[clamp(22px,5vh,64px)]">
-    START ORDER
-  </button>
-
-</div>
-
-
 
   <!-- Bước 3: POS iframe -->
-  <div id="pos-container" class="hidden w-full h-screen">
-    <iframe id="pos-frame" class="w-full h-full border-0" referrerpolicy="no-referrer"></iframe>
+  <div id="pos-container" aria-hidden="true">
+    <iframe id="pos-frame" referrerpolicy="no-referrer" sandbox="allow-forms allow-scripts allow-same-origin allow-popups"></iframe>
   </div>
 
   <!-- Popup nhập mật mã -->
   <div id="password-popup" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-[2200]">
     <div class="bg-white p-6 rounded-lg shadow-lg text-center">
       <h3 class="text-lg font-semibold mb-4">Nhập mật mã</h3>
-      <input id="password-input" type="password" maxlength="4"
-             class="border p-2 rounded text-center tracking-widest text-xl"
-             placeholder="****" inputmode="numeric" />
+      <input id="password-input" type="password" maxlength="4" class="border p-2 rounded text-center tracking-widest text-xl" placeholder="****" inputmode="numeric" />
       <div class="mt-4 flex justify-center space-x-4">
         <button id="password-ok" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">OK</button>
         <button id="password-cancel" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Hủy</button>
@@ -134,87 +183,36 @@
   </div>
 
   <!-- Màn đen -->
-  <div id="screen-overlay"></div>
+  <div id="screen-overlay" aria-hidden="true"></div>
 
-  <!-- Nút bí mật -->
-  <button id="back-btn-start" class="secret-btn" aria-label="hidden-back-start">◀</button>
-  <button id="back-btn-select" class="secret-btn" aria-label="hidden-back-select">▶</button>
+  <!-- Nút bí mật (left) -->
+  <button id="back-btn-start" class="secret-btn" aria-label="hidden-back-start"></button>
 
-  <!-- Scripts -->
-  <script src="./assets/js/redirect-core.js?v=mod1"></script>
-  <script src="./assets/js/secret-btn.js?v=mod1"></script>
-  <script src="./assets/js/state.js?v=mod1"></script>
+  <!-- Load scripts: state.js must load early (detect notch & helpers) -->
+  <script src="./assets/js/state.js?v=2"></script>
+  <script src="./assets/js/redirect.js?v=2"></script>
+  <script src="./assets/js/secret-btn.js?v=2"></script>
+
+  <!-- Firebase libs (blackout uses firebase) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-  <script src="./assets/js/blackout.js?v=mod1"></script>
-  <script src="./assets/js/nosleep.js?v=mod1"></script>
-  <script src="./assets/js/sw-register.js?v=mod1"></script>
 
+  <script src="./assets/js/blackout.js?v=2"></script>
+  <script src="./assets/js/nosleep.js?v=2"></script>
+  <script src="./assets/js/sw-register.js?v=2"></script>
+
+  <!-- small runtime: ensure START button label is consistent and prevents double-tap zoom -->
   <script>
-  // Prevent copy/paste/cut/selectstart/contextmenu globally,
-  // but allow inputs to behave normally.
-  (function() {
-    // helper: allow if event target is form control
-    function isFormControl(el) {
-      if (!el) return false;
-      const tag = el.tagName && el.tagName.toLowerCase();
-      if (!tag) return false;
-      if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
-      if (el.isContentEditable) return true;
-      // allow children of input wrappers
-      if (el.closest && el.closest('input, textarea, select, [contenteditable="true"]')) return true;
-      return false;
-    }
-
-    // Block selection start (mouse & touch)
-    document.addEventListener('selectstart', function(e) {
-      if (isFormControl(e.target)) return; // allow selecting input text
-      e.preventDefault();
-    }, { passive: false });
-
-    // Block copy / cut / paste
-    ['copy','cut','paste'].forEach(ev => {
-      document.addEventListener(ev, function(e) {
-        if (isFormControl(e.target)) return; // permit for inputs
-        e.preventDefault();
-        // optional: show small toast if needed
-      }, { passive: false });
+    document.addEventListener('DOMContentLoaded', () => {
+      const b = document.getElementById('start-order');
+      if (b) b.textContent = 'START ORDER';
+      // Prevent pinch/double tap zoom
+      document.addEventListener('touchstart', function (e) { if (e.touches && e.touches.length > 1) e.preventDefault(); }, {passive:false});
+      document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, {passive:false});
+      document.addEventListener('dblclick', (e) => e.preventDefault(), {passive:false});
     });
-
-    // Block context menu (right click / long press)
-    document.addEventListener('contextmenu', function(e) {
-      if (isFormControl(e.target)) return; // allow contextmenu for input fields
-      e.preventDefault();
-    }, { passive: false });
-
-    // For touch: prevent multi-touch zoom & pinch selection
-    document.addEventListener('touchstart', function(e) {
-      if (e.touches && e.touches.length > 1) {
-        e.preventDefault();
-      }
-    }, { passive: false });
-
-    // prevent gesture scale on iOS where e.scale exists
-    document.addEventListener('gesturestart', function(e) {
-      e.preventDefault();
-    }, { passive: false });
-
-    // Extra: prevent long-press selection fallback on some Android
-    let longPressTimer = null;
-    document.addEventListener('touchstart', function(e) {
-      if (isFormControl(e.target)) return;
-      longPressTimer = setTimeout(function() {
-        // nothing (prevent default already applied by CSS), but ensure no selection menus
-        // we also prevent contextmenu events triggered by long press
-        // (some browsers still fire contextmenu — already blocked above)
-      }, 600);
-    }, { passive: false });
-    document.addEventListener('touchend', function(e) {
-      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
-    }, { passive: false });
-  })();
-</script>
+  </script>
 
 </body>
 </html>
