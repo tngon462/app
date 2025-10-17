@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>T-NGON</title>
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#3b82f6">
+
+  <!-- PWA manifest + icon (giữ nguyên app name/icon như cũ) -->
+  <link rel="manifest" href="./redirect.webmanifest">
+  <link rel="icon" sizes="192x192" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <style>
+    :root { color-scheme: light; }
+    body {
+      margin:0; padding:0; height:100vh;
+      display:flex; align-items:center; justify-content:center; flex-direction:column;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background:#f3f4f6;
+    }
+    .logo {
+      width:96px; height:96px; border-radius:20px;
+      background:url('./icons/icon-192.png') no-repeat center/cover;
+      margin-bottom:20px; box-shadow:0 6px 16px rgba(0,0,0,.15);
+    }
+    .title { font-weight:800; font-size:22px; color:#111827; margin:6px 0 2px; }
+    .desc { color:#6b7280; font-size:14px; margin-bottom:18px; text-align:center; max-width:420px; }
+
+    .row { display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; justify-content:center; }
+    .btn {
+      appearance:none; border:0; cursor:pointer;
+      padding:12px 18px; border-radius:12px; font-weight:700; font-size:16px;
+      background:#3b82f6; color:#fff; box-shadow:0 6px 14px rgba(59,130,246,.25);
+    }
+    .btn:hover { background:#2563eb; }
+    .btn.secondary { background:#e5e7eb; color:#111827; box-shadow:none; }
+
+    .hint {
+      margin-top:14px; color:#4b5563; font-size:13px; text-align:center; max-width:520px;
+      line-height:1.35;
+    }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .hidden { display:none; }
+  </style>
+</head>
+<body>
+  <div class="logo"></div>
+  <div class="title">T-NGON</div>
+  <div id="status" class="desc">Chọn “Mở ứng dụng” hoặc thêm vào Màn hình chính để dùng như app.</div>
+
+  <div id="actions" class="row">
+    <button id="openBtn" class="btn">Mở ứng dụng</button>
+    <button id="howBtn" class="btn secondary">Cách cài lên Màn hình chính</button>
+  </div>
+
+  <div id="howTo" class="hint hidden">
+    <div><strong>iPhone/iPad (Safari):</strong> bấm chia sẻ <span class="mono">□↑</span> → <em>Thêm vào MH chính</em>.</div>
+    <div><strong>Android (Chrome):</strong> bấm menu ⋮ → <em>Thêm vào MH chính</em> / <em>Cài đặt ứng dụng</em>.</div>
+  </div>
+
+  <script>
+    // util
+    const qs = new URLSearchParams(location.search);
+    const inStandalone =
+      window.matchMedia && window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true; // iOS
+
+    const stay = qs.get('stay') === '1';
+
+    function go() {
+      const ts = Date.now();
+      location.replace('./redirect.html?cb=' + ts);
+    }
+
+    // nút
+    const openBtn = document.getElementById('openBtn');
+    const howBtn  = document.getElementById('howBtn');
+    const howTo   = document.getElementById('howTo');
+    const statusEl= document.getElementById('status');
+
+    openBtn.addEventListener('click', go);
+    howBtn.addEventListener('click', () => {
+      howTo.classList.toggle('hidden');
+    });
+
+    if (inStandalone && !stay) {
+      // ĐÃ LÀ PWA → vào thẳng app, luôn lấy bản mới nhất
+      go();
+    } else {
+      // Đang ở trình duyệt → không tự redirect, để người dùng cài/follow
+      statusEl.textContent = 'Bạn đang mở trong trình duyệt. Hãy bấm “Mở ứng dụng” hoặc cài lên Màn hình chính để dùng mượt hơn.';
+    }
+  </script>
+</body>
+</html>
