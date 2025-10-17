@@ -195,134 +195,145 @@
   <button id="back-btn-start" class="secret-btn" aria-label="hidden-back-start">◀</button>
   <button id="back-btn-select" class="secret-btn" aria-label="hidden-back-select">▶</button>
 
-  <script>
+ <script>
 (function(){
   'use strict';
 
-  function isStandaloneMode() {
+  // CONFIG: fallback offset when PWA on iPhone-like UA and env() unreliable
+  const FALLBACK_OFFSETS_PX = [44, 64]; // try first value, if still bad increase to next
+
+  function isStandalone() {
     try {
       return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
-             || (window.navigator && window.navigator.standalone)
-             || document.referrer.startsWith('android-app://');
+             || window.navigator.standalone === true
+             || (window.location && window.location.search && window.location.search.includes('standalone=1'));
     } catch(e){ return false; }
   }
 
-  function readSafeAreaTopPx() {
+  function readEnvSafeTop() {
     try {
       const el = document.createElement('div');
-      el.style.cssText = 'position:absolute; top:-9999px; padding-top:env(safe-area-inset-top, 0px);';
+      el.style.cssText = 'position:absolute; top:-9999px; padding-top: env(safe-area-inset-top, 0px);';
       document.documentElement.appendChild(el);
-      const v = window.getComputedStyle(el).paddingTop;
+      const computed = window.getComputedStyle(el).paddingTop;
       document.documentElement.removeChild(el);
-      return parseFloat(v) || 0;
+      return parseFloat(computed) || 0;
     } catch(e){ return 0; }
   }
 
-  function uaLooksLikeIPhone() {
+  function uaIsIPhoneFamily() {
     const ua = (navigator.userAgent || '').toLowerCase();
-    return ua.includes('iphone') || ua.includes('ipad') || ua.includes('ipod');
+    return ua.includes('iphone') || ua.includes('ipod') || ua.includes('ipad');
   }
 
-  function applyNotchFix() {
-    const params = new URLSearchParams(location.search);
-    if (params.get('forceNotch') === '1') {
-      console.debug('[notch] forced ON');
-      setNotchStyles(true, 44);
-      return;
+  function applyHardOffset(px) {
+    const pos = document.getElementById('pos-container');
+    // apply transform-based push so system UI overlay won't overlap content
+    if (pos) {
+      pos.style.transform = `translateY(${px}px)`;
+      pos.style.top = '0';
+      pos.style.height = `calc(100vh - ${px}px)`;
+      pos.style.paddingTop = '0';
+      pos.style.paddingBottom = '0';
+      // ensure iframe inside fills new container
+      const iframe = document.getElementById('pos-frame');
+      if (iframe) { iframe.style.height = '100%'; iframe.style.width = '100%'; }
     }
-    if (params.get('forceNoNotch') === '1') {
-      console.debug('[notch] forced OFF');
-      setNotchStyles(false, 0);
-      return;
-    }
+    // also shift any start/select views so they remain visible if desired:
+    const select = document.getElementById('select-table');
+    const start = document.getElementById('start-screen');
+    if (select) select.style.transform = `translateY(${px}px)`;
+    if (start) start.style.transform = `translateY(${px}px)`;
+    console.debug('[notch-fallback] applied hard offset', px);
+  }
 
-    const safeTop = readSafeAreaTopPx();
-    const standalone = isStandaloneMode();
-    const isiPhone = uaLooksLikeIPhone();
-    console.debug('[notch] safeTop', safeTop, 'standalone', standalone, 'isiPhone', isiPhone);
+  function removeHardOffset() {
+    const pos = document.getElementById('pos-container');
+    if (pos) {
+      pos.style.transform = '';
+      pos.style.top = '';
+      pos.style.height = '';
+      pos.style.paddingTop = '';
+      pos.style.paddingBottom = '';
+    }
+    const select = document.getElementById('select-table');
+    const start = document.getElementById('start-screen');
+    if (select) select.style.transform = '';
+    if (start) start.style.transform = '';
+    console.debug('[notch-fallback] removed hard offset');
+  }
+
+  function decideAndApply() {
+    const params = new URLSearchParams(location.search);
+    if (params.get('forceNotch') === '1') { applyHardOffset(FALLBACK_OFFSETS_PX[0]); return; }
+    if (params.get('forceNoNotch') === '1') { removeHardOffset(); return; }
+
+    const safeTop = readEnvSafeTop();
+    const standalone = isStandalone();
+    const isiPhone = uaIsIPhoneFamily();
+
+    console.debug('[notch] env safeTop=', safeTop, 'standalone=', standalone, 'isiPhone=', isiPhone);
 
     if (safeTop > 6) {
-      // browser gives correct safe inset -> honor it
-      setNotchStyles(true, safeTop);
+      // good env value: honor it (no hard offset)
+      removeHardOffset();
+      // ensure pos uses env padding so content below status bar is safe
+      const pos = document.getElementById('pos-container');
+      if (pos) {
+        pos.style.paddingTop = 'env(safe-area-inset-top)';
+        pos.style.paddingBottom = 'env(safe-area-inset-bottom)';
+        pos.style.paddingLeft = 'env(safe-area-inset-left)';
+        pos.style.paddingRight = 'env(safe-area-inset-right)';
+        pos.style.top = '0';
+        pos.style.height = 'calc(100vh - env(safe-area-inset-top))';
+      }
       return;
     }
 
-    // env returned 0 or tiny:
-    if (standalone && isiPhone) {
-      // PWA on iPhone often returns 0 for env but status bar still overlays.
-      // Use conservative fallback ~44px (iPhone XR / many modern phones).
-      setNotchStyles(true, 44);
+    // env unreliable (0). If not standalone or not iPhone, do nothing (full-bleed)
+    if (!standalone || !isiPhone) {
+      removeHardOffset();
       return;
     }
 
-    // No notch detected -> full-bleed
-    setNotchStyles(false, 0);
+    // Running standalone on iPhone and env=0 → enforce fallback offset(s)
+    // Try first fallback offset; you can increase value if still overlapped.
+    applyHardOffset(FALLBACK_OFFSETS_PX[0]);
+
+    // As a safety: recheck after short delay; if still overlap you can increase offset automatically:
+    setTimeout(() => {
+      // heuristic: read element bounding to see if top of pos-frame is behind notch area
+      try {
+        const iframe = document.getElementById('pos-frame');
+        if (!iframe) return;
+        const rect = iframe.getBoundingClientRect();
+        // if top of iframe <= 0 (i.e. still under status bar area), bump offset
+        if (rect.top <= 0) {
+          console.debug('[notch-fallback] iframe rect.top', rect.top, ' -> bumping fallback');
+          // try larger fallback if available
+          if (FALLBACK_OFFSETS_PX.length > 1) applyHardOffset(FALLBACK_OFFSETS_PX[1]);
+        }
+      } catch(e){ console.warn('fallback check error', e); }
+    }, 350);
   }
 
-  function setNotchStyles(enable, pxFallback) {
-    const pos = document.getElementById('pos-container');
-    if (enable) {
-      document.body.classList.add('has-notch');
-      // prefer env() but fallback to pxFallback
-      const topVal = `env(safe-area-inset-top, ${pxFallback}px)`;
-      const bottomVal = `env(safe-area-inset-bottom, 0px)`;
-      const leftVal = `env(safe-area-inset-left, 0px)`;
-      const rightVal = `env(safe-area-inset-right, 0px)`;
-      // apply to pos container via CSS variables / inline styles
-      if (pos) {
-        pos.style.paddingTop = topVal;
-        pos.style.paddingBottom = bottomVal;
-        pos.style.paddingLeft = leftVal;
-        pos.style.paddingRight = rightVal;
-        pos.style.top = '0';
-        // make height reduce by top inset so iframe content not under status bar
-        pos.style.height = `calc(100vh - ${topVal})`;
-      }
-      // ensure body keeps env padding if available; if env=0, do explicit fallback
-      const safeTopPx = readSafeAreaTopPx();
-      if (safeTopPx > 6) {
-        document.body.style.paddingTop = '';
-        document.body.style.paddingBottom = '';
-        document.body.style.paddingLeft = '';
-        document.body.style.paddingRight = '';
-      } else {
-        // fallback to explicit px for body so other UI also shifted
-        document.body.style.paddingTop = pxFallback + 'px';
-        document.body.style.paddingBottom = '0px';
-        document.body.style.paddingLeft = '0px';
-        document.body.style.paddingRight = '0px';
-      }
-      console.debug('[notch] applied notch styles top=', topVal);
-    } else {
-      document.body.classList.remove('has-notch');
-      // remove inline padding so default CSS (or no padding) applies
-      document.body.style.padding = '0';
-      if (pos) {
-        pos.style.padding = '0';
-        pos.style.top = '0';
-        pos.style.height = '100vh';
-      }
-      console.debug('[notch] removed notch styles (full-bleed)');
-    }
-  }
-
-  // run after DOM ready
+  // Run on DOM ready
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', applyNotchFix);
+    document.addEventListener('DOMContentLoaded', decideAndApply);
   } else {
-    applyNotchFix();
+    decideAndApply();
   }
 
-  // re-evaluate on orientation/resize/focus
-  window.addEventListener('orientationchange', () => setTimeout(applyNotchFix, 250));
-  window.addEventListener('resize', () => setTimeout(applyNotchFix, 250));
-  window.addEventListener('focus', () => setTimeout(applyNotchFix, 300));
+  // Re-evaluate on orientation change / focus (PWA wake)
+  window.addEventListener('orientationchange', () => setTimeout(decideAndApply, 250));
+  window.addEventListener('resize', () => setTimeout(decideAndApply, 250));
+  window.addEventListener('focus', () => setTimeout(decideAndApply, 300));
 })();
 </script>
   <!-- Scripts -->
-  <script src="./assets/js/redirect-core.js?v=mod1"></script>
-  <script src="./assets/js/secret-btn.js?v=mod1"></script>
-  <script src="./assets/js/state.js?v=mod1"></script>
+  <script src="./assets/js/redirect-core.js?v=mod11"></script>
+  <script src="./assets/js/secret-btn.js?v=mod11"></script>
+  <script src="./assets/js/state.js?v=mod11"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
