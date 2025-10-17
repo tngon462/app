@@ -61,24 +61,24 @@
     </div>
   </div>
 
-  <!-- Bước 2: Màn bắt đầu -->
 <!-- Bước 2: Màn bắt đầu -->
 <div id="start-screen" class="hidden flex flex-col items-center justify-center min-h-screen">
-  <!-- Số bàn siêu to -->
-  <div id="selected-table"
-       class="leading-none font-extrabold text-blue-600 mb-10
-              text-[min(18vw,18vh)]">
+
+  <!-- Số bàn siêu to: chiếm ~15–18% cạnh ngắn của màn hình -->
+  <div
+    id="selected-table"
+    class="leading-none font-extrabold text-blue-600 mb-10 text-[min(25vw,25vh)]">
   </div>
 
-  <!-- Nút 5:2 -->
-  <button id="start-order"
-          class="rounded-2xl bg-blue-500 text-white font-extrabold shadow-lg hover:bg-blue-600
-                 flex items-center justify-center
-                 w-[min(80vw,37.5vh)] h-[15vh]
-                 text-[clamp(22px,5vh,64px)]">
-    Bắt đầu gọi món
+  <!-- Nút START ORDER: cao = 15% chiều cao màn hình; rộng = 2.5 × cao -->
+  <button
+    id="start-order"
+    class="rounded-2xl bg-blue-500 text-white font-extrabold shadow-lg hover:bg-blue-600 flex items-center justify-center w-[min(80vw,37.5vh)] h-[15vh] text-[clamp(22px,5vh,64px)]">
+    START ORDER
   </button>
+
 </div>
+
 
 
   <!-- Bước 3: POS iframe -->
