@@ -1,219 +1,279 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8" />
-  <title>T-NGON - Gọi món</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#3b82f6" />
+  <meta charset="UTF-8" />
+  <title>T-NGON - Gọi món</title>
+  <!-- meta viewport đã có viewport-fit=cover, rất tốt -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#3b82f6" />
 
-  <!-- disable text selection / long-press selection -->
+  <!-- disable text selection / long-press selection -->
 <style>
-  /* disable selection globally */
-  html, body, #select-table, #start-screen, #pos-container, .secret-btn, * {
-    -webkit-user-select: none !important; /* Safari/Chrome iOS/Android */
-    -moz-user-select: none !important;
-    -ms-user-select: none !important;
-    user-select: none !important;
-    -webkit-touch-callout: none !important; /* iOS long press menu */
-    -webkit-user-drag: none !important;
-    -ms-touch-action: manipulation;
-    touch-action: manipulation;
-  }
+  /* disable selection globally */
+  html, body, #select-table, #start-screen, #pos-container, .secret-btn, * {
+    -webkit-user-select: none !important; /* Safari/Chrome iOS/Android */
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    user-select: none !important;
+    -webkit-touch-callout: none !important; /* iOS long press menu */
+    -webkit-user-drag: none !important;
+    -ms-touch-action: manipulation;
+    touch-action: manipulation;
+  }
 
-  /* allow selection and normal behavior on form controls (password input etc.) */
-  input, textarea, select, [contenteditable="true"] {
-    -webkit-user-select: text !important;
-    user-select: text !important;
-    -webkit-touch-callout: default !important;
-    -webkit-user-drag: auto !important;
-  }
+  /* allow selection and normal behavior on form controls (password input etc.) */
+  input, textarea, select, [contenteditable="true"] {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+    -webkit-touch-callout: default !important;
+    -webkit-user-drag: auto !important;
+  }
 
-  /* if you want to keep links clickable but not selectable */
-  a { -webkit-user-select: none !important; user-select: none !important; }
+  /* if you want to keep links clickable but not selectable */
+  a { -webkit-user-select: none !important; user-select: none !important; }
 
-  /* hide iOS context menu on long press of images */
-  img { -webkit-touch-callout: none !important; }
+  /* hide iOS context menu on long press of images */
+  img { -webkit-touch-callout: none !important; }
 
-  /* optional: avoid outline when tapping (but keep focus styles for accessibility if needed) */
-  :focus { outline: none !important; }
+  /* optional: avoid outline when tapping (but keep focus styles for accessibility if needed) */
+  :focus { outline: none !important; }
 </style>
 
-  <!-- PWA -->
-  <link rel="manifest" href="./redirect.webmanifest" />
-  <link rel="icon" href="./icons/icon-192.png" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <!-- PWA -->
+  <link rel="manifest" href="./redirect.webmanifest" />
+  <link rel="icon" href="./icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <!-- Tailwind -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
 
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      background: #f3f4f6;
+  <style>
+    /* *** BƯỚC FIX TAI THỎ 1/2: Đảm bảo box-sizing để padding không làm tràn chiều cao *** */
+    /* Đây là một CSS reset chuẩn giúp padding (safe area insets) được tính bên trong height: 100% */
+    *, ::before, ::after {
+      box-sizing: border-box;
     }
-    body {
-      padding-top: env(safe-area-inset-top);
-      padding-left: env(safe-area-inset-left);
-      padding-right: env(safe-area-inset-right);
-      padding-bottom: env(safe-area-inset-bottom);
-    }
-    #screen-overlay {
-      position: fixed;
-      inset: 0;
-      background: #000;
-      z-index: 2000;
-      display: none;
-    }
-    .secret-btn {
-      position: fixed;
-      bottom: 6px;
-      width: 48px;
-      height: 48px;
-      background: transparent;
-      opacity: 0;
-      z-index: 2100;
-      pointer-events: auto;
-    }
-    #back-btn-start { left: 6px; }
-    #back-btn-select { right: 6px; }
-  </style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #f3f4f6;
+    }
+    /* padding env() đã có, rất tốt */
+    body {
+      padding-top: env(safe-area-inset-top);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    #screen-overlay {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      z-index: 2000;
+      display: none;
+    }
+    .secret-btn {
+      position: fixed;
+      bottom: 6px;
+      width: 48px;
+      height: 48px;
+      background: transparent;
+      opacity: 0;
+      z-index: 2100;
+      pointer-events: auto;
+    }
+    #back-btn-start { left: 6px; }
+    #back-btn-select { right: 6px; }
+  </style>
+    <!-- KHỐI CODE MỚI THÊM ĐỂ FIX LỖI FULL MÀN HÌNH IFRAME VÀ SPACING -->
+    <style>
+        /* =========================================================================
+           FIX LỖI FULL MÀN HÌNH IFRAME VÀ SPACING CHO MÀN CHỌN BÀN
+           ========================================================================= */
+
+        /* 1. Fix màn hình chọn bàn (select-table) bị co cụm */
+        /* Buộc màn hình này chiếm toàn bộ chiều cao/rộng khả dụng bên trong body đã được padding. */
+        #select-table {
+            min-height: 100%; /* Đảm bảo nó trải dài hết chiều cao của body */
+            width: 100%;
+            /* Body đã có flex justify-center, set min-height: 100% sẽ giúp nó có đủ không gian để căn giữa */
+        }
+        
+        /* 2. Fix màn hình bắt đầu (start-screen) */
+        /* min-h-screen trên start-screen bị lỗi khi body có padding. Đổi sang h-full để tương thích. */
+        #start-screen {
+            min-height: 100% !important; /* Ghi đè min-h-screen để fit với chiều cao body */
+            width: 100%; /* Đảm bảo nó full width */
+        }
+
+
+        /* 3. Fix iframe không full màn hình */
+        /* Sử dụng fixed position để iframe bỏ qua flex-center của body và fill viewport */
+        /* Đồng thời phải áp dụng lại padding an toàn (safe-area-insets) vì fixed position bỏ qua padding của body */
+        #pos-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1000;
+            
+            /* Áp dụng lại padding an toàn cho Fixed element */
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+            padding-left: env(safe-area-inset-left);
+            padding-right: env(safe-area-inset-right);
+            
+            /* Chuyển sang Flex để iframe bên trong có thể fill 100% không gian padding mới */
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Đảm bảo iframe bên trong lấp đầy #pos-container đã được fixed/padded */
+        #pos-frame {
+            flex-grow: 1; /* Cho phép nó lấp đầy không gian padding */
+            width: 100%;
+            height: 100%;
+        }
+    </style>
 </head>
 <body class="flex flex-col items-center justify-center">
 
-  <!-- Bước 1: Chọn bàn -->
-  <div id="select-table" class="flex flex-col items-center">
-    <h1 class="text-3xl font-bold text-gray-900 mb-6">Vui lòng chọn bàn</h1>
-    <div id="table-container"
-         class="grid justify-center gap-4
-                grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5
-                px-4">
-    </div>
-  </div>
+  <!-- Bước 1: Chọn bàn -->
+  <div id="select-table" class="flex flex-col items-center">
+    <h1 class="text-3xl font-bold text-gray-900 mb-6">Vui lòng chọn bàn</h1>
+    <div id="table-container"
+         class="grid justify-center gap-4
+                grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5
+                px-4">
+    </div>
+  </div>
 
 <!-- Bước 2: Màn bắt đầu -->
+<!-- Đã thêm CSS ghi đè min-h-screen trong phần <style> mới -->
 <div id="start-screen" class="hidden flex flex-col items-center justify-center min-h-screen">
 
-  <!-- Số bàn siêu to: chiếm ~15–18% cạnh ngắn của màn hình -->
-  <div
-    id="selected-table"
-    class="leading-none font-extrabold text-gray-900 mb-10 text-[min(60vw,60vh)]">
-  </div>
+  <!-- Số bàn siêu to: chiếm ~15–18% cạnh ngắn của màn hình -->
+  <div
+    id="selected-table"
+    class="leading-none font-extrabold text-gray-900 mb-10 text-[min(60vw,60vh)]">
+  </div>
 
-  <!-- Nút START ORDER: cao = 15% chiều cao màn hình; rộng = 2.5 × cao -->
-  <button
-    id="start-order"
-    class="rounded-2xl bg-blue-500 text-white font-extrabold shadow-lg hover:bg-blue-600 flex items-center justify-center w-[min(80vw,37.5vh)] h-[15vh] text-[clamp(22px,5vh,64px)]">
-    START ORDER
-  </button>
+  <!-- Nút START ORDER: cao = 15% chiều cao màn hình; rộng = 2.5 × cao -->
+  <button
+    id="start-order"
+    class="rounded-2xl bg-blue-500 text-white font-extrabold shadow-lg hover:bg-blue-600 flex items-center justify-center w-[min(80vw,37.5vh)] h-[15vh] text-[clamp(22px,5vh,64px)]">
+    START ORDER
+  </button>
 
 </div>
 
 
 
-  <!-- Bước 3: POS iframe -->
-  <div id="pos-container" class="hidden w-full h-screen">
-    <iframe id="pos-frame" class="w-full h-full border-0" referrerpolicy="no-referrer"></iframe>
-  </div>
+  <!-- Bước 3: POS iframe -->
+  <!-- *** BƯỚC FIX TAI THỎ 2/2: Thay h-screen (100vh) bằng h-full (100% của body đã có padding) *** -->
+  <div id="pos-container" class="hidden w-full h-full">
+    <iframe id="pos-frame" class="w-full h-full border-0" referrerpolicy="no-referrer"></iframe>
+  </div>
 
-  <!-- Popup nhập mật mã -->
-  <div id="password-popup" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-[2200]">
-    <div class="bg-white p-6 rounded-lg shadow-lg text-center">
-      <h3 class="text-lg font-semibold mb-4">Nhập mật mã</h3>
-      <input id="password-input" type="password" maxlength="4"
-             class="border p-2 rounded text-center tracking-widest text-xl"
-             placeholder="****" inputmode="numeric" />
-      <div class="mt-4 flex justify-center space-x-4">
-        <button id="password-ok" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">OK</button>
-        <button id="password-cancel" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Hủy</button>
-      </div>
-      <p id="password-error" class="text-red-500 mt-2 hidden">Sai mật mã!</p>
-    </div>
-  </div>
+  <!-- Popup nhập mật mã -->
+  <div id="password-popup" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-[2200]">
+    <div class="bg-white p-6 rounded-lg shadow-lg text-center">
+      <h3 class="text-lg font-semibold mb-4">Nhập mật mã</h3>
+      <input id="password-input" type="password" maxlength="4"
+             class="border p-2 rounded text-center tracking-widest text-xl"
+             placeholder="****" inputmode="numeric" />
+      <div class="mt-4 flex justify-center space-x-4">
+        <button id="password-ok" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">OK</button>
+        <button id="password-cancel" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Hủy</button>
+      </div>
+      <p id="password-error" class="text-red-500 mt-2 hidden">Sai mật mã!</p>
+    </div>
+  </div>
 
-  <!-- Màn đen -->
-  <div id="screen-overlay"></div>
+  <!-- Màn đen -->
+  <div id="screen-overlay"></div>
 
-  <!-- Nút bí mật -->
-  <button id="back-btn-start" class="secret-btn" aria-label="hidden-back-start">◀</button>
-  <button id="back-btn-select" class="secret-btn" aria-label="hidden-back-select">▶</button>
+  <!-- Nút bí mật -->
+  <button id="back-btn-start" class="secret-btn" aria-label="hidden-back-start">◀</button>
+  <button id="back-btn-select" class="secret-btn" aria-label="hidden-back-select">▶</button>
 
-  <!-- Scripts -->
-  <script src="./assets/js/redirect-core.js?v=mod1"></script>
-  <script src="./assets/js/secret-btn.js?v=mod1"></script>
-  <script src="./assets/js/state.js?v=mod1"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-  <script src="./assets/js/blackout.js?v=mod1"></script>
-  <script src="./assets/js/nosleep.js?v=mod1"></script>
-  <script src="./assets/js/sw-register.js?v=mod1"></script>
+  <!-- Scripts -->
+  <script src="./assets/js/redirect-core.js?v=mod1"></script>
+  <script src="./assets/js/secret-btn.js?v=mod1"></script>
+  <script src="./assets/js/state.js?v=mod1"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <script src="./assets/js/blackout.js?v=mod1"></script>
+  <script src="./assets/js/nosleep.js?v=mod1"></script>
+  <script src="./assets/js/sw-register.js?v=mod1"></script>
 
-  <script>
-  // Prevent copy/paste/cut/selectstart/contextmenu globally,
-  // but allow inputs to behave normally.
-  (function() {
-    // helper: allow if event target is form control
-    function isFormControl(el) {
-      if (!el) return false;
-      const tag = el.tagName && el.tagName.toLowerCase();
-      if (!tag) return false;
-      if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
-      if (el.isContentEditable) return true;
-      // allow children of input wrappers
-      if (el.closest && el.closest('input, textarea, select, [contenteditable="true"]')) return true;
-      return false;
-    }
+  <script>
+  // Prevent copy/paste/cut/selectstart/contextmenu globally,
+  // but allow inputs to behave normally.
+  (function() {
+    // helper: allow if event target is form control
+    function isFormControl(el) {
+      if (!el) return false;
+      const tag = el.tagName && el.tagName.toLowerCase();
+      if (!tag) return false;
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+      if (el.isContentEditable) return true;
+      // allow children of input wrappers
+      if (el.closest && el.closest('input, textarea, select, [contenteditable="true"]')) return true;
+      return false;
+    }
 
-    // Block selection start (mouse & touch)
-    document.addEventListener('selectstart', function(e) {
-      if (isFormControl(e.target)) return; // allow selecting input text
-      e.preventDefault();
-    }, { passive: false });
+    // Block selection start (mouse & touch)
+    document.addEventListener('selectstart', function(e) {
+      if (isFormControl(e.target)) return; // allow selecting input text
+      e.preventDefault();
+    }, { passive: false });
 
-    // Block copy / cut / paste
-    ['copy','cut','paste'].forEach(ev => {
-      document.addEventListener(ev, function(e) {
-        if (isFormControl(e.target)) return; // permit for inputs
-        e.preventDefault();
-        // optional: show small toast if needed
-      }, { passive: false });
-    });
+    // Block copy / cut / paste
+    ['copy','cut','paste'].forEach(ev => {
+      document.addEventListener(ev, function(e) {
+        if (isFormControl(e.target)) return; // permit for inputs
+        e.preventDefault();
+        // optional: show small toast if needed
+      }, { passive: false });
+    });
 
-    // Block context menu (right click / long press)
-    document.addEventListener('contextmenu', function(e) {
-      if (isFormControl(e.target)) return; // allow contextmenu for input fields
-      e.preventDefault();
-    }, { passive: false });
+    // Block context menu (right click / long press)
+    document.addEventListener('contextmenu', function(e) {
+      if (isFormControl(e.target)) return; // allow contextmenu for input fields
+      e.preventDefault();
+    }, { passive: false });
 
-    // For touch: prevent multi-touch zoom & pinch selection
-    document.addEventListener('touchstart', function(e) {
-      if (e.touches && e.touches.length > 1) {
-        e.preventDefault();
-      }
-    }, { passive: false });
+    // For touch: prevent multi-touch zoom & pinch selection
+    document.addEventListener('touchstart', function(e) {
+      if (e.touches && e.touches.length > 1) {
+        e.preventDefault();
+      }
+    }, { passive: false });
 
-    // prevent gesture scale on iOS where e.scale exists
-    document.addEventListener('gesturestart', function(e) {
-      e.preventDefault();
-    }, { passive: false });
+    // prevent gesture scale on iOS where e.scale exists
+    document.addEventListener('gesturestart', function(e) {
+      e.preventDefault();
+    }, { passive: false });
 
-    // Extra: prevent long-press selection fallback on some Android
-    let longPressTimer = null;
-    document.addEventListener('touchstart', function(e) {
-      if (isFormControl(e.target)) return;
-      longPressTimer = setTimeout(function() {
-        // nothing (prevent default already applied by CSS), but ensure no selection menus
-        // we also prevent contextmenu events triggered by long press
-        // (some browsers still fire contextmenu — already blocked above)
-      }, 600);
-    }, { passive: false });
-    document.addEventListener('touchend', function(e) {
-      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
-    }, { passive: false });
-  })();
+    // Extra: prevent long-press selection fallback on some Android
+    let longPressTimer = null;
+    document.addEventListener('touchstart', function(e) {
+      if (isFormControl(e.target)) return;
+      longPressTimer = setTimeout(function() {
+        // nothing (prevent default already applied by CSS), but ensure no selection menus
+        // we also prevent contextmenu events triggered by long press
+        // (some browsers still fire contextmenu — already blocked above)
+      }, 600);
+    }, { passive: false });
+    document.addEventListener('touchend', function(e) {
+      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    }, { passive: false });
+  })();
 </script>
 
 </body>
