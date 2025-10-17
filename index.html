@@ -3,41 +3,40 @@
 <head>
   <meta charset="UTF-8" />
   <title>T-NGON - Gọi món</title>
-  <!-- meta viewport đã có viewport-fit=cover, rất tốt -->
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#3b82f6" />
 
   <!-- disable text selection / long-press selection -->
-  <style>
-    /* disable selection globally */
-    html, body, #select-table, #start-screen, #pos-container, .secret-btn, * {
-      -webkit-user-select: none !important; /* Safari/Chrome iOS/Android */
-      -moz-user-select: none !important;
-      -ms-user-select: none !important;
-      user-select: none !important;
-      -webkit-touch-callout: none !important; /* iOS long press menu */
-      -webkit-user-drag: none !important;
-      -ms-touch-action: manipulation;
-      touch-action: manipulation;
-    }
+<style>
+  /* disable selection globally */
+  html, body, #select-table, #start-screen, #pos-container, .secret-btn, * {
+    -webkit-user-select: none !important; /* Safari/Chrome iOS/Android */
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    user-select: none !important;
+    -webkit-touch-callout: none !important; /* iOS long press menu */
+    -webkit-user-drag: none !important;
+    -ms-touch-action: manipulation;
+    touch-action: manipulation;
+  }
 
-    /* allow selection and normal behavior on form controls (password input etc.) */
-    input, textarea, select, [contenteditable="true"] {
-      -webkit-user-select: text !important;
-      user-select: text !important;
-      -webkit-touch-callout: default !important;
-      -webkit-user-drag: auto !important;
-    }
+  /* allow selection and normal behavior on form controls (password input etc.) */
+  input, textarea, select, [contenteditable="true"] {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+    -webkit-touch-callout: default !important;
+    -webkit-user-drag: auto !important;
+  }
 
-    /* if you want to keep links clickable but not selectable */
-    a { -webkit-user-select: none !important; user-select: none !important; }
+  /* if you want to keep links clickable but not selectable */
+  a { -webkit-user-select: none !important; user-select: none !important; }
 
-    /* hide iOS context menu on long press of images */
-    img { -webkit-touch-callout: none !important; }
+  /* hide iOS context menu on long press of images */
+  img { -webkit-touch-callout: none !important; }
 
-    /* optional: avoid outline when tapping (but keep focus styles for accessibility if needed) */
-    :focus { outline: none !important; }
-  </style>
+  /* optional: avoid outline when tapping (but keep focus styles for accessibility if needed) */
+  :focus { outline: none !important; }
+</style>
 
   <!-- PWA -->
   <link rel="manifest" href="./redirect.webmanifest" />
@@ -49,23 +48,18 @@
   <script src="https://cdn.tailwindcss.com"></script>
 
   <style>
-    /* *** BƯỚC FIX TAI THỎ 1/2: Đảm bảo box-sizing để padding không làm tràn chiều cao *** */
-    *, ::before, ::after { box-sizing: border-box; }
-
     html, body {
       margin: 0;
       padding: 0;
       height: 100%;
       background: #f3f4f6;
     }
-    /* note: initial body padding uses env(); we'll override it at runtime depending on detection */
     body {
       padding-top: env(safe-area-inset-top);
       padding-left: env(safe-area-inset-left);
       padding-right: env(safe-area-inset-right);
       padding-bottom: env(safe-area-inset-bottom);
     }
-
     #screen-overlay {
       position: fixed;
       inset: 0;
@@ -86,55 +80,6 @@
     #back-btn-start { left: 6px; }
     #back-btn-select { right: 6px; }
   </style>
-
-  <!-- KHỐI CODE MỚI THÊM ĐỂ FIX LỖI NOTCH / TAI THỎ -->
-  <style>
-    /*
-      Khi phát hiện "không có notch" ta sẽ gỡ padding cho body (để full-bleed).
-      Khi có notch, giữ nguyên padding (CSS env) để an toàn.
-      Ngoài ra điều chỉnh pos-container để iframe full-bleed khi không notch.
-    */
-
-    /* Make pos-container fixed full viewport by default (JS sẽ điều chỉnh padding nếu cần) */
-    #pos-container {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      z-index: 1000;
-      display: none;
-      /* default no extra padding here; initial body may have env padding but we'll override body if needed */
-      padding: 0;
-      box-sizing: border-box;
-      /* ensure iframe fills */
-      display: flex;
-      flex-direction: column;
-    }
-    #pos-container.is-shown { display: flex; }
-    #pos-frame { flex: 1 1 auto; width: 100%; height: 100%; border: 0; }
-
-    /* When JS adds .has-notch to body, we want select/start to respect safe-area by keeping body padding.
-       When no notch, JS will remove body padding (set to 0) so content can be true full-bleed. */
-
-    /* Keep select/start areas full height inside body */
-    #select-table { min-height: 100%; width: 100%; }
-    /* start-screen override for safe behavior with body padding */
-    #start-screen { min-height: 100% !important; width: 100%; }
-
-    /* Buttons / layout */
-    #selected-table { font-weight:800; color:#111; line-height:1; margin-bottom:1rem; text-align:center; font-size: min(60vw,60vh); }
-    #start-order { height:15vh; width: min(80vw,37.5vh); border-radius:1rem; font-weight:800; font-size: clamp(20px,5vh,48px); display:flex; align-items:center; justify-content:center; background:#0ea5e9; color:#fff; box-shadow:0 6px 18px rgba(2,6,23,0.12); }
-
-    /* Table grid */
-    #table-container { display:grid; justify-content:center; gap:1rem; padding:0 1rem; grid-template-columns: repeat(2, minmax(0,1fr)); }
-    @media(min-width:640px){ #table-container { grid-template-columns: repeat(3,1fr); } }
-    @media(min-width:768px){ #table-container { grid-template-columns: repeat(4,1fr); } }
-    @media(min-width:1024px){ #table-container { grid-template-columns: repeat(5,1fr); } }
-    .table-btn { display:flex; align-items:center; justify-content:center; padding:1rem; border-radius:.75rem; font-weight:800; background:#0369a1; color:#fff; font-size: clamp(18px,3.5vw,28px); min-height:5.25rem; user-select:none; }
-    .table-btn:active { transform: translateY(1px); }
-
-  </style>
 </head>
 <body class="flex flex-col items-center justify-center">
 
@@ -148,28 +93,28 @@
     </div>
   </div>
 
-  <!-- Bước 2: Màn bắt đầu -->
-  <!-- Đã thêm CSS ghi đè min-h-screen trong phần <style> mới -->
-  <div id="start-screen" class="hidden flex flex-col items-center justify-center min-h-screen">
+<!-- Bước 2: Màn bắt đầu -->
+<div id="start-screen" class="hidden flex flex-col items-center justify-center min-h-screen">
 
-    <!-- Số bàn siêu to: chiếm ~15–18% cạnh ngắn của màn hình -->
-    <div
-      id="selected-table"
-      class="leading-none font-extrabold text-gray-900 mb-10 text-[min(60vw,60vh)]">
-    </div>
-
-    <!-- Nút START ORDER: cao = 15% chiều cao màn hình; rộng = 2.5 × cao -->
-    <button
-      id="start-order"
-      class="rounded-2xl bg-blue-500 text-white font-extrabold shadow-lg hover:bg-blue-600 flex items-center justify-center w-[min(80vw,37.5vh)] h-[15vh] text-[clamp(22px,5vh,64px)]">
-      START ORDER
-    </button>
-
+  <!-- Số bàn siêu to: chiếm ~15–18% cạnh ngắn của màn hình -->
+  <div
+    id="selected-table"
+    class="leading-none font-extrabold text-gray-900 mb-10 text-[min(60vw,60vh)]">
   </div>
 
+  <!-- Nút START ORDER: cao = 15% chiều cao màn hình; rộng = 2.5 × cao -->
+  <button
+    id="start-order"
+    class="rounded-2xl bg-blue-500 text-white font-extrabold shadow-lg hover:bg-blue-600 flex items-center justify-center w-[min(80vw,37.5vh)] h-[15vh] text-[clamp(22px,5vh,64px)]">
+    START ORDER
+  </button>
+
+</div>
+
+
+
   <!-- Bước 3: POS iframe -->
-  <!-- *** BƯỚC FIX TAI THỎ 2/2: Thay h-screen (100vh) bằng h-full (100% của body đã có padding) *** -->
-  <div id="pos-container" class="hidden w-full h-full">
+  <div id="pos-container" class="hidden w-full h-screen">
     <iframe id="pos-frame" class="w-full h-full border-0" referrerpolicy="no-referrer"></iframe>
   </div>
 
@@ -195,145 +140,10 @@
   <button id="back-btn-start" class="secret-btn" aria-label="hidden-back-start">◀</button>
   <button id="back-btn-select" class="secret-btn" aria-label="hidden-back-select">▶</button>
 
- <script>
-(function(){
-  'use strict';
-
-  // CONFIG: fallback offset when PWA on iPhone-like UA and env() unreliable
-  const FALLBACK_OFFSETS_PX = [44, 64]; // try first value, if still bad increase to next
-
-  function isStandalone() {
-    try {
-      return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
-             || window.navigator.standalone === true
-             || (window.location && window.location.search && window.location.search.includes('standalone=1'));
-    } catch(e){ return false; }
-  }
-
-  function readEnvSafeTop() {
-    try {
-      const el = document.createElement('div');
-      el.style.cssText = 'position:absolute; top:-9999px; padding-top: env(safe-area-inset-top, 0px);';
-      document.documentElement.appendChild(el);
-      const computed = window.getComputedStyle(el).paddingTop;
-      document.documentElement.removeChild(el);
-      return parseFloat(computed) || 0;
-    } catch(e){ return 0; }
-  }
-
-  function uaIsIPhoneFamily() {
-    const ua = (navigator.userAgent || '').toLowerCase();
-    return ua.includes('iphone') || ua.includes('ipod') || ua.includes('ipad');
-  }
-
-  function applyHardOffset(px) {
-    const pos = document.getElementById('pos-container');
-    // apply transform-based push so system UI overlay won't overlap content
-    if (pos) {
-      pos.style.transform = `translateY(${px}px)`;
-      pos.style.top = '0';
-      pos.style.height = `calc(100vh - ${px}px)`;
-      pos.style.paddingTop = '0';
-      pos.style.paddingBottom = '0';
-      // ensure iframe inside fills new container
-      const iframe = document.getElementById('pos-frame');
-      if (iframe) { iframe.style.height = '100%'; iframe.style.width = '100%'; }
-    }
-    // also shift any start/select views so they remain visible if desired:
-    const select = document.getElementById('select-table');
-    const start = document.getElementById('start-screen');
-    if (select) select.style.transform = `translateY(${px}px)`;
-    if (start) start.style.transform = `translateY(${px}px)`;
-    console.debug('[notch-fallback] applied hard offset', px);
-  }
-
-  function removeHardOffset() {
-    const pos = document.getElementById('pos-container');
-    if (pos) {
-      pos.style.transform = '';
-      pos.style.top = '';
-      pos.style.height = '';
-      pos.style.paddingTop = '';
-      pos.style.paddingBottom = '';
-    }
-    const select = document.getElementById('select-table');
-    const start = document.getElementById('start-screen');
-    if (select) select.style.transform = '';
-    if (start) start.style.transform = '';
-    console.debug('[notch-fallback] removed hard offset');
-  }
-
-  function decideAndApply() {
-    const params = new URLSearchParams(location.search);
-    if (params.get('forceNotch') === '1') { applyHardOffset(FALLBACK_OFFSETS_PX[0]); return; }
-    if (params.get('forceNoNotch') === '1') { removeHardOffset(); return; }
-
-    const safeTop = readEnvSafeTop();
-    const standalone = isStandalone();
-    const isiPhone = uaIsIPhoneFamily();
-
-    console.debug('[notch] env safeTop=', safeTop, 'standalone=', standalone, 'isiPhone=', isiPhone);
-
-    if (safeTop > 6) {
-      // good env value: honor it (no hard offset)
-      removeHardOffset();
-      // ensure pos uses env padding so content below status bar is safe
-      const pos = document.getElementById('pos-container');
-      if (pos) {
-        pos.style.paddingTop = 'env(safe-area-inset-top)';
-        pos.style.paddingBottom = 'env(safe-area-inset-bottom)';
-        pos.style.paddingLeft = 'env(safe-area-inset-left)';
-        pos.style.paddingRight = 'env(safe-area-inset-right)';
-        pos.style.top = '0';
-        pos.style.height = 'calc(100vh - env(safe-area-inset-top))';
-      }
-      return;
-    }
-
-    // env unreliable (0). If not standalone or not iPhone, do nothing (full-bleed)
-    if (!standalone || !isiPhone) {
-      removeHardOffset();
-      return;
-    }
-
-    // Running standalone on iPhone and env=0 → enforce fallback offset(s)
-    // Try first fallback offset; you can increase value if still overlapped.
-    applyHardOffset(FALLBACK_OFFSETS_PX[0]);
-
-    // As a safety: recheck after short delay; if still overlap you can increase offset automatically:
-    setTimeout(() => {
-      // heuristic: read element bounding to see if top of pos-frame is behind notch area
-      try {
-        const iframe = document.getElementById('pos-frame');
-        if (!iframe) return;
-        const rect = iframe.getBoundingClientRect();
-        // if top of iframe <= 0 (i.e. still under status bar area), bump offset
-        if (rect.top <= 0) {
-          console.debug('[notch-fallback] iframe rect.top', rect.top, ' -> bumping fallback');
-          // try larger fallback if available
-          if (FALLBACK_OFFSETS_PX.length > 1) applyHardOffset(FALLBACK_OFFSETS_PX[1]);
-        }
-      } catch(e){ console.warn('fallback check error', e); }
-    }, 350);
-  }
-
-  // Run on DOM ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', decideAndApply);
-  } else {
-    decideAndApply();
-  }
-
-  // Re-evaluate on orientation change / focus (PWA wake)
-  window.addEventListener('orientationchange', () => setTimeout(decideAndApply, 250));
-  window.addEventListener('resize', () => setTimeout(decideAndApply, 250));
-  window.addEventListener('focus', () => setTimeout(decideAndApply, 300));
-})();
-</script>
   <!-- Scripts -->
-  <script src="./assets/js/redirect-core.js?v=mod11"></script>
-  <script src="./assets/js/secret-btn.js?v=mod11"></script>
-  <script src="./assets/js/state.js?v=mod11"></script>
+  <script src="./assets/js/redirect-core.js?v=mod1"></script>
+  <script src="./assets/js/secret-btn.js?v=mod1"></script>
+  <script src="./assets/js/state.js?v=mod1"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
@@ -396,13 +206,15 @@
       if (isFormControl(e.target)) return;
       longPressTimer = setTimeout(function() {
         // nothing (prevent default already applied by CSS), but ensure no selection menus
+        // we also prevent contextmenu events triggered by long press
+        // (some browsers still fire contextmenu — already blocked above)
       }, 600);
     }, { passive: false });
     document.addEventListener('touchend', function(e) {
       if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
     }, { passive: false });
   })();
-  </script>
+</script>
 
 </body>
 </html>
