@@ -3,40 +3,41 @@
 <head>
   <meta charset="UTF-8" />
   <title>T-NGON - Gọi món</title>
+  <!-- meta viewport đã có viewport-fit=cover, rất tốt -->
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#3b82f6" />
 
   <!-- disable text selection / long-press selection -->
-<style>
-  /* disable selection globally */
-  html, body, #select-table, #start-screen, #pos-container, .secret-btn, * {
-    -webkit-user-select: none !important; /* Safari/Chrome iOS/Android */
-    -moz-user-select: none !important;
-    -ms-user-select: none !important;
-    user-select: none !important;
-    -webkit-touch-callout: none !important; /* iOS long press menu */
-    -webkit-user-drag: none !important;
-    -ms-touch-action: manipulation;
-    touch-action: manipulation;
-  }
+  <style>
+    /* disable selection globally */
+    html, body, #select-table, #start-screen, #pos-container, .secret-btn, * {
+      -webkit-user-select: none !important; /* Safari/Chrome iOS/Android */
+      -moz-user-select: none !important;
+      -ms-user-select: none !important;
+      user-select: none !important;
+      -webkit-touch-callout: none !important; /* iOS long press menu */
+      -webkit-user-drag: none !important;
+      -ms-touch-action: manipulation;
+      touch-action: manipulation;
+    }
 
-  /* allow selection and normal behavior on form controls (password input etc.) */
-  input, textarea, select, [contenteditable="true"] {
-    -webkit-user-select: text !important;
-    user-select: text !important;
-    -webkit-touch-callout: default !important;
-    -webkit-user-drag: auto !important;
-  }
+    /* allow selection and normal behavior on form controls (password input etc.) */
+    input, textarea, select, [contenteditable="true"] {
+      -webkit-user-select: text !important;
+      user-select: text !important;
+      -webkit-touch-callout: default !important;
+      -webkit-user-drag: auto !important;
+    }
 
-  /* if you want to keep links clickable but not selectable */
-  a { -webkit-user-select: none !important; user-select: none !important; }
+    /* if you want to keep links clickable but not selectable */
+    a { -webkit-user-select: none !important; user-select: none !important; }
 
-  /* hide iOS context menu on long press of images */
-  img { -webkit-touch-callout: none !important; }
+    /* hide iOS context menu on long press of images */
+    img { -webkit-touch-callout: none !important; }
 
-  /* optional: avoid outline when tapping (but keep focus styles for accessibility if needed) */
-  :focus { outline: none !important; }
-</style>
+    /* optional: avoid outline when tapping (but keep focus styles for accessibility if needed) */
+    :focus { outline: none !important; }
+  </style>
 
   <!-- PWA -->
   <link rel="manifest" href="./redirect.webmanifest" />
@@ -48,92 +49,23 @@
   <script src="https://cdn.tailwindcss.com"></script>
 
   <style>
+    /* *** BƯỚC FIX TAI THỎ 1/2: Đảm bảo box-sizing để padding không làm tràn chiều cao *** */
+    *, ::before, ::after { box-sizing: border-box; }
+
     html, body {
       margin: 0;
       padding: 0;
       height: 100%;
       background: #f3f4f6;
     }
-    
-    /* Xử lý cho thiết bị có tai thỏ (notch) */
-    @supports(padding: max(0px)) {
-      body {
-        /* Đảm bảo padding an toàn cho tai thỏ */
-        padding-top: max(env(safe-area-inset-top), 0px);
-        padding-left: max(env(safe-area-inset-left), 0px);
-        padding-right: max(env(safe-area-inset-right), 0px);
-        padding-bottom: max(env(safe-area-inset-bottom), 0px);
-      }
-      
-      /* Điều chỉnh cho các màn hình cụ thể */
-      #select-table, #start-screen, #pos-container {
-        padding-left: max(env(safe-area-inset-left), 1rem);
-        padding-right: max(env(safe-area-inset-right), 1rem);
-      }
-      
-      /* Đảm bảo nút START ORDER không bị che bởi tai thỏ */
-      #start-screen {
-        padding-top: max(env(safe-area-inset-top), 2rem);
-        padding-bottom: max(env(safe-area-inset-bottom), 2rem);
-      }
-      
-      /* Đảm bảo nút bí mật không bị che */
-      .secret-btn {
-        margin-bottom: max(env(safe-area-inset-bottom), 6px);
-      }
+    /* note: initial body padding uses env(); we'll override it at runtime depending on detection */
+    body {
+      padding-top: env(safe-area-inset-top);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+      padding-bottom: env(safe-area-inset-bottom);
     }
-    
-    /* Tối ưu cho iPad và thiết bị lớn */
-    @media (min-width: 768px) {
-      #table-container {
-        max-width: 80%;
-        margin: 0 auto;
-      }
-      
-      #selected-table {
-        font-size: min(40vw, 40vh) !important;
-      }
-      
-      #start-order {
-        width: min(60vw, 30vh) !important;
-        height: 12vh !important;
-        font-size: clamp(20px, 4vh, 48px) !important;
-      }
-    }
-    
-    /* Tối ưu cho điện thoại có màn hình nhỏ */
-    @media (max-width: 360px) {
-      #table-container {
-        grid-template-columns: repeat(2, 1fr) !important;
-        gap: 0.75rem;
-      }
-      
-      #selected-table {
-        font-size: min(50vw, 50vh) !important;
-      }
-      
-      #start-order {
-        width: min(85vw, 40vh) !important;
-        height: 14vh !important;
-        font-size: clamp(18px, 4.5vh, 40px) !important;
-      }
-    }
-    
-    /* Đảm bảo iframe POS chiếm toàn bộ màn hình an toàn */
-    #pos-container {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-    }
-    
-    #pos-frame {
-      width: 100%;
-      height: 100%;
-    }
-    
+
     #screen-overlay {
       position: fixed;
       inset: 0;
@@ -141,7 +73,6 @@
       z-index: 2000;
       display: none;
     }
-    
     .secret-btn {
       position: fixed;
       bottom: 6px;
@@ -152,9 +83,57 @@
       z-index: 2100;
       pointer-events: auto;
     }
-    
     #back-btn-start { left: 6px; }
     #back-btn-select { right: 6px; }
+  </style>
+
+  <!-- KHỐI CODE MỚI THÊM ĐỂ FIX LỖI NOTCH / TAI THỎ -->
+  <style>
+    /*
+      Khi phát hiện "không có notch" ta sẽ gỡ padding cho body (để full-bleed).
+      Khi có notch, giữ nguyên padding (CSS env) để an toàn.
+      Ngoài ra điều chỉnh pos-container để iframe full-bleed khi không notch.
+    */
+
+    /* Make pos-container fixed full viewport by default (JS sẽ điều chỉnh padding nếu cần) */
+    #pos-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 1000;
+      display: none;
+      /* default no extra padding here; initial body may have env padding but we'll override body if needed */
+      padding: 0;
+      box-sizing: border-box;
+      /* ensure iframe fills */
+      display: flex;
+      flex-direction: column;
+    }
+    #pos-container.is-shown { display: flex; }
+    #pos-frame { flex: 1 1 auto; width: 100%; height: 100%; border: 0; }
+
+    /* When JS adds .has-notch to body, we want select/start to respect safe-area by keeping body padding.
+       When no notch, JS will remove body padding (set to 0) so content can be true full-bleed. */
+
+    /* Keep select/start areas full height inside body */
+    #select-table { min-height: 100%; width: 100%; }
+    /* start-screen override for safe behavior with body padding */
+    #start-screen { min-height: 100% !important; width: 100%; }
+
+    /* Buttons / layout */
+    #selected-table { font-weight:800; color:#111; line-height:1; margin-bottom:1rem; text-align:center; font-size: min(60vw,60vh); }
+    #start-order { height:15vh; width: min(80vw,37.5vh); border-radius:1rem; font-weight:800; font-size: clamp(20px,5vh,48px); display:flex; align-items:center; justify-content:center; background:#0ea5e9; color:#fff; box-shadow:0 6px 18px rgba(2,6,23,0.12); }
+
+    /* Table grid */
+    #table-container { display:grid; justify-content:center; gap:1rem; padding:0 1rem; grid-template-columns: repeat(2, minmax(0,1fr)); }
+    @media(min-width:640px){ #table-container { grid-template-columns: repeat(3,1fr); } }
+    @media(min-width:768px){ #table-container { grid-template-columns: repeat(4,1fr); } }
+    @media(min-width:1024px){ #table-container { grid-template-columns: repeat(5,1fr); } }
+    .table-btn { display:flex; align-items:center; justify-content:center; padding:1rem; border-radius:.75rem; font-weight:800; background:#0369a1; color:#fff; font-size: clamp(18px,3.5vw,28px); min-height:5.25rem; user-select:none; }
+    .table-btn:active { transform: translateY(1px); }
+
   </style>
 </head>
 <body class="flex flex-col items-center justify-center">
@@ -170,6 +149,7 @@
   </div>
 
   <!-- Bước 2: Màn bắt đầu -->
+  <!-- Đã thêm CSS ghi đè min-h-screen trong phần <style> mới -->
   <div id="start-screen" class="hidden flex flex-col items-center justify-center min-h-screen">
 
     <!-- Số bàn siêu to: chiếm ~15–18% cạnh ngắn của màn hình -->
@@ -188,7 +168,8 @@
   </div>
 
   <!-- Bước 3: POS iframe -->
-  <div id="pos-container" class="hidden w-full h-screen">
+  <!-- *** BƯỚC FIX TAI THỎ 2/2: Thay h-screen (100vh) bằng h-full (100% của body đã có padding) *** -->
+  <div id="pos-container" class="hidden w-full h-full">
     <iframe id="pos-frame" class="w-full h-full border-0" referrerpolicy="no-referrer"></iframe>
   </div>
 
@@ -213,6 +194,80 @@
   <!-- Nút bí mật -->
   <button id="back-btn-start" class="secret-btn" aria-label="hidden-back-start">◀</button>
   <button id="back-btn-select" class="secret-btn" aria-label="hidden-back-select">▶</button>
+
+  <!-- ===== NOTCH DETECTION SCRIPT =====
+       - Phát hiện safe-area-inset-top bằng cách đọc env(safe-area-inset-top)
+       - Nếu giá trị > threshold => coi là thiết bị có notch -> giữ padding trên body (CSS env)
+       - Nếu giá trị <= threshold => coi là KHÔNG notch -> gỡ padding body để iframe + UI full-bleed
+       - Cho phép override test với ?forceNotch=1 hoặc ?forceNoNotch=1
+  -->
+  <script>
+    (function(){
+      'use strict';
+      function detectNotch() {
+        try {
+          // quick override by query string for testing
+          const params = new URLSearchParams(location.search);
+          if (params.get('forceNotch') === '1') return true;
+          if (params.get('forceNoNotch') === '1') return false;
+
+          const t = document.createElement('div');
+          t.style.cssText = 'position:absolute; top:-9999px; padding-top: env(safe-area-inset-top, 0px);';
+          document.documentElement.appendChild(t);
+          const computed = window.getComputedStyle(t).paddingTop;
+          document.documentElement.removeChild(t);
+          const px = parseFloat(computed) || 0;
+          return px > 6; // threshold (px) — tuneable
+        } catch (e) {
+          console.warn('notch detect error', e);
+          return false;
+        }
+      }
+
+      function applyNotchBehavior() {
+        const hasNotch = detectNotch();
+        // apply body padding behavior
+        if (!hasNotch) {
+          // Remove body padding so app is full-bleed on non-notch devices
+          document.body.style.padding = '0';
+        } else {
+          // Let CSS env() handle safe area (reset inline style)
+          document.body.style.padding = '';
+          document.body.classList.add('has-notch');
+        }
+
+        // adjust pos-container padding accordingly
+        const pos = document.getElementById('pos-container');
+        if (pos) {
+          if (!hasNotch) {
+            // make iframe true full viewport (no extra padding)
+            pos.style.padding = '0';
+            pos.style.top = '0';
+            pos.style.height = '100vh';
+          } else {
+            // ensure safe-area padding applied inside fixed pos container
+            pos.style.paddingTop = 'env(safe-area-inset-top)';
+            pos.style.paddingBottom = 'env(safe-area-inset-bottom)';
+            pos.style.paddingLeft = 'env(safe-area-inset-left)';
+            pos.style.paddingRight = 'env(safe-area-inset-right)';
+            pos.style.top = '0';
+            pos.style.height = 'calc(100vh - env(safe-area-inset-top))';
+          }
+        }
+      }
+
+      // Run early after DOM ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', applyNotchBehavior);
+      } else {
+        applyNotchBehavior();
+      }
+
+      // Also re-check on resize/orientationchange in case environment changes
+      window.addEventListener('orientationchange', () => setTimeout(applyNotchBehavior, 300));
+      window.addEventListener('resize', () => setTimeout(applyNotchBehavior, 300));
+    })();
+  </script>
 
   <!-- Scripts -->
   <script src="./assets/js/redirect-core.js?v=mod1"></script>
@@ -280,47 +335,13 @@
       if (isFormControl(e.target)) return;
       longPressTimer = setTimeout(function() {
         // nothing (prevent default already applied by CSS), but ensure no selection menus
-        // we also prevent contextmenu events triggered by long press
-        // (some browsers still fire contextmenu — already blocked above)
       }, 600);
     }, { passive: false });
     document.addEventListener('touchend', function(e) {
       if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
     }, { passive: false });
   })();
-  
-  // Thêm JavaScript để xử lý responsive tốt hơn
-  document.addEventListener('DOMContentLoaded', function() {
-    // Kiểm tra và điều chỉnh kích thước dựa trên thiết bị
-    function adjustLayoutForDevice() {
-      const isTablet = window.innerWidth >= 768 && window.innerHeight >= 1024;
-      const isSmallPhone = window.innerWidth <= 360;
-      
-      // Thêm class tùy chỉnh cho thiết bị
-      if (isTablet) {
-        document.body.classList.add('tablet-device');
-      } else if (isSmallPhone) {
-        document.body.classList.add('small-phone');
-      } else {
-        document.body.classList.add('standard-phone');
-      }
-      
-      // Đảm bảo iframe POS chiếm toàn bộ màn hình an toàn
-      const posContainer = document.getElementById('pos-container');
-      if (posContainer) {
-        posContainer.style.paddingTop = 'env(safe-area-inset-top)';
-        posContainer.style.paddingBottom = 'env(safe-area-inset-bottom)';
-        posContainer.style.paddingLeft = 'env(safe-area-inset-left)';
-        posContainer.style.paddingRight = 'env(safe-area-inset-right)';
-      }
-    }
-    
-    // Gọi hàm khi trang tải và khi thay đổi kích thước
-    adjustLayoutForDevice();
-    window.addEventListener('resize', adjustLayoutForDevice);
-    window.addEventListener('orientationchange', adjustLayoutForDevice);
-  });
-</script>
+  </script>
 
 </body>
 </html>
