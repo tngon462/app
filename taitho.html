@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <title>T-NGON - Gọi món (Notch-safe)</title>
+
+  <!-- Lock zoom + support safe-area -->
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <meta name="theme-color" content="#3b82f6" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+  <!-- Manifest / icon (giữ như project) -->
+  <link rel="manifest" href="./redirect.webmanifest" />
+  <link rel="icon" href="./icons/icon-192.png" />
+
+  <!-- Tailwind (nếu dự án đang dùng) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    /* ===== CONFIG: chỉnh ở đây nếu cần ===== */
+    :root { --TOP_OFFSET_PX: 44px; } /* <-- thay đổi nếu muốn chừa to hơn */
+
+    /* Reset & box-sizing */
+    *, *::before, *::after { box-sizing: border-box; -webkit-font-smoothing:antialiased; }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: #f3f4f6;
+      /* LUÔN chừa vùng trên (notch) bằng padding-top cố định */
+      padding-top: var(--TOP_OFFSET_PX);
+      /* optional: bạn có thể vẫn dùng env(...) kết hợp: padding-top: env(safe-area-inset-top, 44px) */
+      padding-left: env(safe-area-inset-left, 0px);
+      padding-right: env(safe-area-inset-right, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    /* Container cho iframe POS: fixed và tính toán lại theo TOP_OFFSET */
+    #pos-container {
+      position: fixed;
+      top: 0;              /* keep at top: we will offset iframe inside */
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 1000;
+      background: #fff;
+      display: none;
+      overflow: hidden;
+    }
+    /* iframe sẽ được đẩy xuống bằng transform để chừa vùng notch, đồng thời giữ kích thước đúng */
+    #pos-frame {
+      position: absolute;
+      top: calc(var(--TOP_OFFSET_PX));
+      left: 0;
+      width: 100%;
+      height: calc(100vh - var(--TOP_OFFSET_PX));
+      border: 0;
+    }
+
+    /* Select / Start screens: đảm bảo không bị che vì body đã có padding-top cố định */
+    #select-table, #start-screen {
+      width: 100%;
+      min-height: calc(100vh - var(--TOP_OFFSET_PX));
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      box-sizing: border-box;
+    }
+    #start-screen { display: none; }
+
+    /* Big number + start button */
+    #selected-table {
+      font-weight: 800;
+      color: #000;
+      line-height: 1;
+      text-align: center;
+      font-size: min(60vw, 60vh);
+      margin-bottom: 1rem;
+      user-select: text; /* allow copy in input but not here; you can remove */
+    }
+    #start-order {
+      height: 15vh;
+      width: min(80vw, 37.5vh);
+      border-radius: 1rem;
+      font-weight: 800;
+      font-size: clamp(20px, 5vh, 48px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0ea5e9;
+      color: white;
+      box-shadow: 0 6px 18px rgba(2,6,23,0.12);
+      -webkit-touch-callout: none;
+    }
+
+    /* Table grid styling */
+    #table-container {
+      display: grid;
+      gap: 1rem;
+      padding: 0 1rem;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      width: 100%;
+    }
+    @media(min-width:640px){ #table-container { grid-template-columns: repeat(3,1fr); } }
+    @media(min-width:768px){ #table-container { grid-template-columns: repeat(4,1fr); } }
+    @media(min-width:1024px){ #table-container { grid-template-columns: repeat(5,1fr); } }
+
+    .table-btn {
+      display:flex; align-items:center; justify-content:center;
+      padding: 1rem; border-radius: .75rem; font-weight:800;
+      background: #0369a1; color:#fff;
+      font-size: clamp(18px, 3.5vw, 28px);
+      min-height: 5.25rem;
+      user-select: none;
+    }
+
+    /* secret button (invisible) */
+    .secret-btn {
+      position: fixed;
+      bottom: 8px;
+      left: 8px;
+      width: 96px;
+      height: 96px;
+      background: transparent;
+      border: none;
+      z-index: 2200;
+      opacity: 0;
+      pointer-events: auto;
+    }
+
+    /* popup password (keep selectable) */
+    #password-popup input { -webkit-user-select: text; user-select: text; }
+
+    /* screen overlay (blackout) */
+    #screen-overlay {
+      position: fixed; inset: 0; background: #000; z-index: 3000; display: none;
+    }
+
+    /* ensure form controls remain usable */
+    input, textarea, select { -webkit-user-select: text !important; user-select: text !important; }
+
+  </style>
+</head>
+<body>
+
+  <!-- STEP 1: Select table -->
+  <div id="select-table" aria-hidden="false">
+    <h1 class="text-3xl font-bold text-gray-900 mb-6">Vui lòng chọn bàn</h1>
+    <div id="table-container"></div>
+  </div>
+
+  <!-- STEP 2: Start screen -->
+  <div id="start-screen" aria-hidden="true">
+    <div id="selected-table" aria-live="polite"></div>
+    <button id="start-order">START ORDER</button>
+  </div>
+
+  <!-- STEP 3: POS iframe -->
+  <div id="pos-container" aria-hidden="true">
+    <iframe id="pos-frame" referrerpolicy="no-referrer" sandbox="allow-forms allow-scripts allow-same-origin allow-popups"></iframe>
+  </div>
+
+  <!-- Password popup -->
+  <div id="password-popup" class="hidden" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:4000;">
+    <div style="background:white;padding:16px;border-radius:8px;min-width:200px;text-align:center;">
+      <h3 style="margin:0 0 8px;font-weight:600;">Nhập mật mã</h3>
+      <input id="password-input" type="password" maxlength="4" inputmode="numeric" style="padding:8px;border-radius:6px;border:1px solid #ddd;text-align:center;font-size:18px;width:120px;" />
+      <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;">
+        <button id="password-ok" style="padding:8px 12px;background:#10b981;color:white;border-radius:6px;border:0;">OK</button>
+        <button id="password-cancel" style="padding:8px 12px;background:#ddd;border-radius:6px;border:0;">Hủy</button>
+      </div>
+      <div id="password-error" style="color:#c53030;margin-top:8px;display:none;">Sai mật mã!</div>
+    </div>
+  </div>
+
+  <div id="screen-overlay"></div>
+
+  <!-- Invisible secret button (left) -->
+  <button id="secret-left" class="secret-btn" aria-label="secret-left"></button>
+
+  <!-- Load your app scripts (keeps same structure) -->
+  <!-- redirect-core.js should implement building table buttons, click behaviour, localStorage etc. -->
+  <script>
+    // ----- small helper: attach default behaviour so this file works standalone -----
+    // If you already have redirect.js / redirect-core.js in assets, you can remove or keep this simple shim.
+    (function(){
+      // Try to load links.json from same folder
+      async function loadLinks() {
+        try {
+          const resp = await fetch('./links.json?cb=' + Date.now(), {cache: 'no-store'});
+          if (!resp.ok) throw new Error('Không load links.json: ' + resp.status);
+          const data = await resp.json();
+          // support new format { updated_at, links: { "1": "...", ... } } or old array/object
+          let linksObj = {};
+          if (data && data.links && typeof data.links === 'object') linksObj = data.links;
+          else if (Array.isArray(data)) {
+            // if array of filenames -> map to indices starting 1
+            data.forEach((v,i)=> { linksObj[String(i+1)] = v; });
+          } else if (typeof data === 'object') linksObj = data;
+          return linksObj;
+        } catch (e) {
+          console.warn('loadLinks error', e);
+          return {};
+        }
+      }
+
+      function buildTableGrid(links) {
+        const container = document.getElementById('table-container');
+        container.innerHTML = '';
+        const keys = Object.keys(links).sort((a,b)=> Number(a)-Number(b));
+        if (keys.length === 0) {
+          container.innerHTML = '<div class="text-sm text-gray-500">Không có bàn (links.json trống)</div>';
+          return;
+        }
+        keys.forEach(k => {
+          const btn = document.createElement('button');
+          btn.className = 'table-btn';
+          btn.textContent = 'Bàn ' + k;
+          btn.dataset.table = k;
+          btn.dataset.url = links[k];
+          btn.addEventListener('click', () => {
+            // show start screen and store selected table
+            document.getElementById('select-table').style.display = 'none';
+            const start = document.getElementById('start-screen');
+            start.style.display = 'flex';
+            document.getElementById('selected-table').textContent = k;
+            const startBtn = document.getElementById('start-order');
+            startBtn.dataset.url = links[k];
+            localStorage.setItem('tableId', k);
+            localStorage.setItem('tableUrl', links[k]);
+            localStorage.setItem('appState','start');
+          });
+          container.appendChild(btn);
+        });
+      }
+
+      async function init() {
+        const links = await loadLinks();
+        buildTableGrid(links);
+
+        // restore state if existed
+        const tableId = localStorage.getItem('tableId');
+        const tableUrl = localStorage.getItem('tableUrl');
+        const state = localStorage.getItem('appState');
+        if (tableId && tableUrl) {
+          if (state === 'pos') {
+            // open pos directly
+            openPos(tableUrl, tableId);
+          } else {
+            // go to start screen but keep selected
+            document.getElementById('select-table').style.display = 'none';
+            const start = document.getElementById('start-screen');
+            start.style.display = 'flex';
+            document.getElementById('selected-table').textContent = tableId;
+            document.getElementById('start-order').dataset.url = tableUrl;
+          }
+        }
+
+        // start order button
+        document.getElementById('start-order').addEventListener('click', function() {
+          const url = this.dataset.url;
+          if (!url) return;
+          openPos(url, this.dataset.table || localStorage.getItem('tableId'));
+        });
+
+        // secret-left: 10 taps in 3s -> go to start screen
+        (function secretHandler() {
+          const btn = document.getElementById('secret-left');
+          let taps = 0, t0 = 0, timer = null;
+          btn.addEventListener('click', () => {
+            const now = Date.now();
+            if (!t0 || (now - t0) > 3000) { t0 = now; taps = 0; }
+            taps++;
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(()=> { taps = 0; t0 = 0; }, 3000);
+            if (taps >= 10) {
+              // go to start screen (show password popup disabled)
+              document.getElementById('pos-container').style.display = 'none';
+              document.getElementById('pos-frame').src = 'about:blank';
+              document.getElementById('start-screen').style.display = 'flex';
+              document.getElementById('select-table').style.display = 'none';
+              localStorage.setItem('appState','start');
+              taps = 0;
+            }
+          });
+        })();
+
+        // password popup handlers (for returning to select)
+        document.getElementById('password-ok').addEventListener('click', ()=> {
+          const v = document.getElementById('password-input').value;
+          if (v === '6868') {
+            // go to select table
+            document.getElementById('password-popup').style.display = 'none';
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('select-table').style.display = 'flex';
+            localStorage.setItem('appState','select');
+            localStorage.removeItem('tableId');
+            localStorage.removeItem('tableUrl');
+          } else {
+            document.getElementById('password-error').style.display = 'block';
+          }
+        });
+        document.getElementById('password-cancel').addEventListener('click', ()=> {
+          document.getElementById('password-popup').style.display = 'none';
+        });
+
+        // helper open pos
+        window.openPos = function(url, tableId) {
+          const posContainer = document.getElementById('pos-container');
+          const iframe = document.getElementById('pos-frame');
+          iframe.src = url;
+          posContainer.style.display = 'block';
+          document.getElementById('start-screen').style.display = 'none';
+          document.getElementById('select-table').style.display = 'none';
+          localStorage.setItem('appState','pos');
+          if (tableId) localStorage.setItem('tableId', tableId);
+          if (url) localStorage.setItem('tableUrl', url);
+        };
+
+        // simple refresh: if links.json updated externally, allow reload list via a key combo (dev)
+        window.addEventListener('keydown', (e) => {
+          if (e.key === 'F5') { init(); }
+        });
+      }
+
+      // init on DOM ready
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+      else init();
+    })();
+  </script>
+
+  <!-- Load remaining app scripts (blackout, firebase, etc.) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <!-- blackout.js should listen to firebase control and set #screen-overlay display accordingly -->
+  <script src="./assets/js/blackout.js?v=taitho" defer></script>
+  <script src="./assets/js/nosleep.js?v=taitho" defer></script>
+  <script src="./assets/js/sw-register.js?v=taitho" defer></script>
+
+</body>
+</html>
