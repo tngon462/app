@@ -195,80 +195,132 @@
   <button id="back-btn-start" class="secret-btn" aria-label="hidden-back-start">◀</button>
   <button id="back-btn-select" class="secret-btn" aria-label="hidden-back-select">▶</button>
 
-  <!-- ===== NOTCH DETECTION SCRIPT =====
-       - Phát hiện safe-area-inset-top bằng cách đọc env(safe-area-inset-top)
-       - Nếu giá trị > threshold => coi là thiết bị có notch -> giữ padding trên body (CSS env)
-       - Nếu giá trị <= threshold => coi là KHÔNG notch -> gỡ padding body để iframe + UI full-bleed
-       - Cho phép override test với ?forceNotch=1 hoặc ?forceNoNotch=1
-  -->
   <script>
-    (function(){
-      'use strict';
-      function detectNotch() {
-        try {
-          // quick override by query string for testing
-          const params = new URLSearchParams(location.search);
-          if (params.get('forceNotch') === '1') return true;
-          if (params.get('forceNoNotch') === '1') return false;
+  (function(){
+    'use strict';
 
-          const t = document.createElement('div');
-          t.style.cssText = 'position:absolute; top:-9999px; padding-top: env(safe-area-inset-top, 0px);';
-          document.documentElement.appendChild(t);
-          const computed = window.getComputedStyle(t).paddingTop;
-          document.documentElement.removeChild(t);
-          const px = parseFloat(computed) || 0;
-          return px > 6; // threshold (px) — tuneable
-        } catch (e) {
-          console.warn('notch detect error', e);
-          return false;
-        }
-      }
+    // Helper: detect whether page running as PWA / standalone
+    function isStandaloneMode() {
+      try {
+        return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+               || (window.navigator && window.navigator.standalone) // iOS legacy
+               || document.referrer.startsWith('android-app://'); // fallback
+      } catch (e) { return false; }
+    }
 
-      function applyNotchBehavior() {
-        const hasNotch = detectNotch();
-        // apply body padding behavior
-        if (!hasNotch) {
-          // Remove body padding so app is full-bleed on non-notch devices
-          document.body.style.padding = '0';
-        } else {
-          // Let CSS env() handle safe area (reset inline style)
-          document.body.style.padding = '';
-          document.body.classList.add('has-notch');
-        }
+    // Read computed value of env(safe-area-inset-top) by inserting a test element
+    function readSafeAreaInsetTopPx() {
+      try {
+        const el = document.createElement('div');
+        el.style.cssText = 'position:absolute; top:-9999px; padding-top: env(safe-area-inset-top, 0px);';
+        document.documentElement.appendChild(el);
+        const val = window.getComputedStyle(el).paddingTop;
+        document.documentElement.removeChild(el);
+        return parseFloat(val) || 0;
+      } catch (e) { return 0; }
+    }
 
-        // adjust pos-container padding accordingly
+    // Heuristic UA check for iPhones/notch devices (not exhaustive, just common)
+    function uaLooksLikeIPhoneWithNotch() {
+      const ua = navigator.userAgent || navigator.vendor || '';
+      const l = ua.toLowerCase();
+      // common iPhone identifiers and a few Android tall-screen keywords
+      return l.includes('iphone') || l.includes('iphone os') || l.includes('ipod') || l.includes('ipad');
+    }
+
+    function applySafeAreaWhenNeeded() {
+      // manual overrides for testing
+      const params = (new URLSearchParams(location.search));
+      if (params.get('forceNotch') === '1') {
+        document.body.classList.add('has-notch');
+        document.body.style.padding = '';
+        // ensure pos-container uses env() safe area inside if available
         const pos = document.getElementById('pos-container');
         if (pos) {
-          if (!hasNotch) {
-            // make iframe true full viewport (no extra padding)
-            pos.style.padding = '0';
-            pos.style.top = '0';
-            pos.style.height = '100vh';
-          } else {
-            // ensure safe-area padding applied inside fixed pos container
-            pos.style.paddingTop = 'env(safe-area-inset-top)';
-            pos.style.paddingBottom = 'env(safe-area-inset-bottom)';
-            pos.style.paddingLeft = 'env(safe-area-inset-left)';
-            pos.style.paddingRight = 'env(safe-area-inset-right)';
-            pos.style.top = '0';
-            pos.style.height = 'calc(100vh - env(safe-area-inset-top))';
-          }
+          pos.style.paddingTop = 'env(safe-area-inset-top)';
+          pos.style.paddingBottom = 'env(safe-area-inset-bottom)';
+          pos.style.paddingLeft = 'env(safe-area-inset-left)';
+          pos.style.paddingRight = 'env(safe-area-inset-right)';
         }
+        return;
+      }
+      if (params.get('forceNoNotch') === '1') {
+        document.body.classList.remove('has-notch');
+        document.body.style.padding = '0';
+        const pos = document.getElementById('pos-container');
+        if (pos) pos.style.padding = '0';
+        return;
       }
 
-      // Run early after DOM ready
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', applyNotchBehavior);
-      } else {
-        applyNotchBehavior();
+      const safeTop = readSafeAreaInsetTopPx();
+      const standalone = isStandaloneMode();
+      const uaNotch = uaLooksLikeIPhoneWithNotch();
+
+      // Debug logs (remove if not needed)
+      // console.debug('[notch] safeTop', safeTop, 'standalone', standalone, 'uaNotch', uaNotch);
+
+      const pos = document.getElementById('pos-container');
+
+      if (safeTop > 6) {
+        // env() reports a meaningful safe area -> honor it
+        document.body.classList.add('has-notch');
+        document.body.style.padding = ''; // let CSS env() work
+        if (pos) {
+          pos.style.paddingTop = 'env(safe-area-inset-top)';
+          pos.style.paddingBottom = 'env(safe-area-inset-bottom)';
+          pos.style.paddingLeft = 'env(safe-area-inset-left)';
+          pos.style.paddingRight = 'env(safe-area-inset-right)';
+          pos.style.top = '0';
+          pos.style.height = 'calc(100vh - env(safe-area-inset-top))';
+        }
+        return;
       }
 
-      // Also re-check on resize/orientationchange in case environment changes
-      window.addEventListener('orientationchange', () => setTimeout(applyNotchBehavior, 300));
-      window.addEventListener('resize', () => setTimeout(applyNotchBehavior, 300));
-    })();
-  </script>
+      // env() gave 0 or very small.
+      // Special-case: if running as standalone on iPhone-like UA, assume notch and apply fallback padding.
+      if (standalone && uaNotch) {
+        document.body.classList.add('has-notch');
+        // Use env(..., 20px) so if env exists it'll be used; otherwise fallback to 20px
+        document.body.style.paddingTop = 'env(safe-area-inset-top, 20px)';
+        document.body.style.paddingBottom = 'env(safe-area-inset-bottom, 0px)';
+        document.body.style.paddingLeft = 'env(safe-area-inset-left, 0px)';
+        document.body.style.paddingRight = 'env(safe-area-inset-right, 0px)';
+        if (pos) {
+          pos.style.paddingTop = 'env(safe-area-inset-top, 20px)';
+          pos.style.paddingBottom = 'env(safe-area-inset-bottom, 0px)';
+          pos.style.paddingLeft = 'env(safe-area-inset-left, 0px)';
+          pos.style.paddingRight = 'env(safe-area-inset-right, 0px)';
+          pos.style.top = '0';
+          pos.style.height = 'calc(100vh - env(safe-area-inset-top, 20px))';
+        }
+        return;
+      }
 
+      // Otherwise: no notch detected — make app full-bleed
+      document.body.classList.remove('has-notch');
+      document.body.style.padding = '0';
+      if (pos) {
+        pos.style.padding = '0';
+        pos.style.top = '0';
+        pos.style.height = '100vh';
+      }
+    }
+
+    // run after DOM ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', applySafeAreaWhenNeeded);
+    } else {
+      applySafeAreaWhenNeeded();
+    }
+
+    // re-evaluate on orientation/resize (user may rotate)
+    window.addEventListener('orientationchange', () => setTimeout(applySafeAreaWhenNeeded, 250));
+    window.addEventListener('resize', () => setTimeout(applySafeAreaWhenNeeded, 250));
+
+    // optional: re-run shortly after webapp "installed" or other UI events
+    window.addEventListener('focus', () => setTimeout(applySafeAreaWhenNeeded, 300));
+  })();
+</script>
   <!-- Scripts -->
   <script src="./assets/js/redirect-core.js?v=mod1"></script>
   <script src="./assets/js/secret-btn.js?v=mod1"></script>
