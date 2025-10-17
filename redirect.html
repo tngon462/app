@@ -63,7 +63,23 @@
 
   <!-- Bước 2: Màn bắt đầu -->
   <div id="start-screen" class="hidden flex flex-col items-center justify-center min-h-screen">
-    <h2 class="text-2xl font-semibold mb-6">Bàn <span id="selected-table"></span></h2>
+   <!-- 
+    Thay thế cho: <h2 class="text-2xl font-semibold mb-6">Bàn <span id="selected-table"></span></h2> 
+    Để đạt được kích thước 60% màn hình, chúng ta sẽ sử dụng CSS inline với đơn vị 'vw' (viewport width).
+-->
+<div style="display: flex; justify-content: center; align-items: center; width: 100%; margin-bottom: 1rem;">
+    <span id="selected-table" 
+          style="
+            font-size: 60vw; 
+            line-height: 1; 
+            font-weight: 900; 
+            color: #1f2937; /* Màu chữ đậm, tương tự font-semibold */
+            text-align: center;
+            display: block;
+          ">
+    </span>
+</div>
+
    <button id="start-order"
     class="w-3/4 max-w-lg px-12 py-8 rounded-lg bg-blue-500 text-white font-bold hover:bg-blue-600 text-4xl shadow">
     START ORDER
