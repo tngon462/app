@@ -2,6 +2,7 @@
 // Secret left button only:
 // - 5 taps within 3000ms -> go to START screen
 // - long press 7000ms -> show password popup; correct "6868" -> go to SELECT screen
+// Updated: ensure overlays/popup/disabled states are cleared so START button is clickable.
 (function () {
   'use strict';
 
@@ -19,12 +20,12 @@
     return;
   }
 
-  // Style adjustments to ensure it's bigger and clickable but invisible
+  // Apply visible-but-invisible style (bigger touch area) if not already
   try {
     btn.style.position = 'fixed';
     btn.style.left = btn.style.left || '8px';
     btn.style.bottom = btn.style.bottom || '8px';
-    btn.style.width = '96px';   // gấp ~2 lần 48px
+    btn.style.width = '96px';
     btn.style.height = '96px';
     btn.style.background = 'transparent';
     btn.style.opacity = '0';
@@ -33,9 +34,9 @@
     btn.style.pointerEvents = 'auto';
     btn.style.borderRadius = '12px';
     btn.setAttribute('aria-hidden', 'true');
-  } catch(e){ /* ignore styling errors */ }
+  } catch(e){ /* ignore */ }
 
-  // UI element refs
+  // UI element refs (may be null; handle gracefully)
   const startScreen = document.getElementById('start-screen');
   const selectScreen = document.getElementById('select-table');
   const posContainer = document.getElementById('pos-container');
@@ -45,32 +46,89 @@
   const okBtn = document.getElementById('password-ok');
   const cancelBtn = document.getElementById('password-cancel');
   const errorEl = document.getElementById('password-error');
+  const overlay = document.getElementById('screen-overlay');
 
-  // Helpers: show/hide UI
+  // Utilities
+  function setVisible(el, visible, displayStyle = 'block') {
+    if (!el) return;
+    // Remove Tailwind's hidden class if present
+    el.classList.toggle('hidden', !visible);
+    el.style.display = visible ? displayStyle : 'none';
+  }
+  function enablePointerEvents(el, enable = true) {
+    if (!el) return;
+    el.style.pointerEvents = enable ? '' : 'none';
+  }
+
+  // Ensure start button is active/clickable
+  function ensureStartClickable() {
+    const startBtn = document.getElementById('start-order');
+    if (!startBtn) return;
+    startBtn.disabled = false;
+    enablePointerEvents(startBtn, true);
+    // remove any overlay that might be positioned above
+    // also clear potential full-screen transparent divs (defensive)
+    const blockers = document.querySelectorAll('.blocking-overlay-temp');
+    blockers.forEach(b => {
+      try { b.remove(); } catch(e){}
+    });
+  }
+
+  // Show start screen properly and clear interfering UI
   function showStartScreen() {
     try {
+      // hide pos
       if (posContainer) posContainer.style.display = 'none';
-      if (posFrame) posFrame.src = 'about:blank';
-      if (startScreen) startScreen.style.display = 'flex';
-      if (selectScreen) selectScreen.style.display = 'none';
-      localStorage.setItem('appState', 'start');
-      console.debug('[secret-btn] goToStart');
-    } catch(e){ console.error(e); }
+      if (posFrame) {
+        try { posFrame.src = 'about:blank'; } catch(e){}
+      }
+
+      // hide overlay and popup
+      if (overlay) overlay.style.display = 'none';
+      if (popup) popup.classList.add('hidden');
+
+      // show start, hide select
+      setVisible(startScreen, true, 'flex');
+      setVisible(selectScreen, false, 'block');
+
+      // set state
+      try { localStorage.setItem('appState', 'start'); } catch(e){}
+
+      // ensure start button clickable
+      ensureStartClickable();
+
+      console.debug('[secret-btn] goToStart (cleared overlays/popup)');
+    } catch (e) {
+      console.error('[secret-btn] showStartScreen error', e);
+    }
   }
+
   function goToSelectScreenAfterAuth() {
     try {
       // clear table info
-      localStorage.removeItem('tableId');
-      localStorage.removeItem('tableUrl');
-      localStorage.setItem('appState', 'select');
-      if (startScreen) startScreen.style.display = 'none';
-      if (selectScreen) selectScreen.style.display = 'flex';
-      if (posContainer) posContainer.style.display = 'none';
-      if (posFrame) posFrame.src = 'about:blank';
+      try {
+        localStorage.removeItem('tableId');
+        localStorage.removeItem('tableUrl');
+        localStorage.setItem('appState', 'select');
+      } catch(e){}
+
+      // hide popup
       if (popup) popup.classList.add('hidden');
       if (errorEl) errorEl.classList.add('hidden');
+
+      // show select screen and hide others
+      setVisible(startScreen, false, 'flex');
+      setVisible(selectScreen, true, 'block');
+      if (posContainer) posContainer.style.display = 'none';
+      if (posFrame) posFrame.src = 'about:blank';
+
+      // ensure no overlay remains
+      if (overlay) overlay.style.display = 'none';
+
+      ensureStartClickable();
+
       console.debug('[secret-btn] goToSelect (after auth)');
-    } catch(e){ console.error(e); }
+    } catch (e) { console.error(e); }
   }
 
   // Tap counting logic
@@ -112,11 +170,9 @@
       // show password popup
       if (popup) {
         popup.classList.remove('hidden');
-        // hide any previous error
         if (errorEl) errorEl.classList.add('hidden');
         if (input) {
           input.value = '';
-          // focus to try to open keyboard (may be blocked on some webapps)
           setTimeout(() => { try { input.focus(); } catch(e){} }, 120);
         }
       }
@@ -126,25 +182,19 @@
     if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
   }
 
-  // Pointer handlers for robust support (mouse + touch)
-  // Use pointer events if available
+  // Pointer handlers
   const supportsPointer = window.PointerEvent !== undefined;
 
   function onPointerStart(e) {
-    e.stopPropagation();
-    // on user interaction -> start longpress
+    // stop propagation so the underlying UI doesn't get a confusing sequence
+    try { e.stopPropagation(); } catch(e){}
     startLongPressTimer();
-    // prevent default to avoid selection/pinch or double-tap zoom on some browsers
     if (e.cancelable) e.preventDefault();
   }
   function onPointerEnd(e) {
-    e.stopPropagation();
+    try { e.stopPropagation(); } catch(e){}
     clearLongPressTimer();
-    if (!longPressTriggered) {
-      // treat as tap
-      registerTap();
-    }
-    // prevent default
+    if (!longPressTriggered) registerTap();
     if (e.cancelable) e.preventDefault();
   }
 
@@ -152,10 +202,8 @@
     btn.addEventListener('pointerdown', onPointerStart, { passive: false });
     btn.addEventListener('pointerup', onPointerEnd, { passive: false });
     btn.addEventListener('pointercancel', () => { clearLongPressTimer(); }, { passive: false });
-    // also handle pointerleave (finger moved out)
     btn.addEventListener('pointerleave', () => { clearLongPressTimer(); }, { passive: false });
   } else {
-    // fallback to touch + mouse
     btn.addEventListener('touchstart', function(e){ onPointerStart(e); }, { passive: false });
     btn.addEventListener('touchend', function(e){ onPointerEnd(e); }, { passive: false });
     btn.addEventListener('touchcancel', function(){ clearLongPressTimer(); }, { passive: false });
@@ -183,7 +231,6 @@
     });
   }
 
-  // allow Enter key on input (keyboard)
   if (input) {
     input.addEventListener('keydown', function(e){
       if (e.key === 'Enter') {
@@ -195,10 +242,9 @@
     });
   }
 
-  // defensive: hide popup when clicking outside (but only when shown)
+  // Defensive: hide popup when clicking outside
   document.addEventListener('click', function(ev){
     if (!popup || popup.classList.contains('hidden')) return;
-    // if click outside popup content -> close
     const content = popup.querySelector('div');
     if (content && !content.contains(ev.target)) {
       popup.classList.add('hidden');
