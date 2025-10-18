@@ -27,9 +27,20 @@
 
     const keys = Object.keys(links).sort((a,b)=> Number(a)-Number(b));
     keys.forEach(key => {
-      const btn = document.createElement('button');
-      btn.className = 'px-6 py-3 m-4 rounded-lg bg-blue-500 text-white font-bold hover:bg-blue-600 w-40 h-28 text-2xl';
-      btn.textContent = 'Bàn ' + key;
+      // khi render mỗi button trong renderTables()
+const btn = document.createElement('button');
+btn.className = [
+  'flex items-center justify-center',
+  'rounded-lg',
+  'bg-blue-600 hover:bg-blue-700',
+  'text-white font-bold',
+  'shadow',
+  'px-4 py-3',         // padding nhỏ cho mobile
+  'sm:px-6 sm:py-4',   // lớn hơn trên sm+
+  'w-28 h-20 sm:w-40 sm:h-28', // kích thước responsive
+  'text-sm sm:text-lg' // chữ nhỏ trên mobile, lớn trên tablet
+].join(' ');
+btn.textContent = 'Bàn ' + key;
       btn.dataset.tableId = key;
       btn.dataset.url = links[key];
 
