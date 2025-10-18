@@ -265,14 +265,26 @@
 </script>
 
   <!-- Scripts -->
-  <script src="./assets/js/redirect-core.js?v=mod1"></script>
-  <script src="./assets/js/secret-btn.js?v=mod1"></script>
-  <script src="./assets/js/state.js?v=mod1"></script>
+  <!-- Firebase SDKs (PHẢI luôn nằm trước firebase config và mọi js dùng firebase) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+  <!-- YOUR firebase config/init (assets/js/firebase.js) -->
+  <script src="./assets/js/firebase.js?v=1"></script>
+
+  <!-- Core logic: render table buttons, bind start -->
+  <script src="./assets/js/redirect-core.js?v=mod1"></script>
+
+  <!-- secret button (left only) -->
+  <script src="./assets/js/secret-btn.js?v=mod1"></script>
+
+  <!-- state / blackout / nosleep (may use firebase) -->
+  <script src="./assets/js/state.js?v=mod1"></script>
   <script src="./assets/js/blackout.js?v=mod1"></script>
   <script src="./assets/js/nosleep.js?v=mod1"></script>
+
+  <!-- service worker register -->
   <script src="./assets/js/sw-register.js?v=mod1"></script>
 
   <script>
