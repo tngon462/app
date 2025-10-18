@@ -83,34 +83,32 @@
 <body class="flex flex-col items-center justify-center">
 
   <!-- Bước 1: Chọn bàn -->
-  <div id="select-table" class="flex flex-col items-center w-full max-w-4xl mx-auto px-4">
-    <h1 class="text-2xl sm:text-5xl font-bold text-gray-900 mb-4 sm:mb-6">Vui lòng chọn bàn</h1>
-
+  <div id="select-table" class="flex flex-col items-center">
+    <h1 class="text-3xl font-bold text-gray-900 mb-6">Vui lòng chọn bàn</h1>
     <div id="table-container"
-         class="w-full grid gap-3
+         class="grid justify-center gap-4
                 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5
-                place-items-center justify-center">
-      <!-- nút sẽ được render bằng JS -->
+                px-4">
     </div>
   </div>
 
-  <!-- Bước 2: Màn bắt đầu -->
-  <div id="start-screen" class="hidden flex flex-col items-center justify-center w-full max-w-3xl mx-auto px-4">
-    <!-- Số bàn -->
-    <div id="selected-table"
-         class="leading-none font-extrabold text-gray-900 mb-6
-                text-[clamp(144px,40vw,480px)] sm:text-[clamp(48px,12vw,200px)]">
-    </div>
+<!-- Bước 2: Màn bắt đầu -->
+<div id="start-screen" class="hidden flex flex-col items-center justify-center min-h-screen">
 
-    <!-- Nút START ORDER -->
-    <button id="start-order"
-            class="rounded-2xl bg-blue-500 text-white font-extrabold shadow-lg hover:bg-blue-600
-                   flex items-center justify-center
-                   w-full sm:w-[min(80vw,37.5vh)] max-w-md h-14 sm:h-[15vh]
-                   text-base sm:text-[clamp(22px,5vh,64px)]">
-      START ORDER
-    </button>
+  <!-- Số bàn siêu to: chiếm ~15–18% cạnh ngắn của màn hình -->
+  <div
+    id="selected-table"
+    class="leading-none font-extrabold text-gray-900 mb-10 text-[min(60vw,60vh)]">
   </div>
+
+  <!-- Nút START ORDER: cao = 15% chiều cao màn hình; rộng = 2.5 × cao -->
+  <button
+    id="start-order"
+    class="rounded-2xl bg-blue-500 text-white font-extrabold shadow-lg hover:bg-blue-600 flex items-center justify-center w-[min(80vw,37.5vh)] h-[15vh] text-[clamp(22px,5vh,64px)]">
+    START ORDER
+  </button>
+
+</div>
 
   <!-- Bước 3: POS iframe -->
   <div id="pos-container" class="hidden">
