@@ -1,10 +1,7 @@
 // assets/js/redirect-core.js
-// Core UI + State + Secret button (left only)
-
 (function(){
   'use strict';
 
-  // ====== helpers ======
   const $ = (id) => document.getElementById(id);
   const selSelect = $('select-table');
   const selStart  = $('start-screen');
@@ -22,18 +19,20 @@
   const passCancel= $('password-cancel');
   const passErr   = $('password-error');
 
-  function show(el){ el.classList.remove('hidden'); }
-  function hide(el){ el.classList.add('hidden'); }
+  function addHidden(el){ el.classList.add('hidden'); if (el===selPos) el.style.display='none'; }
+  function removeHidden(el){ el.classList.remove('hidden'); if (el===selPos) el.style.display=''; }
 
   function cacheBust(url){ return url + (url.includes('?') ? '&' : '?') + 'cb=' + Date.now(); }
 
-  // ====== state in localStorage ======
+  // ====== state ======
   function setState(s){ localStorage.setItem('appState', s); }
   function getState(){ return localStorage.getItem('appState') || 'select'; }
 
   function setTable(id, url){
     localStorage.setItem('tableId', String(id));
     localStorage.setItem('tableUrl', url);
+    // cho blackout.js biết
+    window.tableId = String(id);
   }
   function getTable(){
     return {
@@ -48,39 +47,37 @@
     delete window.tableId;
   }
 
-  // ====== navigation helpers (exposed for blackout/QRback if needed) ======
+  // ====== navigation ======
   function gotoSelect(clear=true){
-    hide(selPos);
+    addHidden(selPos);
     iframe.src = 'about:blank';
-    hide(selStart);
-    show(selSelect);
+    addHidden(selStart);
+    removeHidden(selSelect);
     if (clear) clearAllState();
     setState('select');
   }
   function gotoStart(){
-    hide(selPos);
+    addHidden(selPos);
     iframe.src = 'about:blank';
     const {id} = getTable();
     if (!id) { gotoSelect(true); return; }
-    tableNumEl.textContent = id; // hiển thị chỉ số
-    hide(selSelect);
-    show(selStart);
+    tableNumEl.textContent = id;
+    addHidden(selSelect);
+    removeHidden(selStart);
     setState('start');
   }
   function gotoPos(url){
-    if (!url) {
-      const t = getTable();
-      if (!t.url) { gotoSelect(true); return; }
-      url = t.url;
-    }
-    iframe.src = url;
-    hide(selSelect);
-    hide(selStart);
-    show(selPos);
+    const t = getTable();
+    const finalUrl = url || t.url;
+    if (!finalUrl) { gotoSelect(true); return; }
+    iframe.src = finalUrl;
+    addHidden(selSelect);
+    addHidden(selStart);
+    removeHidden(selPos);
     setState('pos');
   }
 
-  // expose
+  // expose if needed externally
   window.gotoSelect = gotoSelect;
   window.gotoStart  = gotoStart;
   window.gotoPos    = gotoPos;
@@ -91,7 +88,7 @@
       const res = await fetch(cacheBust('./links.json'), { cache: 'no-store' });
       if (!res.ok) throw new Error('HTTP '+res.status);
       const data = await res.json();
-      // hỗ trợ 2 định dạng: {links:{...}} hoặc {...}
+      // hỗ trợ {links:{...}} hoặc map phẳng
       const map = data.links || data;
       if (map && typeof map === 'object' && !Array.isArray(map)) return map;
       throw new Error('links.json invalid shape');
@@ -104,8 +101,11 @@
   function renderTables(map){
     const wrap = $('table-container');
     wrap.innerHTML = '';
-    const keys = Object.keys(map).sort((a,b)=>Number(a)-Number(b));
 
+    // đảm bảo grid căn giữa
+    wrap.classList.add('place-items-center','justify-center');
+
+    const keys = Object.keys(map).sort((a,b)=>Number(a)-Number(b));
     keys.forEach((key)=>{
       const btn = document.createElement('button');
       btn.className = [
@@ -114,17 +114,17 @@
         'bg-blue-600 hover:bg-blue-700',
         'text-white font-bold',
         'shadow',
-        'px-4 py-3',           // mobile padding
-        'sm:px-6 sm:py-4',     // larger on sm+
-        'w-28 h-20 sm:w-40 sm:h-28', // size responsive
-        'text-sm sm:text-lg'   // text responsive
+        'px-4 py-3',
+        'sm:px-6 sm:py-4',
+        'w-28 h-20 sm:w-40 sm:h-28',
+        'text-sm sm:text-lg'
       ].join(' ');
       btn.textContent = 'Bàn ' + key;
       btn.addEventListener('click', ()=>{
         const url = map[key];
         setTable(key, url);
         tableNumEl.textContent = key;
-        gotoStart(); // sang màn start (không mở POS ngay)
+        gotoStart();
       });
       wrap.appendChild(btn);
     });
@@ -137,9 +137,7 @@
     gotoPos(url);
   });
 
-  // ====== secret button (LEFT ONLY) ======
-  // - 5 click trong 3s => về START (không xóa bàn)
-  // - long press 7s => yêu cầu mật mã 6868 => về SELECT (xóa sạch)
+  // ====== secret button: 5 click/3s => START, long press 7s => mật mã => SELECT ======
   (function wireSecret(){
     let pressTimer = null;
     let clickCount = 0;
@@ -156,30 +154,27 @@
       clickCount++;
       if (clickCount >= 5) {
         clearTimeout(clickTimer); clickTimer = null; clickCount = 0;
-        // về START
-        gotoStart(); // KHÔNG clear table
+        gotoStart(); // không xoá bàn
       }
     });
 
-    // Long press 7s
+    // Long press 7s => popup mật mã
     const LONG_MS = 7000;
     function startPress(){
       if (pressTimer) return;
       pressTimer = setTimeout(()=>{
         pressTimer = null;
-        // mở popup nhập mật khẩu
         passErr.classList.add('hidden');
         passInput.value = '';
-        // Một số iOS webapp chặn focus auto — vẫn mở popup và để user tap vào input
+        // iOS PWA có thể không auto-focus, để user tap
         popup.classList.remove('hidden');
 
-        function closePopup(){ popup.classList.add('hidden'); }
-        passCancel.onclick = ()=> closePopup();
+        function close(){ popup.classList.add('hidden'); }
+        passCancel.onclick = ()=> close();
         passOk.onclick = ()=>{
           if (passInput.value === '6868') {
-            closePopup();
-            // về SELECT, xóa sạch
-            gotoSelect(true);
+            close();
+            gotoSelect(true); // xoá sạch
           } else {
             passErr.classList.remove('hidden');
           }
@@ -198,15 +193,12 @@
 
   // ====== boot ======
   (async function boot(){
-    // 1) Nếu đã có state cũ: khôi phục
     const state = getState();
     const {id, url} = getTable();
 
-    // 2) Tải link để render nút
     const map = await loadLinks();
     if (map) renderTables(map);
 
-    // 3) Khôi phục UI
     if (state === 'pos' && url) {
       gotoPos(url);
     } else if (state === 'start' && id) {
