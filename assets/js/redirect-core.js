@@ -159,7 +159,7 @@
     });
 
     // Long press 7s => popup mật mã
-    const LONG_MS = 7000;
+    const LONG_MS = 4000;
     function startPress(){
       if (pressTimer) return;
       pressTimer = setTimeout(()=>{
