@@ -1,8 +1,9 @@
 // ===============================================
-// device-bind.js v8e
-// - Overlay Gate an toàn, không gate lại sau khi đã vào app
-// - TX fix (không commit khi mã không hợp lệ)
-// - Anti-reload loop cho reloadAt & broadcast/reloadAt
+// device-bind.js v8f
+// - Không gate lại sau khi đã vào app (trừ khi unbindAt)
+// - Anti-reload loop (tem localStorage)
+// - Trì hoãn 5s mới subscribe commands/broadcast để né lệnh cũ
+// - Ghi log nguyên nhân reload để debug
 // ===============================================
 (function () {
   const LS = window.localStorage;
@@ -55,6 +56,7 @@
     return ov;
   }
   function showOverlay(message){
+    if (entered) { console.warn('[gate] skip show after entered:', message); return; }
     const ov = ensureOverlay();
     ov.style.display = 'flex';
     if (message) { const err = $('code-error'); if (err) err.textContent = message; }
@@ -107,6 +109,8 @@
       info: { ua: navigator.userAgent }
     });
     LS.setItem('deviceCode', code);
+    // bằng chứng đã bind (dùng cho debug)
+    LS.setItem('boundProof', `${code}::${deviceId}`);
   }
 
   function startHeartbeat(){
@@ -129,6 +133,11 @@
     return false;
   }
 
+  function listenCommandsDelayed(){
+    // trì hoãn 5s để né lệnh cũ còn sót
+    setTimeout(()=> listenCommands(), 5000);
+  }
+
   function listenCommands(){
     assertFirebaseReady();
     const cmdRef = firebase.database().ref('devices/'+deviceId+'/commands');
@@ -139,6 +148,7 @@
       // 1) Reload (per-device) — chỉ 1 lần / timestamp
       if (c.reloadAt && shouldReloadOnce('cmdReloadStamp', c.reloadAt)) {
         try { cmdRef.child('reloadAt').remove(); } catch(_) {}
+        console.warn('[reload] via commands.reloadAt =', c.reloadAt);
         setTimeout(()=> location.reload(true), 50);
         return;
       }
@@ -156,7 +166,9 @@
 
       // 3) Unbind -> xoá mã & reload về gate
       if (c.unbindAt){
-        try { LS.removeItem('deviceCode'); LS.removeItem('tableNumber'); } finally {
+        try { LS.removeItem('deviceCode'); LS.removeItem('tableNumber'); LS.removeItem('boundProof'); }
+        finally {
+          console.warn('[reload] via commands.unbindAt =', c.unbindAt);
           setTimeout(()=> location.reload(true), 50);
         }
       }
@@ -167,6 +179,7 @@
     bRef.on('value', s=>{
       const ts = s.val();
       if (ts && shouldReloadOnce('broadcastReloadStamp', ts)) {
+        console.warn('[reload] via broadcast.reloadAt =', ts);
         setTimeout(()=> location.reload(true), 50);
       }
     });
@@ -176,7 +189,7 @@
   let entered = false;
   function enterAppOnce(){
     if (entered) return;
-    entered = true;               // từ đây trở đi: KHÔNG gate lại nữa
+    entered = true;
 
     hideOverlay();
     show('select-table'); hide('start-screen'); hide('pos-container');
@@ -185,7 +198,7 @@
     try {
       assertFirebaseReady();
       startHeartbeat();
-      listenCommands();
+      listenCommandsDelayed(); // trì hoãn 5s
     } catch (e) {
       // ĐÃ vào app rồi thì không gate nữa; chỉ log lỗi
       console.error('[bind] init error after enter:', e);
