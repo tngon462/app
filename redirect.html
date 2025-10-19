@@ -144,9 +144,9 @@
   <!-- Các file phụ -->
   <script src="./assets/js/blackout.js?v=2"></script>
   <script src="./assets/js/nosleep.js?v=2"></script>
-  <script src="./assets/js/sw-register.js?v=2"></script>
-
-  <!-- Chặn pinch-zoom/double-tap -->
+  
+  <!-- Chặn pinch-zoom/double-tap   <script src="./assets/js/sw-register.js?v=2"></script>
+     -->
   <script>
     document.addEventListener('touchstart', function (e) { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
     document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
