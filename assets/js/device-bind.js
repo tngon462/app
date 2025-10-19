@@ -1,9 +1,13 @@
 // ===============================================
-// device-bind.js v9d2 (PROD)
-// - Gate thật (bind OK mới vào)
-// - Đồng bộ table về Admin: "-" khi đang ở màn chọn bàn
-// - Report ngay khi vào + mỗi 1s
-// - Anti-loop reload/unbind/broadcast
+// device-bind.js v9e (PROD)
+// - Gate thật: chỉ vào app khi bind OK
+// - Nhận lệnh Admin: reloadAt / setTable / unbindAt (chặn lặp theo tem)
+// - Đồng bộ trạng thái về Admin (mỗi 1s + ngay khi vào):
+//     • stage: "select" | "start" | "pos"
+//     • inPOS: boolean
+//     • table: "-", "<bàn>", hoặc "+<bàn>" (nếu stage='pos')
+// - Nếu đang ở "Chọn bàn": xóa localStorage.tableNumber để không nhớ bàn cũ
+// - Sau reload: nếu còn tableNumber -> vào thẳng Start Order
 // ===============================================
 (function () {
   const LS = window.localStorage;
@@ -89,41 +93,74 @@
     return false;
   }
 
-  // ---------- Reporter: đồng bộ TABLE về Admin ----------
-  let lastSentTable;
+  // ---------- Stage / Table detection ----------
+  function currentStage(){
+    if (visible('pos-container'))  return 'pos';
+    if (visible('select-table'))    return 'select';
+    if (visible('start-screen'))    return 'start';
+    return 'unknown';
+  }
   function normalizeTable(raw){
     if (!raw) return '-';
     const s = String(raw).trim();
     return s ? s : '-';
   }
-  async function sendTable(val){
-    try{
-      await firebase.database().ref('devices/'+deviceId+'/table').set(val);
-      lastSentTable = val;
-      log('report table =', val);
-    }catch(e){ log('report table error', e); }
-  }
-  function computeCurrentTable(){
-    if (visible('select-table')) {
-      // Đang ở màn chọn bàn => xoá local để không nhớ bàn cũ
-      if (LS.getItem('tableNumber')) LS.removeItem('tableNumber');
-      return '-';
-    }
+  function computeStateForAdmin(){
+    const stage = currentStage();
     let t = LS.getItem('tableNumber') || '';
-    if (!t && visible('start-screen')) {
+
+    if (stage === 'select') {
+      if (LS.getItem('tableNumber')) LS.removeItem('tableNumber'); // không nhớ bàn cũ
+      return { table: '-', stage, inPOS: false };
+    }
+
+    if (!t && stage === 'start') {
       const el = $('selected-table'); t = (el && el.textContent) ? el.textContent.trim() : '';
     }
-    return normalizeTable(t);
+
+    const base = normalizeTable(t);
+    if (stage === 'pos') {
+      // Đang trong iframe POS -> hiển thị +<bàn>
+      const plus = base === '-' ? '+?' : ('+' + base.replace(/^\+/, ''));
+      return { table: plus, stage, inPOS: true };
+    }
+
+    // start / unknown
+    return { table: base, stage, inPOS: false };
   }
-  function reportTableLoop(){
+
+  // Reporter cache
+  let lastSent = { table: undefined, stage: undefined, inPOS: undefined };
+
+  async function pushStateToAdmin(state){
+    try{
+      const upd = {};
+      if (state.table !== lastSent.table) upd.table = state.table;
+      if (state.stage !== lastSent.stage) upd.stage = state.stage;
+      if (state.inPOS !== lastSent.inPOS) upd.inPOS = state.inPOS;
+
+      if (Object.keys(upd).length) {
+        await firebase.database().ref('devices/'+deviceId).update(upd);
+        lastSent = { ...lastSent, ...upd };
+        log('report', upd);
+      }
+    }catch(e){ log('report error', e); }
+  }
+
+  function startReporter(){
     // báo ngay khi vào
-    const first = computeCurrentTable();
-    if (lastSentTable !== first) sendTable(first);
-    // sau đó poll 1s
-    setInterval(()=>{
-      const v = computeCurrentTable();
-      if (v !== lastSentTable) sendTable(v);
+    pushStateToAdmin(computeStateForAdmin());
+    // sau đó poll mỗi 1s
+    setInterval(()=> {
+      pushStateToAdmin(computeStateForAdmin());
     }, 1000);
+
+    // cộng thêm quan sát classList của #pos-container để nhạy hơn
+    const pos = $('pos-container');
+    if (pos && 'MutationObserver' in window) {
+      const mo = new MutationObserver(()=> pushStateToAdmin(computeStateForAdmin()));
+      mo.observe(pos, { attributes:true, attributeFilter:['class'] });
+    }
   }
 
   // ---------- Commands ----------
@@ -146,7 +183,8 @@
         show('start-screen'); hide('select-table'); hide('pos-container');
         setTableText(t);
         try{ cmdRef.child('setTable').remove(); }catch(_){}
-        firebase.database().ref('devices/'+deviceId).update({ table: normalizeTable(t) });
+        // báo ngay
+        pushStateToAdmin({ table: normalizeTable(t), stage: 'start', inPOS:false });
       }
 
       // unbindAt
@@ -241,7 +279,7 @@
       ensureAuth().catch(()=>{});
       startHeartbeat();
       setTimeout(listenCommands, 3000);
-      reportTableLoop(); // ⬅️ báo table ngay + mỗi 1s
+      startReporter(); // ⬅️ báo stage/inPOS/table ngay + mỗi 1s
     }catch(e){ console.error('[bind] init after enter:', e); }
   }
 
