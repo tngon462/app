@@ -1,6 +1,6 @@
 {
   "name": "T-NGON - Gọi món v2",
-  "short_name": "T-NGON APP",
+  "short_name": "T-NGON V2",
   "start_url": "https://tngon462.github.io/app/redirect.html",
   "scope": "https://tngon462.github.io/app/redirect.html",
   "display": "standalone",
