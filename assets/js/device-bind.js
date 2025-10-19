@@ -1,18 +1,22 @@
 // ===============================================
-// device-bind.js v8g (DEBUG BUILD)
-// - Không nhận lệnh reload/unbind từ admin (tạm tắt) -> tránh bị đẩy về gate
-// - Log chi tiết luồng bind + lý do fail
-// - Không gate lại sau khi đã vào app
+// device-bind.js v8h (DEBUG & AUTO-CREATE CODE)
+// - Log banner khi file load (để chắc chắn script đang chạy)
+// - Nếu mã chưa tồn tại -> tự tạo {enabled:true} rồi bind vào máy này
+// - Tắt reload/unbind từ admin khi debug để tránh bị đẩy ra
 // ===============================================
 (function () {
+  // --- DEBUG banner ngay khi file nạp ---
+  console.log('%c[bind] device-bind.js v8h loaded', 'background:#0ea5e9;color:#fff;padding:2px 6px;border-radius:4px');
+
   const LS = window.localStorage;
   const $  = (id) => document.getElementById(id);
 
-  // ===== DEBUG toggles =====
+  // ===== DEBUG flags =====
   const DEBUG = true;
-  const DISABLE_COMMANDS_RELOAD = true;   // tắt xử lý reloadAt
-  const DISABLE_COMMANDS_UNBIND = true;   // tắt xử lý unbindAt
-  const DISABLE_BROADCAST_RELOAD = true;  // tắt broadcast reload
+  const DISABLE_COMMANDS_RELOAD  = true;  // tắt reloadAt từ admin khi debug
+  const DISABLE_COMMANDS_UNBIND  = true;  // tắt unbindAt khi debug
+  const DISABLE_BROADCAST_RELOAD = true;  // tắt broadcast reload khi debug
+  const ALLOW_CREATE_CODE_IF_ABSENT = true; // ✅ tự tạo mã nếu chưa tồn tại
 
   function log(...a){ if (DEBUG) console.log('[bind]', ...a); }
   function warn(...a){ if (DEBUG) console.warn('[bind]', ...a); }
@@ -31,7 +35,7 @@
     ov.innerHTML = `
       <div class="w-full max-w-sm bg-white border border-gray-200 rounded-2xl shadow p-6">
         <h1 class="text-2xl font-extrabold text-gray-900 mb-2 text-center">Nhập mã iPad</h1>
-        <p class="text-xs text-gray-500 mb-3 text-center">Debug v8g — không nhận lệnh reload/unbind</p>
+        <p class="text-xs text-gray-500 mb-3 text-center">Debug v8h — auto-create code if missing</p>
         <div class="text-xs text-gray-600 mb-2"><b>Device ID:</b> <span id="dbg-dev"></span></div>
         <input id="code-input" type="text" maxlength="20" placeholder="VD: A1B2C3"
                class="w-full border rounded-lg px-4 py-3 text-center tracking-widest font-mono text-lg"
@@ -101,17 +105,13 @@
     log('Firebase initialized with', window.firebaseConfig?.databaseURL);
   }
 
-  async function checkCodeStatus(code){
-    // Trả về {exists, enabled, boundDeviceId}
+  async function getCodeStatus(code){
     assertFirebaseReady();
-    const snap = await firebase.database().ref('codes/'+code).once('value');
-    if (!snap.exists()) return { exists:false, enabled:false, boundDeviceId:null };
+    const ref = firebase.database().ref('codes/'+code);
+    const snap = await ref.once('value');
+    if (!snap.exists()) return { exists:false, enabled:false, boundDeviceId:null, ref };
     const v = snap.val() || {};
-    return {
-      exists: true,
-      enabled: v.enabled !== false,
-      boundDeviceId: v.boundDeviceId || null
-    };
+    return { exists:true, enabled: v.enabled !== false, boundDeviceId: v.boundDeviceId || null, ref };
   }
 
   async function bindCodeToDevice(code){
@@ -119,26 +119,34 @@
     await firebase.auth().signInAnonymously().catch((e)=>{ throw new Error('Auth lỗi: '+(e?.message||e)); });
 
     log('Try bind code:', code, 'on device:', deviceId);
-    const status = await checkCodeStatus(code);
-    log('Code status:', status);
+    let { exists, enabled, boundDeviceId, ref } = await getCodeStatus(code);
+    log('Code status BEFORE:', {exists, enabled, boundDeviceId});
 
-    if (!status.exists)         throw new Error('Mã không tồn tại. Hãy thêm mã trong Admin > Danh sách MÃ.');
-    if (!status.enabled)        throw new Error('Mã đã bị tắt.');
-
-    // Nếu đang gắn máy khác => báo cụ thể
-    if (status.boundDeviceId && status.boundDeviceId !== deviceId) {
-      throw new Error(`Mã đang gắn với thiết bị khác: ${status.boundDeviceId}. Hãy "Thu hồi" trong Admin rồi thử lại.`);
+    // Nếu chưa tồn tại mà cho phép auto-create
+    if (!exists && ALLOW_CREATE_CODE_IF_ABSENT) {
+      log('Code not exists -> AUTO CREATE');
+      await ref.set({
+        enabled: true,
+        createdAt: firebase.database.ServerValue.TIMESTAMP
+      });
+      exists = true; enabled = true; boundDeviceId = null;
     }
 
-    // Transaction để set (vẫn cần, để tránh race condition)
-    const codeRef = firebase.database().ref('codes/'+code);
-    await codeRef.transaction(data=>{
-      if (!data) return;                   // không commit: không tồn tại (race)
-      if (data.enabled === false) return;  // không commit: bị tắt
+    if (!exists)         throw new Error('Mã không tồn tại. Hãy thêm mã trong Admin > Danh sách MÃ.');
+    if (!enabled)        throw new Error('Mã đã bị tắt.');
+
+    if (boundDeviceId && boundDeviceId !== deviceId) {
+      throw new Error(`Mã đang gắn với thiết bị khác: ${boundDeviceId}. Hãy "Thu hồi" trong Admin rồi thử lại.`);
+    }
+
+    // Transaction set (tránh race)
+    await ref.transaction(data=>{
+      if (!data) return;                     // không commit: race xóa
+      if (data.enabled === false) return;    // không commit
       if (!data.boundDeviceId || data.boundDeviceId === deviceId) {
         return { ...data, boundDeviceId: deviceId, boundAt: firebase.database.ServerValue.TIMESTAMP };
       }
-      return; // không commit: đang gắn máy khác (race)
+      return;                                // không commit: race chiếm
     }, (error, committed)=>{
       if (error) throw error;
       if (!committed) throw new Error('Không thể giữ mã do bị máy khác chiếm cùng lúc. Thử lại.');
@@ -164,11 +172,9 @@
     }, 30*1000);
   }
 
-  // (giữ lại nhưng tắt hành động reload/unbind để debug)
   function listenCommands(){
     assertFirebaseReady();
     const cmdRef = firebase.database().ref('devices/'+deviceId+'/commands');
-
     cmdRef.on('value', s=>{
       const c=s.val()||{};
       if (c.reloadAt)  warn('commands.reloadAt seen:', c.reloadAt, DISABLE_COMMANDS_RELOAD ? '(IGNORED)' : '');
@@ -182,8 +188,6 @@
         try { cmdRef.child('setTable').remove(); } catch(_) {}
         firebase.database().ref('devices/'+deviceId).update({ table: t });
       }
-
-      // tắt reload/unbind để debug
       if (!DISABLE_COMMANDS_RELOAD && c.reloadAt) {
         try { cmdRef.child('reloadAt').remove(); } catch(_) {}
         setTimeout(()=> location.reload(true), 50);
@@ -216,7 +220,7 @@
     try {
       assertFirebaseReady();
       startHeartbeat();
-      listenCommands();
+      listenCommands(); // vẫn lắng nghe, nhưng reload/unbind đang tắt
     } catch (e) {
       errl('init after enter:', e);
     }
@@ -238,17 +242,16 @@
 
       const code = LS.getItem('deviceCode');
       log('Boot with deviceCode =', code, 'deviceId =', deviceId);
-
       if (!code) return; // chờ nhập mã
 
-      const st = await checkCodeStatus(code);
-      log('Boot check code status:', st);
+      const stSnap = await getCodeStatus(code);
+      log('Boot check code status:', { exists: stSnap.exists, enabled: stSnap.enabled, boundDeviceId: stSnap.boundDeviceId });
 
-      if (!st.exists)              throw new Error('Mã không tồn tại.');
-      if (!st.enabled)             throw new Error('Mã đã bị tắt.');
-      if (st.boundDeviceId && st.boundDeviceId !== deviceId) {
+      if (!stSnap.exists)              throw new Error('Mã không tồn tại.');
+      if (!stSnap.enabled)             throw new Error('Mã đã bị tắt.');
+      if (stSnap.boundDeviceId && stSnap.boundDeviceId !== deviceId) {
         LS.removeItem('deviceCode');
-        throw new Error(`Mã đang gắn với thiết bị khác: ${st.boundDeviceId}. Hãy "Thu hồi" trong Admin.`);
+        throw new Error(`Mã đang gắn với thiết bị khác: ${stSnap.boundDeviceId}. Hãy "Thu hồi" trong Admin.`);
       }
 
       enterAppOnce();
