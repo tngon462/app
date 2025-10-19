@@ -16,6 +16,14 @@
   <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
 
+  <!-- Ẩn toàn bộ UI app cho đến khi qua cổng mã -->
+<style>
+  html.gating #select-table,
+  html.gating #start-screen,
+  html.gating #pos-container { display: none !important; }
+</style>
+<script>document.documentElement.classList.add('gating');</script>
+  
   <!-- Chặn select/copy/zoom ngoài input -->
   <style>
     html, body, #select-table, #start-screen, #pos-container, .secret-btn, * {
