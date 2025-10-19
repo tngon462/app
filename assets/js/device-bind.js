@@ -1,59 +1,34 @@
 // ===============================================
-//  device-bind.js v4b
-//  - Gate toàn trang (no cancel), state machine anti-blink
-//  - Bật/tắt class `gating` để khóa/mở UI gốc ngay từ đầu
-//  - Admin commands: reload, setTable (nhảy Start Order), unbind (auto reload về gate)
+//  device-bind.js v6 (NO Boot Shield, anti-blink)
+//  - Khóa UI bằng html.gating cho đến khi mã hợp lệ
+//  - Admin: reload, setTable (jump Start Order), unbind (auto reload về gate)
 // ===============================================
 
 if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig); // từ /assets/js/firebase.js
+  firebase.initializeApp(firebaseConfig); // cấu hình từ /assets/js/firebase.js
 }
 firebase.auth().signInAnonymously().catch(console.error);
 
 const LS = window.localStorage;
 const $  = (id) => document.getElementById(id);
 
-// ------- State machine -------
-const STATE = { INIT: 'INIT', GATE: 'GATE', APP: 'APP' };
-let currentState = STATE.INIT;
-
-// ------- Helpers UI -------
+// ------- State & helpers -------
+let entered = false;                 // chống vào app nhiều lần
 const lockUI   = () => document.documentElement.classList.add('gating');
 const unlockUI = () => document.documentElement.classList.remove('gating');
 
 function show(id){ const el=$(id); if(el) el.classList.remove('hidden'); }
 function hide(id){ const el=$(id); if(el) el.classList.add('hidden'); }
 function setTableText(t){ const el=$('selected-table'); if(el) el.textContent = t||''; }
-
 function uuidv4(){return'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);});}
-let deviceId = LS.getItem('deviceId') || (LS.setItem('deviceId', uuidv4()), LS.getItem('deviceId'));
 
-// ------- Shields / Gate -------
-function ensureBootShield(){
-  if ($('boot-shield')) return;
-  const el = document.createElement('div');
-  el.id = 'boot-shield';
-  el.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:5000;display:flex;align-items:center;justify-content:center;padding:16px';
-  el.innerHTML = `
-    <div class="w-full max-w-sm text-center">
-      <h1 class="text-2xl font-extrabold text-gray-900 mb-3">Đang kiểm tra thiết bị…</h1>
-      <p class="text-sm text-gray-500">Vui lòng đợi trong giây lát.</p>
-      <div class="mt-4 animate-pulse text-gray-400">● ● ●</div>
-    </div>`;
-  document.body.appendChild(el);
-}
-function removeBootShield(){ const el=$('boot-shield'); if(el) el.remove(); }
+let deviceId = LS.getItem('deviceId');
+if (!deviceId) { deviceId = uuidv4(); LS.setItem('deviceId', deviceId); }
 
+// ------- Code Gate (form nhập mã, không có Hủy) -------
 function showCodeGate(message){
-  // Khoá UI app tuyệt đối
-  lockUI();
+  lockUI(); // khóa UI app cứng
   ['select-table','start-screen','pos-container'].forEach(hide);
-
-  if (currentState === STATE.GATE) {
-    const e=$('code-error'); if(e&&message) e.textContent=message;
-    return;
-  }
-  currentState = STATE.GATE;
 
   let gate = $('code-gate');
   if (!gate){
@@ -64,7 +39,7 @@ function showCodeGate(message){
       <div class="w-full h-full flex items-center justify-center p-6">
         <div class="w-full max-w-sm bg-white border border-gray-200 rounded-2xl shadow p-6">
           <h1 class="text-2xl font-extrabold text-gray-900 mb-4 text-center">Nhập mã iPad</h1>
-          <p class="text-sm text-gray-500 mb-4 text-center">Nhập mã được cấp để tiếp tục.</p>
+          <p class="text-sm text-gray-500 mb-4 text-center">Nhập mã được cấp để tiếp tục. Không có nút Hủy.</p>
           <input id="code-input" type="text" maxlength="20" placeholder="VD: A1B2C3"
                  class="w-full border rounded-lg px-4 py-3 text-center tracking-widest font-mono text-lg"
                  inputmode="latin" autocomplete="one-time-code" />
@@ -85,9 +60,9 @@ function showCodeGate(message){
       if(!raw){ err.textContent='Vui lòng nhập mã.'; return; }
       setBusy(true);
       try{
-        await bindCodeToDevice(raw); // ném lỗi nếu sai/đã dùng
-        gate.remove();               // đóng gate
-        enterApp();                  // mở app
+        await bindCodeToDevice(raw);   // ném lỗi nếu sai/đã dùng
+        gate.remove();                 // đóng gate
+        enterAppOnce();                // vào app 1 lần
       }catch(e){
         err.textContent = (e && e.message) ? e.message : 'Không dùng được mã này.';
       }finally{ setBusy(false); }
@@ -103,12 +78,12 @@ function showCodeGate(message){
 async function bindCodeToDevice(code){
   const codeRef = firebase.database().ref('codes/'+code);
   await codeRef.transaction(data=>{
-    if(!data) return null;
-    if(data.enabled===false) return; // fail commit
+    if(!data) return null;                 // mã không tồn tại -> fail
+    if(data.enabled===false) return;       // mã bị tắt -> fail
     if(!data.boundDeviceId || data.boundDeviceId===deviceId){
       return {...data, boundDeviceId: deviceId, boundAt: firebase.database.ServerValue.TIMESTAMP};
     }
-    return; // fail commit
+    return; // đang gắn máy khác -> fail
   },(error,committed)=>{
     if(error) throw error;
     if(!committed) throw new Error('Mã không khả dụng hoặc đã dùng ở thiết bị khác.');
@@ -133,10 +108,10 @@ function listenCommands(){
   cmdRef.on('value', s=>{
     const c=s.val()||{};
 
-    // Reload trang
+    // 1) Reload toàn trang
     if (c.reloadAt) { location.reload(true); return; }
 
-    // Set table -> show Start Order ngay
+    // 2) Set table -> nhảy sang Start Order
     if (c.setTable && c.setTable.value){
       const t = c.setTable.value;
       LS.setItem('tableNumber', t);
@@ -147,10 +122,10 @@ function listenCommands(){
       firebase.database().ref('devices/'+deviceId).update({ table: t });
     }
 
-    // Unbind -> dọn & reload về gate
+    // 3) Unbind -> dọn & reload về gate
     if (c.unbindAt){
       try { LS.removeItem('deviceCode'); LS.removeItem('tableNumber'); }
-      finally { location.reload(true); } // reload để quay về gate
+      finally { location.reload(true); }
     }
   });
 
@@ -158,19 +133,18 @@ function listenCommands(){
   firebase.database().ref('broadcast/reloadAt').on('value', s=>{ if(s.val()) location.reload(true); });
 }
 
-// ------- Mở app (chỉ 1 lần) -------
-function enterApp(){
-  if (currentState === STATE.APP) return;
-  currentState = STATE.APP;
+// ------- Vào app đúng 1 lần -------
+function enterAppOnce(){
+  if (entered) return;
+  entered = true;
 
-  // Mở khóa UI app trước rồi mới gỡ shield để tránh nhấp nháy
+  // Mở khóa UI (gỡ html.gating), rồi hiển thị UI mặc định
   unlockUI();
-  removeBootShield();
 
-  // Mặc định về “Chọn bàn” (giữ flow cũ)
+  // Mặc định về “Chọn bàn”
   show('select-table'); hide('start-screen'); hide('pos-container');
 
-  // Sync số bàn nếu có
+  // Sync số bàn nếu đã có
   setTableText(LS.getItem('tableNumber') || '');
 
   startHeartbeat();
@@ -179,15 +153,14 @@ function enterApp(){
 
 // ------- Boot -------
 document.addEventListener('DOMContentLoaded', async ()=>{
-  // Khóa UI ngay (phòng trường hợp class chưa set từ <head>)
+  // Chắc chắn khóa UI (phòng khi class chưa set từ <head>)
   lockUI();
-  ensureBootShield();
 
-  // Ẩn toàn bộ app UI cho chắc chắn
+  // Ẩn toàn bộ UI app
   ['select-table','start-screen','pos-container'].forEach(hide);
   setTableText(LS.getItem('tableNumber') || '');
 
-  // Kiểm tra code hiện có
+  // Kiểm tra mã sẵn có
   const code = LS.getItem('deviceCode');
   if (!code){ showCodeGate(); return; }
 
@@ -200,7 +173,8 @@ document.addEventListener('DOMContentLoaded', async ()=>{
       LS.removeItem('deviceCode');
       throw new Error('Mã đã gắn với thiết bị khác.');
     }
-    enterApp(); // OK
+    // OK -> vào app
+    enterAppOnce();
   }catch(e){
     showCodeGate(e?.message || null);
   }
