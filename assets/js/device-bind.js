@@ -1,8 +1,8 @@
 // ===============================================
-// device-bind.js v8d (Anti-reload loop, Fail-safe Overlay)
-// - Mỗi reloadAt chỉ xử lý 1 lần (dùng localStorage "stamp")
-// - Broadcast reload xử lý 1 lần/tem thời gian
-// - Vẫn overlay an toàn, không dùng html.gating
+// device-bind.js v8e
+// - Overlay Gate an toàn, không gate lại sau khi đã vào app
+// - TX fix (không commit khi mã không hợp lệ)
+// - Anti-reload loop cho reloadAt & broadcast/reloadAt
 // ===============================================
 (function () {
   const LS = window.localStorage;
@@ -120,7 +120,6 @@
 
   // ====== chống reload vòng lặp ======
   function shouldReloadOnce(key, ts) {
-    // key: 'cmdReloadStamp' hoặc 'broadcastReloadStamp'
     if (!ts) return false;
     const last = parseInt(LS.getItem(key)||'0', 10);
     if (Number(ts) > last) {
@@ -137,11 +136,9 @@
     cmdRef.on('value', s=>{
       const c=s.val()||{};
 
-      // 1) Reload (per-device)
+      // 1) Reload (per-device) — chỉ 1 lần / timestamp
       if (c.reloadAt && shouldReloadOnce('cmdReloadStamp', c.reloadAt)) {
-        // cố gắng dọn lệnh để lần sau không lặp (nếu có quyền)
         try { cmdRef.child('reloadAt').remove(); } catch(_) {}
-        // dùng setTimeout để tránh đụng onValue ngay frame hiện tại
         setTimeout(()=> location.reload(true), 50);
         return;
       }
@@ -153,7 +150,6 @@
         show('start-screen'); hide('select-table'); hide('pos-container');
         setTableText(t);
         const startBtn = $('start-order'); if (startBtn) { try{ startBtn.scrollIntoView({block:'center'}); }catch(_){ } }
-        // dọn lệnh
         try { cmdRef.child('setTable').remove(); } catch(_) {}
         firebase.database().ref('devices/'+deviceId).update({ table: t });
       }
@@ -166,7 +162,7 @@
       }
     });
 
-    // Broadcast reload toàn bộ (1 lần / timestamp)
+    // Broadcast reload toàn bộ
     const bRef = firebase.database().ref('broadcast/reloadAt');
     bRef.on('value', s=>{
       const ts = s.val();
@@ -180,7 +176,8 @@
   let entered = false;
   function enterAppOnce(){
     if (entered) return;
-    entered = true;
+    entered = true;               // từ đây trở đi: KHÔNG gate lại nữa
+
     hideOverlay();
     show('select-table'); hide('start-screen'); hide('pos-container');
     setTableText(LS.getItem('tableNumber') || '');
@@ -190,13 +187,19 @@
       startHeartbeat();
       listenCommands();
     } catch (e) {
-      showOverlay(e?.message || 'Lỗi khởi tạo lệnh.');
+      // ĐÃ vào app rồi thì không gate nữa; chỉ log lỗi
+      console.error('[bind] init error after enter:', e);
     }
   }
 
   // ---------- Boot ----------
+  // CHỈ gate lỗi TRƯỚC khi vào app; SAU khi entered=true thì KHÔNG overlay nữa
   window.addEventListener('error', (e)=>{
-    showOverlay((e && e.message) ? e.message : 'Lỗi không xác định.');
+    if (!entered) {
+      showOverlay((e && e.message) ? e.message : 'Lỗi không xác định.');
+    } else {
+      console.error('[bind] runtime error after enter:', e?.message || e);
+    }
   });
 
   document.addEventListener('DOMContentLoaded', async ()=>{
@@ -208,7 +211,7 @@
       await firebase.auth().signInAnonymously().catch((e)=>{ throw new Error('Auth lỗi: '+(e?.message||e)); });
 
       const code = LS.getItem('deviceCode');
-      if (!code) return; // chưa có mã -> chờ người dùng nhập trên overlay
+      if (!code) return; // chờ nhập mã
 
       const snap = await firebase.database().ref('codes/'+code).once('value');
       const data = snap.val();
