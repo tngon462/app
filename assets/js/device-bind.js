@@ -1,20 +1,15 @@
 // ===============================================
-// device-bind.js v9d (PROD)
-// - Gate thực sự chặn: chỉ vào app khi bind mã OK
-// - Auto-bind on boot nếu code có sẵn nhưng chưa bound trong DB
-// - Anti-loop: reloadAt, unbindAt, broadcast.reloadAt (tem localStorage)
-// - Báo số bàn về Admin theo thời gian thực:
-//     • Nếu đang ở màn "Chọn bàn" -> gửi "-" và xóa localStorage.tableNumber
-//     • Nếu ở "Start Order" -> gửi đúng số bàn (ưu tiên localStorage.tableNumber)
+// device-bind.js v9d2 (PROD)
+// - Gate thật (bind OK mới vào)
+// - Đồng bộ table về Admin: "-" khi đang ở màn chọn bàn
+// - Report ngay khi vào + mỗi 1s
+// - Anti-loop reload/unbind/broadcast
 // ===============================================
 (function () {
   const LS = window.localStorage;
   const $  = (id) => document.getElementById(id);
 
   let entered = false;
-  let requireGate = false;
-  let deviceId = LS.getItem('deviceId');
-  if (!deviceId) { deviceId = uuidv4(); LS.setItem('deviceId', deviceId); }
 
   // ---------- Helpers ----------
   function uuidv4(){ return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);}); }
@@ -22,6 +17,12 @@
   function show(id){ const el=$(id); if(el) el.classList.remove('hidden'); }
   function hide(id){ const el=$(id); if(el) el.classList.add('hidden'); }
   function visible(id){ const el=$(id); return !!(el && !el.classList.contains('hidden')); }
+  function log(){ try{ console.log('[bind]', ...arguments); }catch(_){} }
+
+  // ---------- Device ID ----------
+  let deviceId = LS.getItem('deviceId');
+  if (!deviceId) { deviceId = uuidv4(); LS.setItem('deviceId', deviceId); }
+  log('deviceId', deviceId);
 
   // ---------- Firebase ----------
   function assertFirebaseReady() {
@@ -81,78 +82,75 @@
   }
 
   // ---------- Anti-loop helper ----------
-  function shouldHandleOnce(key, ts){
+  function oncePerStamp(key, ts){
     if(!ts) return false;
     const last = parseInt(LS.getItem(key)||'0',10);
     if(Number(ts) > last){ LS.setItem(key,String(ts)); return true; }
     return false;
   }
 
-  // ---------- Báo số bàn về Admin (poll nhẹ) ----------
-  let lastSentTable = undefined; // undefined -> chưa gửi
-  function normalizeTableValue(raw){
+  // ---------- Reporter: đồng bộ TABLE về Admin ----------
+  let lastSentTable;
+  function normalizeTable(raw){
     if (!raw) return '-';
     const s = String(raw).trim();
     return s ? s : '-';
   }
-  async function sendTableToAdmin(val){
+  async function sendTable(val){
     try{
       await firebase.database().ref('devices/'+deviceId+'/table').set(val);
       lastSentTable = val;
-    }catch(_){}
+      log('report table =', val);
+    }catch(e){ log('report table error', e); }
   }
-  function startTableReporter(){
-    // Mỗi 1s kiểm tra màn hình/LS và đẩy về admin nếu khác lần trước
+  function computeCurrentTable(){
+    if (visible('select-table')) {
+      // Đang ở màn chọn bàn => xoá local để không nhớ bàn cũ
+      if (LS.getItem('tableNumber')) LS.removeItem('tableNumber');
+      return '-';
+    }
+    let t = LS.getItem('tableNumber') || '';
+    if (!t && visible('start-screen')) {
+      const el = $('selected-table'); t = (el && el.textContent) ? el.textContent.trim() : '';
+    }
+    return normalizeTable(t);
+  }
+  function reportTableLoop(){
+    // báo ngay khi vào
+    const first = computeCurrentTable();
+    if (lastSentTable !== first) sendTable(first);
+    // sau đó poll 1s
     setInterval(()=>{
-      try{
-        const onSelect = visible('select-table');
-        const onStart  = visible('start-screen');
-
-        if (onSelect) {
-          // Đang ở màn chọn bàn => xóa bàn cũ trong LS + báo '-'
-          if (LS.getItem('tableNumber')) LS.removeItem('tableNumber');
-          const val = '-';
-          if (lastSentTable !== val) sendTableToAdmin(val);
-          return;
-        }
-
-        let t = LS.getItem('tableNumber');
-        if (!t && onStart) {
-          // Thử lấy từ UI nếu cần
-          const el = $('selected-table'); t = (el && el.textContent) ? el.textContent.trim() : '';
-        }
-        const val = normalizeTableValue(t);
-        if (lastSentTable !== val) sendTableToAdmin(val);
-      }catch(_){}
+      const v = computeCurrentTable();
+      if (v !== lastSentTable) sendTable(v);
     }, 1000);
   }
 
-  // ---------- Commands (trì hoãn 3s sau khi vào app) ----------
-  function listenCommandsDelayed(){ setTimeout(listenCommands, 3000); }
+  // ---------- Commands ----------
   function listenCommands(){
     const cmdRef = firebase.database().ref('devices/'+deviceId+'/commands');
     cmdRef.on('value', s=>{
       const c=s.val()||{};
 
       // reloadAt
-      if (c.reloadAt && shouldHandleOnce('cmdReloadStamp', c.reloadAt)) {
+      if (c.reloadAt && oncePerStamp('cmdReloadStamp', c.reloadAt)) {
         try{ cmdRef.child('reloadAt').remove(); }catch(_){}
         setTimeout(()=>location.reload(true), 50);
         return;
       }
 
-      // setTable → nhảy Start Order + lưu local + báo ngay cho admin
+      // setTable → nhảy Start Order + lưu local + báo ngay
       if (c.setTable && c.setTable.value){
         const t=c.setTable.value;
         LS.setItem('tableNumber', t);
         show('start-screen'); hide('select-table'); hide('pos-container');
         setTableText(t);
         try{ cmdRef.child('setTable').remove(); }catch(_){}
-        firebase.database().ref('devices/'+deviceId).update({ table: normalizeTableValue(t) });
+        firebase.database().ref('devices/'+deviceId).update({ table: normalizeTable(t) });
       }
 
       // unbindAt
-      if (c.unbindAt && shouldHandleOnce('cmdUnbindStamp', c.unbindAt)) {
+      if (c.unbindAt && oncePerStamp('cmdUnbindStamp', c.unbindAt)) {
         try{
           LS.removeItem('deviceCode');
           LS.removeItem('tableNumber');
@@ -167,7 +165,7 @@
     const bRef = firebase.database().ref('broadcast/reloadAt');
     bRef.on('value', s=>{
       const ts=s.val();
-      if (ts && shouldHandleOnce('broadcastReloadStamp', ts)) {
+      if (ts && oncePerStamp('broadcastReloadStamp', ts)) {
         setTimeout(()=>location.reload(true), 50);
       }
     });
@@ -229,7 +227,6 @@
     if (entered) return;
     entered = true;
 
-    // Nếu đã có số bàn -> vào thẳng Start Order
     const t = LS.getItem('tableNumber');
     hideOverlay();
     if (t) {
@@ -241,9 +238,10 @@
 
     try{
       assertFirebaseReady();
+      ensureAuth().catch(()=>{});
       startHeartbeat();
-      listenCommandsDelayed();
-      startTableReporter(); // <-- bắt đầu đồng bộ bàn về Admin
+      setTimeout(listenCommands, 3000);
+      reportTableLoop(); // ⬅️ báo table ngay + mỗi 1s
     }catch(e){ console.error('[bind] init after enter:', e); }
   }
 
@@ -261,8 +259,6 @@
       const saved = LS.getItem('deviceCode');
 
       if (!saved) {
-        // Không có deviceCode -> Gate bắt buộc
-        requireGate = true;
         showOverlay();
         return;
       }
@@ -270,20 +266,17 @@
       // Có deviceCode -> kiểm tra/tự bind nếu cần rồi vào app
       const snap = await firebase.database().ref('codes/'+saved).once('value');
       if (!snap.exists()){
-        requireGate = true;
         LS.removeItem('deviceCode');
         showOverlay('Mã đã bị xóa. Vui lòng nhập lại.');
         return;
       }
       const data = snap.val() || {};
       if (data.enabled === false) {
-        requireGate = true;
         LS.removeItem('deviceCode');
         showOverlay('Mã đã bị tắt. Vui lòng nhập mã khác.');
         return;
       }
       if (data.boundDeviceId && data.boundDeviceId !== deviceId) {
-        requireGate = true;
         LS.removeItem('deviceCode');
         showOverlay('Mã đang gắn với thiết bị khác. Vui lòng nhập mã khác.');
         return;
@@ -292,14 +285,10 @@
         await bindCodeToDevice(saved);
       }
 
-      requireGate = false;
       enterAppOnce();
     }catch(e){
-      if (requireGate) showOverlay(e?.message || 'Lỗi khởi động.');
-      else {
-        if (!entered) { requireGate = true; showOverlay(e?.message || 'Lỗi khởi động.'); }
-        else console.error(e);
-      }
+      if (!entered) showOverlay(e?.message || 'Lỗi khởi động.');
+      else console.error(e);
     }
   });
 })();
