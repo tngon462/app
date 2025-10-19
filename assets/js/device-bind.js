@@ -1,5 +1,8 @@
 // assets/js/device-bind.js
-// v12 — transaction 1-mã-1-máy + anti-flicker + phát sự kiện cho core cập nhật START ORDER
+// v13 — Không reload khi đổi bàn; reload chỉ khi "Làm mới"
+// - Transaction 1-mã-1-máy
+// - Lọc lệnh theo SESSION_TS
+// - Phát event cho core để Start Order cập nhật đúng link
 
 (function(){
   const SESSION_TS = Date.now();
@@ -9,6 +12,7 @@
   function uuidv4(){return'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);});}
   function n(x){ const v = Number(x); return Number.isFinite(v) ? v : 0; }
 
+  // DeviceId
   let deviceId = LS.getItem('deviceId');
   if (!deviceId){ deviceId = uuidv4(); LS.setItem('deviceId', deviceId); }
 
@@ -23,7 +27,7 @@
   const db = firebase.database();
   firebase.auth().onAuthStateChanged(u => { if (!u) firebase.auth().signInAnonymously().catch(()=>{}); });
 
-  // UI helpers
+  // ===== UI helpers =====
   function ensureBootShield(){
     if (document.getElementById('boot-shield')) return;
     const el = document.createElement('div');
@@ -43,7 +47,7 @@
   function hideAppUI(){ ['select-table','start-screen','pos-container'].forEach(hide); }
   function setTableText(t){ const el=document.getElementById('selected-table'); if(el) el.textContent=t||''; }
 
-  // Thông báo cho core mỗi khi bàn đổi
+  // ===== Báo cho core khi bàn thay đổi (KHÔNG reload) =====
   function notifyCoreTable(table){
     const t = (table||'').toString().trim();
     LS.setItem('tableNumber', t);
@@ -54,7 +58,7 @@
     }catch(_) {}
   }
 
-  // Gate (nhập mã)
+  // ===== Gate (nhập mã) =====
   let gateShown = false;
   function showCodeGate(message){
     if (gateShown) { const e=document.getElementById('code-error'); if(e&&message) e.textContent=message; return; }
@@ -101,7 +105,7 @@
     setTimeout(()=> input.focus(), 60);
   }
 
-  // Transaction claim 1-mã-1-máy
+  // ===== Transaction claim 1-mã-1-máy =====
   async function claimCodeByTransaction(code){
     const ref = db.ref('codes/'+code);
     const res = await ref.transaction((data)=>{
@@ -123,7 +127,7 @@
     });
   }
 
-  // Heartbeat + Commands
+  // ===== Heartbeat & Commands =====
   function startHeartbeat(){
     setInterval(()=> db.ref('devices/'+deviceId)
       .update({ lastSeen: firebase.database.ServerValue.TIMESTAMP }).catch(()=>{}), 30*1000);
@@ -135,31 +139,28 @@
     cmdRef.on('value', (s)=>{
       const c = s.val() || {};
 
-      // reloadAt (mới hơn phiên)
+      // --- "Làm mới": đặt cờ rồi reload ---
       const ra = n(c.reloadAt);
       if (ra && ra > SESSION_TS){
+        try { LS.setItem('startupMode','start'); } catch(_) {}
         cmdRef.child('reloadAt').remove().finally(()=> location.reload(true));
         return;
       }
 
-      // setTable (mới hơn phiên)
+      // --- Đổi số bàn: KHÔNG reload, chỉ cập nhật màn Start + link ---
       if (c.setTable && c.setTable.value){
         const at = n(c.setTable.at || c.setTable.ts);
         if (at > SESSION_TS){
           const t = String(c.setTable.value).trim();
-          // Lưu + báo core + đặt cờ để sau reload vào Start
-          notifyCoreTable(t);
-          LS.setItem('startupMode', 'start');
-          // Cho admin thấy ngay
+          notifyCoreTable(t); // cập nhật số bàn + phát event cho core
           db.ref('devices/'+deviceId).update({ table: t, lastKnownTable: t }).catch(()=>{});
-          // Dọn lệnh
           cmdRef.child('setTable').remove().catch(()=>{});
-          // Mở Start screen (không auto vào POS)
+          // chuyển sang màn Start (không mở POS)
           show('start-screen'); hide('select-table'); hide('pos-container');
         }
       }
 
-      // unbindAt (mới hơn phiên)
+      // --- Gỡ liên kết: xóa local + reload về gate ---
       const ua = n(c.unbindAt);
       if (ua && ua > SESSION_TS){
         LS.removeItem('deviceCode');
@@ -169,14 +170,17 @@
       }
     });
 
-    // broadcast reload
+    // Broadcast reload toàn bộ
     db.ref('broadcast/reloadAt').on('value', s=>{
       const ts = n(s.val());
-      if (ts && ts > SESSION_TS) location.reload(true);
+      if (ts && ts > SESSION_TS){
+        try { LS.setItem('startupMode','start'); } catch(_) {}
+        location.reload(true);
+      }
     });
   }
 
-  // Enter app
+  // ===== Enter app =====
   let entered = false;
   function enterApp(){
     if (entered) return;
@@ -185,14 +189,17 @@
     document.documentElement.classList.remove('gating');
     removeBootShield();
 
-    const wantStart = (LS.getItem('startupMode') === 'start') && !!LS.getItem('tableNumber');
+    const wantStart = (LS.getItem('startupMode') === 'start');
     const t = LS.getItem('tableNumber') || '';
-    notifyCoreTable(t);
+
+    // Thông báo cho core bàn hiện tại (nếu có)
+    if (t) notifyCoreTable(t);
 
     if (wantStart && t){
       show('start-screen'); hide('select-table'); hide('pos-container');
-      setTimeout(()=> LS.removeItem('startupMode'), 200);
-    }else{
+      setTimeout(()=> LS.removeItem('startupMode'), 150);
+    } else {
+      // giữ đúng state hiện có (mặc định vào chọn bàn)
       show('select-table'); hide('start-screen'); hide('pos-container');
     }
 
@@ -200,7 +207,7 @@
     listenCommands();
   }
 
-  // Boot
+  // ===== Boot =====
   document.addEventListener('DOMContentLoaded', async ()=>{
     ensureBootShield();
     hideAppUI();
