@@ -1,13 +1,11 @@
 // ===============================================
-// device-bind.js v9e (PROD)
-// - Gate thật: chỉ vào app khi bind OK
-// - Nhận lệnh Admin: reloadAt / setTable / unbindAt (chặn lặp theo tem)
-// - Đồng bộ trạng thái về Admin (mỗi 1s + ngay khi vào):
-//     • stage: "select" | "start" | "pos"
-//     • inPOS: boolean
-//     • table: "-", "<bàn>", hoặc "+<bàn>" (nếu stage='pos')
-// - Nếu đang ở "Chọn bàn": xóa localStorage.tableNumber để không nhớ bàn cũ
-// - Sau reload: nếu còn tableNumber -> vào thẳng Start Order
+// device-bind.js v9f (PROD)
+// - Gate thật (bind OK mới vào)
+// - Giữ tableNumber & đồng bộ stage/inPOS/table về /devices/<id>
+// - Khi vào POS/iframe: nếu thiếu tableNumber -> lấy từ UI, LƯU vào LS, và báo "+<bàn>"
+// - Admin reloadAt: reload xong, nếu còn tableNumber -> tự vào Start Order
+// - Admin setTable: vào ngay Start Order <bàn>, báo "<bàn>"
+// - Admin unbindAt: xoá code + tableNumber rồi reload về Gate
 // ===============================================
 (function () {
   const LS = window.localStorage;
@@ -21,12 +19,10 @@
   function show(id){ const el=$(id); if(el) el.classList.remove('hidden'); }
   function hide(id){ const el=$(id); if(el) el.classList.add('hidden'); }
   function visible(id){ const el=$(id); return !!(el && !el.classList.contains('hidden')); }
-  function log(){ try{ console.log('[bind]', ...arguments); }catch(_){} }
 
   // ---------- Device ID ----------
   let deviceId = LS.getItem('deviceId');
   if (!deviceId) { deviceId = uuidv4(); LS.setItem('deviceId', deviceId); }
-  log('deviceId', deviceId);
 
   // ---------- Firebase ----------
   function assertFirebaseReady() {
@@ -44,7 +40,7 @@
     assertFirebaseReady(); await ensureAuth();
     const codeRef = firebase.database().ref('codes/'+code);
 
-    // Kiểm tra sơ bộ
+    // Kiểm tra
     const snap0 = await codeRef.once('value');
     if (!snap0.exists()) throw new Error('Mã không tồn tại. Hãy thêm mã trong Admin.');
     const v0 = snap0.val() || {};
@@ -72,7 +68,7 @@
       info: { ua: navigator.userAgent }
     });
 
-    LS.setItem('deviceCode', code); // chỉ set khi bind OK
+    LS.setItem('deviceCode', code);
   }
 
   // ---------- Heartbeat ----------
@@ -83,14 +79,6 @@
         firebase.database().ref('devices/'+deviceId).update({ lastSeen: firebase.database.ServerValue.TIMESTAMP });
       }catch(_){}
     }, 30_000);
-  }
-
-  // ---------- Anti-loop helper ----------
-  function oncePerStamp(key, ts){
-    if(!ts) return false;
-    const last = parseInt(LS.getItem(key)||'0',10);
-    if(Number(ts) > last){ LS.setItem(key,String(ts)); return true; }
-    return false;
   }
 
   // ---------- Stage / Table detection ----------
@@ -105,62 +93,85 @@
     const s = String(raw).trim();
     return s ? s : '-';
   }
-  function computeStateForAdmin(){
+  function readTableFromUI(){
+    const el = $('selected-table');
+    return el && el.textContent ? el.textContent.trim() : '';
+  }
+
+  // Luôn đảm bảo LS.tableNumber có giá trị khi chuẩn bị vào POS
+  function ensureTableNumberBeforePOS(){
+    let t = LS.getItem('tableNumber');
+    if (!t) {
+      t = readTableFromUI();
+      if (t) LS.setItem('tableNumber', t);
+    }
+    return t;
+  }
+
+  // Gửi state lên /devices/<id>
+  let last = { table: undefined, stage: undefined, inPOS: undefined };
+  async function report(state){
+    try{
+      const upd = {};
+      if (state.table !== last.table) upd.table = state.table;
+      if (state.stage !== last.stage) upd.stage = state.stage;
+      if (state.inPOS !== last.inPOS) upd.inPOS = state.inPOS;
+      if (Object.keys(upd).length){
+        // lưu cả lastKnownTable để admin có thể fallback nếu cần
+        if (state.table && state.table !== '-' && !state.table.startsWith('+')) upd.lastKnownTable = state.table;
+        if (state.table && state.table.startsWith('+')) upd.lastKnownTable = state.table.replace(/^\+/, '');
+        await firebase.database().ref('devices/'+deviceId).update(upd);
+        last = { ...last, ...upd };
+      }
+    }catch(_){}
+  }
+
+  function computeState(){
     const stage = currentStage();
     let t = LS.getItem('tableNumber') || '';
 
     if (stage === 'select') {
-      if (LS.getItem('tableNumber')) LS.removeItem('tableNumber'); // không nhớ bàn cũ
-      return { table: '-', stage, inPOS: false };
+      // đang ở màn chọn bàn -> chắc chắn không nhớ bàn cũ
+      if (LS.getItem('tableNumber')) LS.removeItem('tableNumber');
+      return { table: '-', stage, inPOS:false };
     }
 
-    if (!t && stage === 'start') {
-      const el = $('selected-table'); t = (el && el.textContent) ? el.textContent.trim() : '';
-    }
+    if (!t && stage === 'start') t = readTableFromUI();
 
     const base = normalizeTable(t);
     if (stage === 'pos') {
-      // Đang trong iframe POS -> hiển thị +<bàn>
-      const plus = base === '-' ? '+?' : ('+' + base.replace(/^\+/, ''));
-      return { table: plus, stage, inPOS: true };
+      const tt = ensureTableNumberBeforePOS() || base; // đảm bảo có
+      const plus = tt && tt !== '-' ? ('+' + String(tt).replace(/^\+/, '')) : '+?';
+      return { table: plus, stage, inPOS:true };
     }
-
-    // start / unknown
-    return { table: base, stage, inPOS: false };
-  }
-
-  // Reporter cache
-  let lastSent = { table: undefined, stage: undefined, inPOS: undefined };
-
-  async function pushStateToAdmin(state){
-    try{
-      const upd = {};
-      if (state.table !== lastSent.table) upd.table = state.table;
-      if (state.stage !== lastSent.stage) upd.stage = state.stage;
-      if (state.inPOS !== lastSent.inPOS) upd.inPOS = state.inPOS;
-
-      if (Object.keys(upd).length) {
-        await firebase.database().ref('devices/'+deviceId).update(upd);
-        lastSent = { ...lastSent, ...upd };
-        log('report', upd);
-      }
-    }catch(e){ log('report error', e); }
+    return { table: base, stage, inPOS:false };
   }
 
   function startReporter(){
-    // báo ngay khi vào
-    pushStateToAdmin(computeStateForAdmin());
-    // sau đó poll mỗi 1s
-    setInterval(()=> {
-      pushStateToAdmin(computeStateForAdmin());
-    }, 1000);
+    // báo ngay
+    report(computeState());
+    // poll 1s
+    setInterval(()=> report(computeState()), 1000);
 
-    // cộng thêm quan sát classList của #pos-container để nhạy hơn
+    // quan sát pos-container để set tableNumber trước khi vào POS
     const pos = $('pos-container');
     if (pos && 'MutationObserver' in window) {
-      const mo = new MutationObserver(()=> pushStateToAdmin(computeStateForAdmin()));
+      const mo = new MutationObserver(()=>{
+        if (!pos.classList.contains('hidden')) {
+          ensureTableNumberBeforePOS(); // <- chốt tableNumber trước khi POS hiển thị
+          report(computeState());
+        }
+      });
       mo.observe(pos, { attributes:true, attributeFilter:['class'] });
     }
+  }
+
+  // ---------- Anti-loop helper ----------
+  function oncePerStamp(key, ts){
+    if(!ts) return false;
+    const last = parseInt(LS.getItem(key)||'0',10);
+    if(Number(ts) > last){ LS.setItem(key,String(ts)); return true; }
+    return false;
   }
 
   // ---------- Commands ----------
@@ -169,25 +180,21 @@
     cmdRef.on('value', s=>{
       const c=s.val()||{};
 
-      // reloadAt
       if (c.reloadAt && oncePerStamp('cmdReloadStamp', c.reloadAt)) {
         try{ cmdRef.child('reloadAt').remove(); }catch(_){}
         setTimeout(()=>location.reload(true), 50);
         return;
       }
 
-      // setTable → nhảy Start Order + lưu local + báo ngay
       if (c.setTable && c.setTable.value){
         const t=c.setTable.value;
         LS.setItem('tableNumber', t);
         show('start-screen'); hide('select-table'); hide('pos-container');
         setTableText(t);
         try{ cmdRef.child('setTable').remove(); }catch(_){}
-        // báo ngay
-        pushStateToAdmin({ table: normalizeTable(t), stage: 'start', inPOS:false });
+        report({ table: t, stage:'start', inPOS:false });
       }
 
-      // unbindAt
       if (c.unbindAt && oncePerStamp('cmdUnbindStamp', c.unbindAt)) {
         try{
           LS.removeItem('deviceCode');
@@ -279,7 +286,7 @@
       ensureAuth().catch(()=>{});
       startHeartbeat();
       setTimeout(listenCommands, 3000);
-      startReporter(); // ⬅️ báo stage/inPOS/table ngay + mỗi 1s
+      startReporter();
     }catch(e){ console.error('[bind] init after enter:', e); }
   }
 
@@ -301,7 +308,6 @@
         return;
       }
 
-      // Có deviceCode -> kiểm tra/tự bind nếu cần rồi vào app
       const snap = await firebase.database().ref('codes/'+saved).once('value');
       if (!snap.exists()){
         LS.removeItem('deviceCode');
