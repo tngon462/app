@@ -42,4 +42,175 @@ function ensureBootShield(){
     </div>`;
   document.body.appendChild(el);
 }
-function removeBootShield(){ const
+function removeBootShield(){ const el=$('boot-shield'); if(el) el.remove(); }
+
+function showCodeGate(message){
+  if (currentState === STATE.GATE) {
+    const e=$('code-error'); if(e&&message) e.textContent=message;
+    return;
+  }
+  currentState = STATE.GATE;
+
+  // Ẩn toàn bộ app UI để không “lọt”
+  ['select-table','start-screen','pos-container'].forEach(hide);
+
+  let gate = $('code-gate');
+  if (!gate){
+    gate = document.createElement('div');
+    gate.id = 'code-gate';
+    gate.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:6000;';
+    gate.innerHTML = `
+      <div class="w-full h-full flex items-center justify-center p-6">
+        <div class="w-full max-w-sm bg-white border border-gray-200 rounded-2xl shadow p-6">
+          <h1 class="text-2xl font-extrabold text-gray-900 mb-4 text-center">Nhập mã iPad</h1>
+          <p class="text-sm text-gray-500 mb-4 text-center">Nhập mã được cấp để tiếp tục.</p>
+          <input id="code-input" type="text" maxlength="20" placeholder="VD: A1B2C3"
+                 class="w-full border rounded-lg px-4 py-3 text-center tracking-widest font-mono text-lg"
+                 inputmode="latin" autocomplete="one-time-code" />
+          <div id="code-error" class="text-red-600 text-sm mt-2 h-5"></div>
+          <button id="code-submit"
+            class="mt-4 w-full rounded-xl bg-blue-600 text-white font-bold py-3 hover:bg-blue-700 transition">
+            XÁC NHẬN
+          </button>
+        </div>
+      </div>`;
+    document.body.appendChild(gate);
+
+    const input=$('code-input'), btn=$('code-submit'), err=$('code-error');
+    function setBusy(b){ btn.disabled=b; btn.textContent=b?'Đang kiểm tra…':'XÁC NHẬN'; }
+    async function submit(){
+      const raw=(input.value||'').trim().toUpperCase();
+      err.textContent='';
+      if(!raw){ err.textContent='Vui lòng nhập mã.'; return; }
+      setBusy(true);
+      try{
+        await bindCodeToDevice(raw); // ném lỗi nếu sai/đã dùng
+        // Thành công: remove gate & mở app
+        gate.remove();
+        enterApp();
+      }catch(e){
+        err.textContent = (e && e.message) ? e.message : 'Không dùng được mã này.';
+      }finally{ setBusy(false); }
+    }
+    btn.addEventListener('click', submit);
+    input.addEventListener('keydown', e=>{ if(e.key==='Enter') submit(); });
+    setTimeout(()=> input.focus(), 60);
+  }
+  if (message){ const err=$('code-error'); if(err) err.textContent=message; }
+}
+
+// ------- Firebase ops -------
+async function bindCodeToDevice(code){
+  const codeRef = firebase.database().ref('codes/'+code);
+  await codeRef.transaction(data=>{
+    if(!data) return null;
+    if(data.enabled===false) return; // fail commit
+    if(!data.boundDeviceId || data.boundDeviceId===deviceId){
+      return {...data, boundDeviceId: deviceId, boundAt: firebase.database.ServerValue.TIMESTAMP};
+    }
+    return; // fail commit
+  },(error,committed)=>{
+    if(error) throw error;
+    if(!committed) throw new Error('Mã không khả dụng hoặc đã dùng ở thiết bị khác.');
+  });
+
+  await firebase.database().ref('devices/'+deviceId).update({
+    code,
+    lastSeen: firebase.database.ServerValue.TIMESTAMP,
+    info: { ua: navigator.userAgent }
+  });
+  LS.setItem('deviceCode', code);
+}
+
+function startHeartbeat(){
+  setInterval(()=>{
+    firebase.database().ref('devices/'+deviceId).update({ lastSeen: firebase.database.ServerValue.TIMESTAMP });
+  }, 30*1000);
+}
+
+function listenCommands(){
+  const cmdRef = firebase.database().ref('devices/'+deviceId+'/commands');
+  cmdRef.on('value', s=>{
+    const c=s.val()||{};
+
+    // Reload trang
+    if (c.reloadAt) { location.reload(true); return; }
+
+    // Set table -> show Start Order ngay
+    if (c.setTable && c.setTable.value){
+      const t = c.setTable.value;
+      LS.setItem('tableNumber', t);
+      // chuyển UI sang màn Start Order với số bàn đó
+      show('start-screen'); hide('select-table'); hide('pos-container');
+      setTableText(t);
+      // Option: auto scroll / focus nút START
+      const startBtn = $('start-order'); if (startBtn) { try{ startBtn.scrollIntoView({block:'center'}); }catch(_){ } }
+
+      // dọn lệnh
+      cmdRef.child('setTable').remove();
+      // lưu nhanh để admin thấy
+      firebase.database().ref('devices/'+deviceId).update({ table: t });
+    }
+
+    // Unbind -> dọn & reload về gate (không alert để khỏi kẹt UI)
+    if (c.unbindAt){
+      try {
+        const code = LS.getItem('deviceCode');
+        if (code){
+          // xóa code local
+          LS.removeItem('deviceCode');
+        }
+        LS.removeItem('tableNumber');
+      } finally {
+        location.reload(true);
+      }
+    }
+  });
+
+  // Broadcast reload toàn bộ
+  firebase.database().ref('broadcast/reloadAt').on('value', s=>{ if(s.val()) location.reload(true); });
+}
+
+// ------- Mở app (chỉ gọi 1 lần) -------
+function enterApp(){
+  if (currentState === STATE.APP) return;
+  currentState = STATE.APP;
+
+  removeBootShield();
+  // Mặc định hiển thị màn “Chọn bàn” (giữ flow cũ)
+  show('select-table'); hide('start-screen'); hide('pos-container');
+
+  // Sync số bàn đang có (nếu có)
+  setTableText(LS.getItem('tableNumber') || '');
+
+  startHeartbeat();
+  listenCommands();
+}
+
+// ------- Boot -------
+document.addEventListener('DOMContentLoaded', async ()=>{
+  ensureBootShield();
+
+  // Ẩn toàn bộ app UI cho chắc chắn
+  ['select-table','start-screen','pos-container'].forEach(hide);
+  setTableText(LS.getItem('tableNumber') || '');
+
+  // Kiểm tra code hiện có
+  const code = LS.getItem('deviceCode');
+  if (!code){ showCodeGate(); return; }
+
+  try{
+    const snap = await firebase.database().ref('codes/'+code).once('value');
+    const data = snap.val();
+    if(!data) throw new Error('Mã không tồn tại.');
+    if(data.enabled===false) throw new Error('Mã đã bị tắt.');
+    if(data.boundDeviceId && data.boundDeviceId!==deviceId){
+      LS.removeItem('deviceCode');
+      throw new Error('Mã đã gắn với thiết bị khác.');
+    }
+    // OK
+    enterApp();
+  }catch(e){
+    showCodeGate(e?.message || null);
+  }
+});
