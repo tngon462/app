@@ -139,6 +139,15 @@
           <span class="text-xs text-gray-500">• Dùng khi muốn tất cả iPad tải lại ngay</span>
         </div>
 
+        <!-- HÀNG ĐỢI MÃ (hiện khi có mã rảnh) -->
+<div id="codes-queue-wrap" class="hidden bg-white rounded-xl shadow-sm border border-gray-200 p-3 md:p-4 mb-4">
+  <div class="flex items-center justify-between">
+    <div class="font-semibold text-gray-800">Hàng đợi mã (chưa dùng)</div>
+    <div class="text-xs text-gray-500">Tổng: <span id="codes-queue-count">0</span></div>
+  </div>
+  <div id="codes-queue" class="mt-3 flex flex-wrap gap-2"></div>
+</div>
+
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <!-- Khối Codes -->
           <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-5">
@@ -439,6 +448,7 @@ T02"></textarea>
   </script>
 
   <!-- ✅ Tách riêng logic tab Thiết bị iPad -->
-  <script src="./assets/js/admin-devices.js?v=1"></script>
+  <script src="./assets/js/admin-devices.js?v=2"></script>
+  <div id="modal-root"></div>
 </body>
 </html>
