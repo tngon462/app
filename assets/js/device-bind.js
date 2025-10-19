@@ -1,8 +1,9 @@
 // assets/js/device-bind.js
-// v13 — Không reload khi đổi bàn; reload chỉ khi "Làm mới"
+// v13.1 — Không reload khi đổi bàn; reload chỉ khi "Làm mới"
 // - Transaction 1-mã-1-máy
 // - Lọc lệnh theo SESSION_TS
 // - Phát event cho core để Start Order cập nhật đúng link
+// - Thêm log chẩn đoán
 
 (function(){
   const SESSION_TS = Date.now();
@@ -12,9 +13,9 @@
   function uuidv4(){return'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);});}
   function n(x){ const v = Number(x); return Number.isFinite(v) ? v : 0; }
 
-  // DeviceId
   let deviceId = LS.getItem('deviceId');
   if (!deviceId){ deviceId = uuidv4(); LS.setItem('deviceId', deviceId); }
+  console.log('[bind] v13.1 deviceId =', deviceId);
 
   // Firebase
   if (!firebase.apps.length) {
@@ -56,6 +57,7 @@
     try{
       document.dispatchEvent(new CustomEvent('tngon:external-set-table', { detail: { table: t }}));
     }catch(_) {}
+    console.log('[bind] notifyCoreTable ->', t);
   }
 
   // ===== Gate (nhập mã) =====
@@ -125,6 +127,7 @@
       lastSeen: firebase.database.ServerValue.TIMESTAMP,
       info: { ua: navigator.userAgent }
     });
+    console.log('[bind] claim OK ->', code);
   }
 
   // ===== Heartbeat & Commands =====
@@ -142,6 +145,7 @@
       // --- "Làm mới": đặt cờ rồi reload ---
       const ra = n(c.reloadAt);
       if (ra && ra > SESSION_TS){
+        console.log('[bind] commands.reloadAt -> reload to Start');
         try { LS.setItem('startupMode','start'); } catch(_) {}
         cmdRef.child('reloadAt').remove().finally(()=> location.reload(true));
         return;
@@ -152,6 +156,7 @@
         const at = n(c.setTable.at || c.setTable.ts);
         if (at > SESSION_TS){
           const t = String(c.setTable.value).trim();
+          console.log('[bind] commands.setTable ->', t);
           notifyCoreTable(t); // cập nhật số bàn + phát event cho core
           db.ref('devices/'+deviceId).update({ table: t, lastKnownTable: t }).catch(()=>{});
           cmdRef.child('setTable').remove().catch(()=>{});
@@ -163,6 +168,7 @@
       // --- Gỡ liên kết: xóa local + reload về gate ---
       const ua = n(c.unbindAt);
       if (ua && ua > SESSION_TS){
+        console.log('[bind] commands.unbindAt -> gate');
         LS.removeItem('deviceCode');
         LS.removeItem('tableNumber');
         LS.removeItem('startupMode');
@@ -174,6 +180,7 @@
     db.ref('broadcast/reloadAt').on('value', s=>{
       const ts = n(s.val());
       if (ts && ts > SESSION_TS){
+        console.log('[bind] broadcast.reloadAt -> reload to Start');
         try { LS.setItem('startupMode','start'); } catch(_) {}
         location.reload(true);
       }
@@ -191,15 +198,14 @@
 
     const wantStart = (LS.getItem('startupMode') === 'start');
     const t = LS.getItem('tableNumber') || '';
-
-    // Thông báo cho core bàn hiện tại (nếu có)
     if (t) notifyCoreTable(t);
 
     if (wantStart && t){
+      console.log('[bind] enterApp -> Start screen (wantStart)');
       show('start-screen'); hide('select-table'); hide('pos-container');
       setTimeout(()=> LS.removeItem('startupMode'), 150);
     } else {
-      // giữ đúng state hiện có (mặc định vào chọn bàn)
+      console.log('[bind] enterApp -> Select screen');
       show('select-table'); hide('start-screen'); hide('pos-container');
     }
 
@@ -213,6 +219,7 @@
     hideAppUI();
 
     const saved = (LS.getItem('deviceCode')||'').trim().toUpperCase();
+    console.log('[bind] Boot with deviceCode =', saved || '(none)', 'deviceId =', deviceId);
     if (!saved){ showCodeGate(); return; }
 
     try{
@@ -232,6 +239,7 @@
       }
       enterApp();
     }catch(e){
+      console.warn('[bind] boot error:', e);
       showCodeGate(e?.message || null);
     }
   });
