@@ -1,10 +1,16 @@
 // ===============================================
-// admin-devices.js v2
-// - Tab "Thiết bị iPad": quản lý MÃ & Thiết bị
-// - Reload toàn bộ / từng máy; Đổi số bàn; Thu hồi mã
+// admin-devices.js v1-sync
+// - GIỮ NGUYÊN UI như bản v1 của bạn
+// - Đồng bộ bàn từ app:
+//     • app ở màn "Chọn bàn" -> hiển thị "-"
+//     • app đang trong POS/iframe -> hiển thị "+<bàn>"
+//     • còn lại -> hiển thị "<bàn>"
+// - Reload từng máy -> chỉ gửi reloadAt (client tự về Start Order nếu còn tableNumber)
+// - Đổi số bàn -> set commands/setTable + cập nhật nhanh cột "Bàn"
+// - Thu hồi / Xoá / Bật-Tắt mã -> giữ nguyên như v1
 // ===============================================
 (function(){
-  // UI refs (theo admin.html bạn đã gửi)
+  // UI refs (giữ nguyên như v1)
   const devError  = document.getElementById('devError');
   const codesBody = document.getElementById('codes-tbody');
   const devicesBody = document.getElementById('devices-tbody');
@@ -18,7 +24,7 @@
     try { const d = new Date(ts); return d.toLocaleString(); } catch(_) { return String(ts); }
   }
 
-  // Firebase
+  // ==== Firebase init (giữ nguyên tinh thần v1) ====
   let db;
   async function initFirebase(){
     if (!firebase.apps.length) {
@@ -31,7 +37,7 @@
     db = firebase.database();
   }
 
-  // ---- CODES ----
+  // ---- CODES (UI & thao tác giữ nguyên v1) ----
   function renderCodes(codes){
     codesBody.innerHTML = '';
     const entries = Object.entries(codes||{}).sort(([a],[b])=> a.localeCompare(b));
@@ -107,20 +113,53 @@
   }
 
   // ---- DEVICES ----
+
+  // Chuẩn hoá hiển thị bàn theo yêu cầu:
+  //  - Nếu app ở màn "Chọn bàn": client nên ghi table="-"
+  //  - Nếu app đang POS/iframe: ưu tiên cờ stage="pos" | inPOS=true -> hiển thị "+<bàn>"
+  //  - Nếu table đã có tiền tố "+" -> giữ nguyên
+  function displayTableFromDevice(data){
+    // 1) raw có thể là string/number hoặc object { value, stage, inPOS, ... }
+    let raw = data?.table;
+
+    if (raw && typeof raw === 'object') {
+      const v = (raw.value ?? raw.table ?? '').toString().trim();
+      const stage = (raw.stage || raw.view || raw.status || '').toString().toLowerCase();
+      const inPOS = (raw.inPOS === true);
+
+      if (stage === 'select') return '-';
+      if (stage === 'pos' || inPOS) return v ? ('+' + v) : '+?';
+      return v || '—';
+    }
+
+    if (raw == null) return '—';
+    raw = String(raw).trim();
+
+    if (raw === '' || raw === '-') return '-';
+    if (raw.startsWith('+')) return raw;
+
+    const inPosFlag =
+      data?.inPOS === true ||
+      String(data?.stage||data?.view||data?.status||'').toLowerCase() === 'pos';
+
+    if (inPosFlag) return `+${raw}`;
+    return raw;
+  }
+
   function renderDevices(devices){
     devicesBody.innerHTML = '';
     const entries = Object.entries(devices||{}).sort(([a],[b])=> a.localeCompare(b));
     for (const [id, data] of entries){
-      const code  = data?.code || '';
-      const table = data?.table || '';
-      const last  = data?.lastSeen || 0;
+      const code   = data?.code || '';
+      const tableD = displayTableFromDevice(data);
+      const last   = data?.lastSeen || 0;
 
       const tr = document.createElement('tr');
       tr.className = 'border-b last:border-0';
       tr.innerHTML = `
         <td class="px-2 py-1 text-xs break-all">${id}</td>
         <td class="px-2 py-1 font-mono">${code || '—'}</td>
-        <td class="px-2 py-1">${table || '—'}</td>
+        <td class="px-2 py-1">${tableD}</td>
         <td class="px-2 py-1 text-xs">${last? formatTime(last) : '—'}</td>
         <td class="px-2 py-1">
           <div class="flex flex-wrap gap-2">
@@ -131,17 +170,27 @@
         </td>
       `;
 
-      // Làm mới (reload): chỉ gửi reloadAt → client tự vào Start Order nếu đã có tableNumber
+      // "Làm mới" (reload): chỉ gửi reloadAt
       tr.querySelector('[data-act="reload"]').addEventListener('click', async ()=>{
         try{
           await db.ref(`devices/${id}/commands/reloadAt`).set(firebase.database.ServerValue.TIMESTAMP);
         }catch(e){ showDevError('Gửi lệnh reload thất bại: '+(e?.message||e)); }
       });
 
-      // Đổi số bàn: prompt nhanh (có thể thay bằng modal danh sách sau)
+      // "Đổi số bàn": prompt nhanh
       tr.querySelector('[data-act="settable"]').addEventListener('click', async ()=>{
         try{
-          let t = prompt('Nhập số bàn mới (ví dụ: 5 hoặc T05):', table || '');
+          // Lấy gợi ý hiện tại (nếu đang là "+8" thì gợi ý "8")
+          let current = '';
+          if (typeof data?.table === 'object') {
+            current = (data.table.value ?? data.table.table ?? '') || '';
+          } else if (typeof data?.table === 'string' && data.table.startsWith('+')) {
+            current = data.table.replace(/^\+/, '');
+          } else {
+            current = data?.table || '';
+          }
+
+          let t = prompt('Nhập số bàn mới (ví dụ: 5 hoặc T05):', current || '');
           if (t===null) return;
           t = String(t).trim();
           if (!t) return;
@@ -150,12 +199,12 @@
             value: t, at: firebase.database.ServerValue.TIMESTAMP
           });
 
-          // (tuỳ chọn) cập nhật cột table cho nhanh cảm giác
+          // Cập nhật nhanh cảm giác (client cũng sẽ tự cập nhật lại ngay sau)
           await db.ref(`devices/${id}/table`).set(t);
         }catch(e){ showDevError('Đổi số bàn thất bại: '+(e?.message||e)); }
       });
 
-      // Gỡ liên kết: xoá bound ở codes + đẩy unbindAt cho thiết bị
+      // "Gỡ liên kết": xoá bound ở codes + đẩy unbindAt cho thiết bị
       tr.querySelector('[data-act="unbind"]').addEventListener('click', async ()=>{
         try{
           if (code) {
@@ -172,7 +221,7 @@
     }
   }
 
-  // ---- Broadcast reload ----
+  // ---- Broadcast reload (toàn bộ) ----
   async function sendBroadcastReload(){
     showDevError('');
     try{
@@ -180,22 +229,19 @@
     }catch(e){ showDevError('Reload toàn bộ thất bại: '+(e?.message||e)); }
   }
 
-  // ---- Wire events & live subscribe ----
+  // ---- Boot & live subscribe ----
   (async function boot(){
     try{
       await initFirebase();
 
-      // Subscribe codes
       db.ref('codes').on('value', s=>{
         try{ renderCodes(s.val()); }catch(e){ showDevError('Render codes lỗi: '+(e?.message||e)); }
       }, e=> showDevError('Lỗi tải mã: '+(e?.message||e)));
 
-      // Subscribe devices
       db.ref('devices').on('value', s=>{
         try{ renderDevices(s.val()); }catch(e){ showDevError('Render devices lỗi: '+(e?.message||e)); }
       }, e=> showDevError('Lỗi tải thiết bị: '+(e?.message||e)));
 
-      // Handlers
       btnImport?.addEventListener('click', importCodesFromTextarea);
       btnBroadcastReload?.addEventListener('click', sendBroadcastReload);
     }catch(e){
