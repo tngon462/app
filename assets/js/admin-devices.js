@@ -1,10 +1,11 @@
 // ===============================================
-// admin-devices.js v2
+// admin-devices.js v3
 // - Tab "Thiết bị iPad": quản lý MÃ & Thiết bị
 // - Reload toàn bộ / từng máy; Đổi số bàn; Thu hồi mã
+// - Hiển thị bàn là "-" khi app ở màn chọn bàn
 // ===============================================
 (function(){
-  // UI refs (theo admin.html bạn đã gửi)
+  // UI refs (theo admin.html bạn đã dùng)
   const devError  = document.getElementById('devError');
   const codesBody = document.getElementById('codes-tbody');
   const devicesBody = document.getElementById('devices-tbody');
@@ -16,6 +17,12 @@
   function formatTime(ts){
     if (!ts) return '—';
     try { const d = new Date(ts); return d.toLocaleString(); } catch(_) { return String(ts); }
+  }
+  function showTable(val){
+    // adm UI: luôn in "-" nếu null/empty/"-"
+    if (!val) return '-';
+    const s = String(val).trim();
+    return s ? s : '-';
   }
 
   // Firebase
@@ -98,7 +105,6 @@
     for (const code of raw){
       updates['codes/'+code+'/enabled'] = true;
       updates['codes/'+code+'/createdAt'] = firebase.database.ServerValue.TIMESTAMP;
-      // giữ nguyên bound nếu đã có
     }
     try{
       await db.ref().update(updates);
@@ -112,7 +118,7 @@
     const entries = Object.entries(devices||{}).sort(([a],[b])=> a.localeCompare(b));
     for (const [id, data] of entries){
       const code  = data?.code || '';
-      const table = data?.table || '';
+      const table = showTable(data?.table);
       const last  = data?.lastSeen || 0;
 
       const tr = document.createElement('tr');
@@ -120,7 +126,7 @@
       tr.innerHTML = `
         <td class="px-2 py-1 text-xs break-all">${id}</td>
         <td class="px-2 py-1 font-mono">${code || '—'}</td>
-        <td class="px-2 py-1">${table || '—'}</td>
+        <td class="px-2 py-1">${table}</td>
         <td class="px-2 py-1 text-xs">${last? formatTime(last) : '—'}</td>
         <td class="px-2 py-1">
           <div class="flex flex-wrap gap-2">
@@ -131,7 +137,7 @@
         </td>
       `;
 
-      // Làm mới (reload): chỉ gửi reloadAt → client tự vào Start Order nếu đã có tableNumber
+      // Làm mới (reload): chỉ gửi reloadAt
       tr.querySelector('[data-act="reload"]').addEventListener('click', async ()=>{
         try{
           await db.ref(`devices/${id}/commands/reloadAt`).set(firebase.database.ServerValue.TIMESTAMP);
@@ -141,7 +147,8 @@
       // Đổi số bàn: prompt nhanh (có thể thay bằng modal danh sách sau)
       tr.querySelector('[data-act="settable"]').addEventListener('click', async ()=>{
         try{
-          let t = prompt('Nhập số bàn mới (ví dụ: 5 hoặc T05):', table || '');
+          let current = (data?.table && data.table !== '-') ? data.table : '';
+          let t = prompt('Nhập số bàn mới (ví dụ: 5 hoặc T05):', current);
           if (t===null) return;
           t = String(t).trim();
           if (!t) return;
@@ -150,12 +157,12 @@
             value: t, at: firebase.database.ServerValue.TIMESTAMP
           });
 
-          // (tuỳ chọn) cập nhật cột table cho nhanh cảm giác
+          // Cập nhật nhanh cảm giác
           await db.ref(`devices/${id}/table`).set(t);
         }catch(e){ showDevError('Đổi số bàn thất bại: '+(e?.message||e)); }
       });
 
-      // Gỡ liên kết: xoá bound ở codes + đẩy unbindAt cho thiết bị
+      // Gỡ liên kết
       tr.querySelector('[data-act="unbind"]').addEventListener('click', async ()=>{
         try{
           if (code) {
