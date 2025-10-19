@@ -1,10 +1,9 @@
 // assets/js/admin-devices.js
 // Quản lý MÃ iPad + danh sách thiết bị (devices)
 // YÊU CẦU: firebase đã init & auth ẩn danh xong ở admin.html
-// v2-enforce-unique-codes — giữ UI, fix hàng đợi & đảm bảo 1 mã chỉ gắn 1 máy
+// v2-enforce-unique-codes + start-on-reload
 
 (function () {
-  // ====== ELs theo admin.html ======
   const elCodesTbody   = document.getElementById('codes-tbody');
   const elDevicesTbody = document.getElementById('devices-tbody');
   const elBtnBroadcast = document.getElementById('btn-broadcast-reload');
@@ -12,15 +11,12 @@
   const elCodesImport  = document.getElementById('codes-import');
   const elDevError     = document.getElementById('devError');
 
-  // (tuỳ chọn) Hàng đợi mã, nếu có container trong HTML
   const elQueueWrap  = document.getElementById('codes-queue-wrap');
   const elQueueList  = document.getElementById('codes-queue');
   const elQueueCount = document.getElementById('codes-queue-count');
 
-  // Modal chọn bàn
   const elModalRoot  = document.getElementById('modal-root');
 
-  // ====== Guard Firebase ======
   if (!window.firebase || !firebase.apps.length) {
     console.warn('[admin-devices] Firebase chưa sẵn sàng. Đảm bảo admin.html đã init trước.');
     return;
@@ -28,11 +24,9 @@
   const db = firebase.database();
   const TABLE_COUNT = 15;
 
-  // ====== State cache để render chéo ======
   let LAST_CODES = {};
   let LAST_DEVICES = {};
 
-  // ====== Helpers ======
   const tsAgo = (ts) => {
     if (!ts) return '-';
     const s = Math.floor((Date.now() - ts) / 1000);
@@ -50,53 +44,7 @@
     elDevError.classList.toggle('hidden', !msg);
   };
 
-  function displayTableFromDevice(obj) {
-    let raw = obj?.table;
-
-    if (raw && typeof raw === 'object') {
-      const v = (raw.value ?? raw.table ?? '').toString().trim();
-      const stage = (raw.stage || raw.view || raw.status || '').toString().toLowerCase();
-      const inPOS = (raw.inPOS === true);
-
-      if (stage === 'select') return '-';
-      if (stage === 'pos' || inPOS) {
-        const fallback = v || (obj?.lastKnownTable ? String(obj.lastKnownTable).trim() : '');
-        return fallback ? ('+' + fallback) : '+?';
-      }
-      return v || '—';
-    }
-
-    if (raw == null) raw = '';
-    raw = String(raw).trim();
-    const stageRoot = String(obj?.stage || obj?.view || obj?.status || '').toLowerCase();
-    const inPOSroot = (obj?.inPOS === true);
-
-    if (raw === '' || raw === '-') {
-      if (stageRoot === 'pos' || inPOSroot) {
-        const lk = (obj?.lastKnownTable ? String(obj.lastKnownTable).trim() : '');
-        return lk ? ('+' + lk) : '+?';
-      }
-      return '-';
-    }
-    if (raw.startsWith('+')) return raw;
-    if (stageRoot === 'pos' || inPOSroot) return `+${raw}`;
-    return raw;
-  }
-
-  function currentPlainTable(obj) {
-    let t = '';
-    const raw = obj?.table;
-    if (raw && typeof raw === 'object') {
-      t = (raw.value ?? raw.table ?? '').toString().trim();
-    } else {
-      t = (raw ?? '').toString().trim();
-    }
-    if (!t || t === '-') t = (obj?.lastKnownTable ? String(obj.lastKnownTable).trim() : '');
-    if (t && t.startsWith('+')) t = t.slice(1);
-    return t || '';
-  }
-
-  // ===== Broadcast reload toàn bộ =====
+  // Broadcast reload toàn bộ
   elBtnBroadcast?.addEventListener('click', async () => {
     try {
       await db.ref('broadcast').update({ reloadAt: firebase.database.ServerValue.TIMESTAMP });
@@ -107,7 +55,7 @@
     }
   });
 
-  // ===== Import danh sách mã =====
+  // Import mã
   elBtnImport?.addEventListener('click', async () => {
     const raw = (elCodesImport?.value || '').trim();
     if (!raw) return alert('Dán danh sách mã (mỗi dòng 1 mã)');
@@ -133,13 +81,12 @@
     }
   });
 
-  // ===== Render Codes (và hàng đợi chuẩn) =====
+  // Render CODES + hàng đợi “rảnh”
   function renderCodes() {
     if (!elCodesTbody) return;
     const data = LAST_CODES || {};
     elCodesTbody.innerHTML = '';
 
-    // Tập mã đang bị ANY device cầm (dù codes/boundDeviceId chưa kịp set)
     const usedByDevices = new Set();
     Object.values(LAST_DEVICES || {}).forEach(d => {
       const c = (d?.code ? String(d.code).trim().toUpperCase() : '');
@@ -148,7 +95,6 @@
 
     const entries = Object.entries(data).sort((a, b) => a[0].localeCompare(b[0]));
 
-    // Hàng đợi mã rảnh
     if (elQueueWrap && elQueueList) {
       const avail = entries
         .filter(([code, o]) =>
@@ -168,7 +114,6 @@
       if (elQueueCount) elQueueCount.textContent = avail.length;
     }
 
-    // Bảng codes
     for (const [code, obj] of entries) {
       const tr = document.createElement('tr');
       tr.className = 'border-b';
@@ -220,7 +165,7 @@
     }
   }
 
-  // ===== Modal chọn bàn =====
+  // Modal chọn bàn
   function openTablePicker(count, onPick) {
     const root = elModalRoot || document.body;
     const wrap = document.createElement('div');
@@ -246,13 +191,60 @@
     wrap.querySelector('#tp-close').addEventListener('click', () => root.removeChild(wrap));
   }
 
-  // ===== Render Devices + actions =====
+  function displayTableFromDevice(obj) {
+    let raw = obj?.table;
+
+    if (raw && typeof raw === 'object') {
+      const v = (raw.value ?? raw.table ?? '').toString().trim();
+      const stage = (raw.stage || raw.view || raw.status || '').toString().toLowerCase();
+      const inPOS = (raw.inPOS === true);
+
+      if (stage === 'select') return '-';
+      if (stage === 'pos' || inPOS) {
+        const fallback = v || (obj?.lastKnownTable ? String(obj.lastKnownTable).trim() : '');
+        return fallback ? ('+' + fallback) : '+?';
+      }
+      return v || '—';
+    }
+
+    if (raw == null) raw = '';
+    raw = String(raw).trim();
+
+    const stageRoot = String(obj?.stage || obj?.view || obj?.status || '').toLowerCase();
+    const inPOSroot = (obj?.inPOS === true);
+
+    if (raw === '' || raw === '-') {
+      if (stageRoot === 'pos' || inPOSroot) {
+        const lk = (obj?.lastKnownTable ? String(obj.lastKnownTable).trim() : '');
+        return lk ? ('+' + lk) : '+?';
+      }
+      return '-';
+    }
+
+    if (raw.startsWith('+')) return raw;
+    if (stageRoot === 'pos' || inPOSroot) return `+${raw}`;
+    return raw;
+  }
+
+  function currentPlainTable(obj) {
+    let t = '';
+    const raw = obj?.table;
+    if (raw && typeof raw === 'object') {
+      t = (raw.value ?? raw.table ?? '').toString().trim();
+    } else {
+      t = (raw ?? '').toString().trim();
+    }
+    if (!t || t === '-') t = (obj?.lastKnownTable ? String(obj.lastKnownTable).trim() : '');
+    if (t && t.startsWith('+')) t = t.slice(1);
+    return t || '';
+  }
+
   function renderDevices() {
     if (!elDevicesTbody) return;
     const data = LAST_DEVICES || {};
     elDevicesTbody.innerHTML = '';
 
-    // Dò trùng code: code -> list deviceIds
+    // chống 2 device dùng cùng 1 code (giữ đầu tiên)
     const codeMap = {};
     Object.entries(data).forEach(([id, d]) => {
       const c = d?.code ? String(d.code).trim().toUpperCase() : '';
@@ -260,17 +252,12 @@
       if (!codeMap[c]) codeMap[c] = [];
       codeMap[c].push(id);
     });
-
-    // Nếu có trùng, unbind các device thứ 2 trở đi (giữ device đầu tiên)
     Object.entries(codeMap).forEach(([code, ids]) => {
       if (ids.length > 1) {
-        ids.slice(1).forEach(async (dupId) => {
+        ids.slice(1).forEach(async dupId => {
           try {
             await db.ref('devices/' + dupId + '/commands').update({ unbindAt: firebase.database.ServerValue.TIMESTAMP });
-            console.warn('[admin-devices] Code', code, 'bị dùng trùng, đã unbind', dupId);
-          } catch (e) {
-            console.error('Unbind device trùng lỗi:', e);
-          }
+          } catch (e) {}
         });
       }
     });
@@ -303,49 +290,40 @@
         </td>
       `;
 
-      // Đổi tên máy
+      // đổi tên máy
       tr.querySelector('[data-act="editname"]').addEventListener('click', async () => {
         const cur = name || '';
         const v = prompt('Nhập tên máy (để trống để xoá):', cur);
         if (v === null) return;
         const nv = String(v).trim();
-        try {
-          await db.ref('devices/' + id + '/name').set(nv || null);
-        } catch (e) {
-          alert('Đổi tên lỗi: ' + (e?.message || e));
-        }
+        try { await db.ref('devices/' + id + '/name').set(nv || null); } catch(e){ alert('Đổi tên lỗi: '+(e?.message||e)); }
       });
 
-      // Làm mới: nếu biết bàn → setTable trước rồi reload (đảm bảo Start Order đúng bàn)
+      // Làm mới: setTable (nếu biết bàn) → reload (để Start Order đúng bàn)
       tr.querySelector('[data-act="reload"]').addEventListener('click', async () => {
         try {
           if (plain) {
-            await db.ref('devices/' + id + '/commands/setTable').set({
-              value: plain, at: firebase.database.ServerValue.TIMESTAMP
-            });
+            await db.ref('devices/' + id + '/commands/setTable').set({ value: plain, at: firebase.database.ServerValue.TIMESTAMP });
           }
           await db.ref('devices/' + id + '/commands').update({ reloadAt: firebase.database.ServerValue.TIMESTAMP });
-        } catch (e) {
-          alert('Gửi lệnh reload thất bại: ' + (e?.message || e));
-        }
+        } catch (e) { alert('Gửi lệnh reload thất bại: ' + (e?.message || e)); }
       });
 
-      // Đổi số bàn: setTable → cập nhật hiển thị → reload để tránh giữ state cũ
+      // Đổi số bàn: setTable → cập nhật hiển thị → reload
       tr.querySelector('[data-act="settable"]').addEventListener('click', () => {
         openTablePicker(TABLE_COUNT, async (tableLabel) => {
           try {
             await db.ref('devices/' + id + '/commands/setTable').set({
-              value: tableLabel, at: firebase.database.ServerValue.TIMESTAMP
+              value: tableLabel,
+              at: firebase.database.ServerValue.TIMESTAMP
             });
             await db.ref('devices/' + id).update({ table: tableLabel, lastKnownTable: tableLabel });
             await db.ref('devices/' + id + '/commands').update({ reloadAt: firebase.database.ServerValue.TIMESTAMP });
-          } catch (e) {
-            alert('Đổi số bàn lỗi: ' + (e?.message || e));
-          }
+          } catch (e) { alert('Đổi số bàn lỗi: ' + (e?.message || e)); }
         });
       });
 
-      // Gỡ liên kết: thu hồi code + đẩy app về màn nhập mã
+      // Gỡ liên kết
       tr.querySelector('[data-act="kick"]').addEventListener('click', async () => {
         const code = obj.code;
         if (!code) return alert('Thiết bị chưa gắn mã.');
@@ -358,25 +336,13 @@
           });
           await db.ref('devices/' + id + '/commands').update({ unbindAt: firebase.database.ServerValue.TIMESTAMP });
           await db.ref('devices/' + id).update({ code: null, table: null });
-        } catch (e) {
-          alert('Gỡ liên kết thất bại: ' + (e?.message || e));
-        }
+        } catch (e) { alert('Gỡ liên kết thất bại: ' + (e?.message || e)); }
       });
 
       elDevicesTbody.appendChild(tr);
     }
   }
 
-  // ===== Subscriptions & cross-render =====
-  db.ref('codes').on('value', (snap) => {
-    LAST_CODES = snap.val() || {};
-    renderCodes();          // render codes + hàng đợi theo LAST_DEVICES
-  }, err => showDevError('Lỗi tải mã: ' + (err?.message || err)));
-
-  db.ref('devices').on('value', (snap) => {
-    LAST_DEVICES = snap.val() || {};
-    renderDevices();        // render devices
-    renderCodes();          // cập nhật lại hàng đợi theo devices mới nhất
-  }, err => showDevError('Lỗi tải thiết bị: ' + (err?.message || err)));
-
+  db.ref('codes').on('value', (snap) => { LAST_CODES = snap.val() || {}; renderCodes(); }, err => showDevError('Lỗi tải mã: ' + (err?.message || err)));
+  db.ref('devices').on('value', (snap) => { LAST_DEVICES = snap.val() || {}; renderDevices(); renderCodes(); }, err => showDevError('Lỗi tải thiết bị: ' + (err?.message || err)));
 })();
