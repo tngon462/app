@@ -1,348 +1,330 @@
-// assets/js/admin-devices.js
-// Quản lý MÃ iPad + danh sách thiết bị (devices)
-// YÊU CẦU: firebase đã init & auth ẩn danh xong ở admin.html
-// v2-enforce-unique-codes + start-on-reload
+// assets/js/device-bind.js
+// T-NGON device bind (client iPad)
+// - 1 mã <-> 1 máy (transaction ràng buộc)
+// - Nhận lệnh admin: setTable (-> Start Order), reload (-> Start Order), unbind (-> Gate)
+// - Đồng bộ trạng thái về /devices/<deviceId>
+// - Không thay đổi UI hiện có (redirect-core.js vẫn điều hướng như cũ)
 
-(function () {
-  const elCodesTbody   = document.getElementById('codes-tbody');
-  const elDevicesTbody = document.getElementById('devices-tbody');
-  const elBtnBroadcast = document.getElementById('btn-broadcast-reload');
-  const elBtnImport    = document.getElementById('btn-import-codes');
-  const elCodesImport  = document.getElementById('codes-import');
-  const elDevError     = document.getElementById('devError');
+(function(){
+  'use strict';
 
-  const elQueueWrap  = document.getElementById('codes-queue-wrap');
-  const elQueueList  = document.getElementById('codes-queue');
-  const elQueueCount = document.getElementById('codes-queue-count');
+  // ===== Helpers =====
+  const LS = window.localStorage;
+  const $  = (id) => document.getElementById(id);
 
-  const elModalRoot  = document.getElementById('modal-root');
-
-  if (!window.firebase || !firebase.apps.length) {
-    console.warn('[admin-devices] Firebase chưa sẵn sàng. Đảm bảo admin.html đã init trước.');
-    return;
+  const WAIT = (ms)=> new Promise(r=> setTimeout(r, ms));
+  function uuidv4(){
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c=>{
+      const r = Math.random()*16|0, v=(c==='x')?r:(r&0x3|0x8); return v.toString(16);
+    });
   }
+
+  // Bắt buộc tồn tại 2 hàm từ redirect-core: gotoSelect/gotoStart (giữ nguyên file cũ của sếp)
+  const gotoSelect = window.gotoSelect || function(){ location.reload(); };
+  const gotoStart  = window.gotoStart  || function(){};
+  const gotoPos    = window.gotoPos    || function(url){};
+
+  // ===== Device identity =====
+  let deviceId = LS.getItem('deviceId');
+  if (!deviceId){ deviceId = uuidv4(); LS.setItem('deviceId', deviceId); }
+
+  // ===== Firebase init guard =====
+  if (!window.firebase || !firebase.apps?.length) {
+    console.error('[bind] Firebase chưa sẵn sàng. Đảm bảo firebase.js đã load & init trước device-bind.js');
+  }
+
   const db = firebase.database();
-  const TABLE_COUNT = 15;
 
-  let LAST_CODES = {};
-  let LAST_DEVICES = {};
-
-  const tsAgo = (ts) => {
-    if (!ts) return '-';
-    const s = Math.floor((Date.now() - ts) / 1000);
-    if (s < 60) return s + 's';
-    const m = Math.floor(s / 60);
-    if (m < 60) return m + 'm';
-    const h = Math.floor(m / 60);
-    if (h < 24) return h + 'h';
-    return Math.floor(h / 24) + 'd';
-  };
-
-  const showDevError = (msg) => {
-    if (!elDevError) return;
-    elDevError.textContent = msg || '';
-    elDevError.classList.toggle('hidden', !msg);
-  };
-
-  // Broadcast reload toàn bộ
-  elBtnBroadcast?.addEventListener('click', async () => {
-    try {
-      await db.ref('broadcast').update({ reloadAt: firebase.database.ServerValue.TIMESTAMP });
-      showDevError('');
-      alert('Đã gửi lệnh reload toàn bộ');
-    } catch (e) {
-      showDevError('Gửi broadcast thất bại: ' + (e?.message || e));
-    }
-  });
-
-  // Import mã
-  elBtnImport?.addEventListener('click', async () => {
-    const raw = (elCodesImport?.value || '').trim();
-    if (!raw) return alert('Dán danh sách mã (mỗi dòng 1 mã)');
-    const lines = raw.split(/\r?\n/).map(s => s.trim().toUpperCase()).filter(Boolean);
-    if (!lines.length) return alert('Không có mã hợp lệ');
-
-    const updates = {};
-    const now = firebase.database.ServerValue.TIMESTAMP;
-    for (const code of lines) {
-      updates['codes/' + code] = {
-        enabled: true,
-        boundDeviceId: null,
-        createdAt: now,
-        boundAt: null
-      };
-    }
-    try {
-      await db.ref().update(updates);
-      elCodesImport.value = '';
-      alert('Đã thêm ' + lines.length + ' mã');
-    } catch (e) {
-      alert('Thêm mã lỗi: ' + (e?.message || e));
-    }
-  });
-
-  // Render CODES + hàng đợi “rảnh”
-  function renderCodes() {
-    if (!elCodesTbody) return;
-    const data = LAST_CODES || {};
-    elCodesTbody.innerHTML = '';
-
-    const usedByDevices = new Set();
-    Object.values(LAST_DEVICES || {}).forEach(d => {
-      const c = (d?.code ? String(d.code).trim().toUpperCase() : '');
-      if (c) usedByDevices.add(c);
-    });
-
-    const entries = Object.entries(data).sort((a, b) => a[0].localeCompare(b[0]));
-
-    if (elQueueWrap && elQueueList) {
-      const avail = entries
-        .filter(([code, o]) =>
-          o && o.enabled === true &&
-          !o.boundDeviceId &&
-          !usedByDevices.has(code.toUpperCase())
-        )
-        .map(([k]) => k);
-      elQueueList.innerHTML = '';
-      avail.forEach(code => {
-        const pill = document.createElement('span');
-        pill.className = 'px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs';
-        pill.textContent = code;
-        elQueueList.appendChild(pill);
-      });
-      elQueueWrap.classList.toggle('hidden', avail.length === 0);
-      if (elQueueCount) elQueueCount.textContent = avail.length;
-    }
-
-    for (const [code, obj] of entries) {
-      const tr = document.createElement('tr');
-      tr.className = 'border-b';
-      tr.innerHTML = `
-        <td class="px-2 py-1 font-mono text-sm">${code}</td>
-        <td class="px-2 py-1">${obj.enabled ? '<span class="text-green-700">Đang bật</span>' : '<span class="text-gray-400">Đang tắt</span>'}</td>
-        <td class="px-2 py-1">${obj.boundDeviceId ? `<span class="text-blue-700">${obj.boundDeviceId}</span>` : '-'}</td>
-        <td class="px-2 py-1">${obj.boundAt ? tsAgo(obj.boundAt) : '-'}</td>
-        <td class="px-2 py-1">
-          <div class="flex items-center gap-2">
-            <button class="px-3 py-1.5 text-xs rounded-md ${obj.enabled ? 'bg-gray-800 hover:bg-black' : 'bg-emerald-600 hover:bg-emerald-700'} text-white" data-act="toggle">${obj.enabled ? 'Tắt' : 'Bật'}</button>
-            <button class="px-3 py-1.5 text-xs rounded-md bg-red-600 text-white hover:bg-red-700" data-act="delete">Xóa mã</button>
-          </div>
-        </td>
-      `;
-
-      tr.querySelector('[data-act="toggle"]').addEventListener('click', async () => {
-        const willEnable = !obj.enabled;
-        try {
-          await db.ref('codes/' + code + '/enabled').set(willEnable);
-          if (!willEnable && obj.boundDeviceId) {
-            await db.ref('devices/' + obj.boundDeviceId + '/commands').update({
-              unbindAt: firebase.database.ServerValue.TIMESTAMP
-            });
-            await db.ref('codes/' + code).update({ boundDeviceId: null, boundAt: null });
-          }
-          alert((willEnable ? 'Bật' : 'Tắt') + ' mã ' + code + ' thành công');
-        } catch (e) {
-          alert('Đổi trạng thái lỗi: ' + (e?.message || e));
-        }
-      });
-
-      tr.querySelector('[data-act="delete"]').addEventListener('click', async () => {
-        if (!confirm('Xóa mã ' + code + '?')) return;
-        try {
-          if (obj.boundDeviceId) {
-            await db.ref('devices/' + obj.boundDeviceId + '/commands').update({
-              unbindAt: firebase.database.ServerValue.TIMESTAMP
-            });
-          }
-          await db.ref('codes/' + code).remove();
-          alert('Đã xóa mã ' + code);
-        } catch (e) {
-          alert('Xóa mã lỗi: ' + (e?.message || e));
-        }
-      });
-
-      elCodesTbody.appendChild(tr);
+  // ===== Links map (để đổi bàn không reload) =====
+  let linksMap = null;
+  async function loadLinks(){
+    try{
+      const url = './links.json' + (/\?/.test('./links.json')?'&':'?') + 'cb=' + Date.now();
+      const res = await fetch(url, { cache:'no-store' });
+      if (!res.ok) throw new Error('HTTP '+res.status);
+      const data = await res.json();
+      linksMap = data.links || data;
+      if (!linksMap || typeof linksMap !== 'object') throw new Error('links.json invalid');
+    }catch(e){
+      console.warn('[bind] Không tải được links.json, chức năng setTable vẫn hoạt động nếu redirect-core đã set sẵn url.');
+      linksMap = null;
     }
   }
 
-  // Modal chọn bàn
-  function openTablePicker(count, onPick) {
-    const root = elModalRoot || document.body;
+  // ===== Gate (nhập mã) đơn giản — không có nút Hủy =====
+  function showCodeGate(message){
+    if ($('code-gate')) {
+      const e = $('code-error');
+      if (e && message) e.textContent = message;
+      return;
+    }
     const wrap = document.createElement('div');
-    wrap.className = 'fixed inset-0 bg-black/50 z-[7000] flex items-center justify-center p-4';
+    wrap.id = 'code-gate';
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:6000;background:#fff;';
     wrap.innerHTML = `
-      <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-4">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-lg font-semibold">Chọn số bàn</h3>
-          <button id="tp-close" class="px-2 py-1 text-sm rounded bg-gray-100 hover:bg-gray-200">Đóng</button>
+      <div class="w-full h-full flex items-center justify-center p-6">
+        <div class="w-full max-w-sm bg-white border border-gray-200 rounded-2xl shadow p-6">
+          <h1 class="text-2xl font-extrabold text-gray-900 mb-4 text-center">Nhập mã iPad</h1>
+          <p class="text-sm text-gray-500 mb-4 text-center">Nhập mã được cấp để tiếp tục.</p>
+          <input id="code-input" type="text" maxlength="20" placeholder="VD: A1B2C3"
+                 class="w-full border rounded-lg px-4 py-3 text-center tracking-widest font-mono text-lg"
+                 autocomplete="one-time-code" />
+          <div id="code-error" class="text-red-600 text-sm mt-2 h-5 text-center"></div>
+          <button id="code-submit"
+            class="mt-4 w-full rounded-xl bg-blue-600 text-white font-bold py-3 hover:bg-blue-700 transition">
+            XÁC NHẬN
+          </button>
         </div>
-        <div id="tp-grid" class="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[60vh] overflow-auto"></div>
       </div>`;
-    root.appendChild(wrap);
+    document.body.appendChild(wrap);
 
-    const grid = wrap.querySelector('#tp-grid');
-    for (let i = 1; i <= count; i++) {
-      const btn = document.createElement('button');
-      btn.className = 'px-3 py-3 rounded-lg border text-sm hover:bg-blue-50';
-      btn.textContent = String(i);
-      btn.addEventListener('click', () => { try { onPick(String(i)); } finally { root.removeChild(wrap); } });
-      grid.appendChild(btn);
+    const btn = $('code-submit');
+    const input = $('code-input');
+    const err = $('code-error');
+    function setBusy(b){ btn.disabled=b; btn.textContent = b?'Đang kiểm tra…':'XÁC NHẬN'; }
+    async function submit(){
+      const raw = (input.value||'').trim().toUpperCase();
+      err.textContent = '';
+      if (!raw) { err.textContent = 'Vui lòng nhập mã.'; return; }
+      setBusy(true);
+      try{
+        await claimCode(raw);
+        // ok → gỡ gate và tiếp tục
+        wrap.remove();
+        afterBindEnter();
+      }catch(e){
+        err.textContent = e?.message || 'Mã không hợp lệ.';
+      }finally{ setBusy(false); }
     }
-    wrap.querySelector('#tp-close').addEventListener('click', () => root.removeChild(wrap));
+    btn.addEventListener('click', submit);
+    input.addEventListener('keydown', e=>{ if (e.key==='Enter') submit(); });
+    setTimeout(()=> input?.focus(), 60);
+    if (message){ err.textContent = message; }
   }
 
-  function displayTableFromDevice(obj) {
-    let raw = obj?.table;
-
-    if (raw && typeof raw === 'object') {
-      const v = (raw.value ?? raw.table ?? '').toString().trim();
-      const stage = (raw.stage || raw.view || raw.status || '').toString().toLowerCase();
-      const inPOS = (raw.inPOS === true);
-
-      if (stage === 'select') return '-';
-      if (stage === 'pos' || inPOS) {
-        const fallback = v || (obj?.lastKnownTable ? String(obj.lastKnownTable).trim() : '');
-        return fallback ? ('+' + fallback) : '+?';
-      }
-      return v || '—';
-    }
-
-    if (raw == null) raw = '';
-    raw = String(raw).trim();
-
-    const stageRoot = String(obj?.stage || obj?.view || obj?.status || '').toLowerCase();
-    const inPOSroot = (obj?.inPOS === true);
-
-    if (raw === '' || raw === '-') {
-      if (stageRoot === 'pos' || inPOSroot) {
-        const lk = (obj?.lastKnownTable ? String(obj.lastKnownTable).trim() : '');
-        return lk ? ('+' + lk) : '+?';
-      }
-      return '-';
-    }
-
-    if (raw.startsWith('+')) return raw;
-    if (stageRoot === 'pos' || inPOSroot) return `+${raw}`;
-    return raw;
-  }
-
-  function currentPlainTable(obj) {
-    let t = '';
-    const raw = obj?.table;
-    if (raw && typeof raw === 'object') {
-      t = (raw.value ?? raw.table ?? '').toString().trim();
-    } else {
-      t = (raw ?? '').toString().trim();
-    }
-    if (!t || t === '-') t = (obj?.lastKnownTable ? String(obj.lastKnownTable).trim() : '');
-    if (t && t.startsWith('+')) t = t.slice(1);
-    return t || '';
-  }
-
-  function renderDevices() {
-    if (!elDevicesTbody) return;
-    const data = LAST_DEVICES || {};
-    elDevicesTbody.innerHTML = '';
-
-    // chống 2 device dùng cùng 1 code (giữ đầu tiên)
-    const codeMap = {};
-    Object.entries(data).forEach(([id, d]) => {
-      const c = d?.code ? String(d.code).trim().toUpperCase() : '';
-      if (!c) return;
-      if (!codeMap[c]) codeMap[c] = [];
-      codeMap[c].push(id);
+  // ===== Transaction ràng buộc mã <-> thiết bị (1-1) =====
+  async function claimCode(code){
+    const ref = db.ref('codes/'+code);
+    // Transaction: chỉ commit khi mã tồn tại, enabled==true và (chưa bound hoặc bound chính thiết bị này)
+    const result = await ref.transaction(cur=>{
+      if (!cur) return cur;                    // mã không tồn tại → không commit
+      if (cur.enabled === false) return;       // tắt → fail
+      if (cur.boundDeviceId && cur.boundDeviceId !== deviceId) return; // đang dùng máy khác → fail
+      // ok → bind về thiết bị hiện tại
+      return {
+        ...cur,
+        boundDeviceId: deviceId,
+        boundAt: firebase.database.ServerValue.TIMESTAMP
+      };
     });
-    Object.entries(codeMap).forEach(([code, ids]) => {
-      if (ids.length > 1) {
-        ids.slice(1).forEach(async dupId => {
-          try {
-            await db.ref('devices/' + dupId + '/commands').update({ unbindAt: firebase.database.ServerValue.TIMESTAMP });
-          } catch (e) {}
-        });
+    if (!result.committed) throw new Error('Mã không khả dụng hoặc đã được dùng ở thiết bị khác.');
+    // Lưu devices side
+    await db.ref('devices/'+deviceId).update({
+      code: code,
+      lastSeen: firebase.database.ServerValue.TIMESTAMP,
+    });
+    LS.setItem('deviceCode', code);
+  }
+
+  // ===== Đồng bộ name/table/stage về admin =====
+  function getAppState(){
+    return LS.getItem('appState') || 'select'; // redirect-core.js đặt 'select' | 'start' | 'pos'
+  }
+  function getCurrentTable(){
+    return {
+      id:  LS.getItem('tableId')  || '',
+      url: LS.getItem('tableUrl') || ''
+    };
+  }
+  async function heartbeat(){
+    const code = LS.getItem('deviceCode') || null;
+    const state = getAppState();              // 'select' | 'start' | 'pos'
+    const {id:tableId} = getCurrentTable();
+    // inPOS cho admin hiển thị +<bàn>
+    const inPOS = (state === 'pos');
+    await db.ref('devices/'+deviceId).update({
+      code: code || null,
+      table: tableId || null,
+      stage: state,
+      inPOS: inPOS,
+      lastSeen: firebase.database.ServerValue.TIMESTAMP,
+      // name: (giữ nguyên — admin chỉnh và lưu)
+    });
+  }
+
+  // ===== Nhận lệnh từ admin =====
+  function listenCommands(){
+    const cmdRef = db.ref('devices/'+deviceId+'/commands');
+    cmdRef.on('value', (snap)=>{
+      const c = snap.val() || {};
+
+      // 1) reloadAt → reload trang và sau reload quay về Start Order
+      if (c.reloadAt) {
+        try{
+          LS.setItem('forceStartAfterReload', '1');
+        }catch(_){}
+        // không xoá lệnh để tránh miss; admin chỉ set timestamp tăng dần
+        location.reload();
+        return;
+      }
+
+      // 2) setTable.value → chỉ đổi số bàn & link, KHÔNG reload, đưa về Start Order
+      if (c.setTable && c.setTable.value){
+        const table = String(c.setTable.value);
+        // lấy url tương ứng
+        let url = '';
+        const map = linksMap;
+        if (map && table in map) url = map[table];
+        // nếu chưa có map hoặc không tìm thấy, giữ nguyên url cũ (redirect-core vẫn có thể dùng tableUrl cũ)
+        // cập nhật localStorage để redirect-core dùng đúng
+        if (table) LS.setItem('tableId', table); else LS.removeItem('tableId');
+        if (url)   LS.setItem('tableUrl', url); else LS.removeItem('tableUrl');
+
+        // đẩy về màn Start Order (giữ UI cũ)
+        try{ gotoStart(); }catch(_){}
+
+        // cập nhật nhanh cho admin
+        db.ref('devices/'+deviceId).update({ table: table || null });
+
+        // dọn lệnh setTable (để lần sau có thể set cùng bàn vẫn chạy)
+        cmdRef.child('setTable').remove().catch(()=>{});
+      }
+
+      // 3) unbindAt → xóa mã local, xóa bàn, về gate
+      if (c.unbindAt){
+        try{
+          const code = LS.getItem('deviceCode');
+          LS.removeItem('deviceCode');
+          LS.removeItem('tableId'); LS.removeItem('tableUrl');
+          LS.removeItem('appState');
+          // dọn một số flag
+          LS.removeItem('forceStartAfterReload');
+          // dọn devices view cho gọn
+          db.ref('devices/'+deviceId).update({ code:null, table:null, stage:'select', inPOS:false });
+        }catch(_){}
+        // không reload → hiện gate ngay (tránh vòng lặp)
+        showCodeGate('Mã đã bị thu hồi. Vui lòng nhập mã khác.');
       }
     });
 
-    const entries = Object.entries(data).sort((a, b) => (b[1].lastSeen || 0) - (a[1].lastSeen || 0));
-    for (const [id, obj] of entries) {
-      const tableDisp = displayTableFromDevice(obj);
-      const plain = currentPlainTable(obj);
-      const name = (obj?.name ? String(obj.name) : '');
+    // Broadcast reload toàn quán
+    db.ref('broadcast/reloadAt').on('value', s=>{
+      if (s.val()) {
+        try{ LS.setItem('forceStartAfterReload', '1'); }catch(_){}
+        location.reload();
+      }
+    });
+  }
 
-      const tr = document.createElement('tr');
-      tr.className = 'border-b';
-      tr.innerHTML = `
-        <td class="px-2 py-1 text-xs break-all">
-          <div class="font-mono">${id}</div>
-          <div class="text-[11px] text-gray-500 mt-0.5">
-            <span id="dname-${id}">${name || '—'}</span>
-            <button class="ml-1 text-blue-600 hover:underline" data-act="editname">✎ Sửa tên</button>
-          </div>
-        </td>
-        <td class="px-2 py-1 font-mono">${obj.code || '-'}</td>
-        <td class="px-2 py-1">${tableDisp}</td>
-        <td class="px-2 py-1">${obj.lastSeen ? tsAgo(obj.lastSeen) : '-'}</td>
-        <td class="px-2 py-1">
-          <div class="flex items-center gap-2">
-            <button class="px-3 py-1.5 text-xs rounded-md bg-blue-600 text-white hover:bg-blue-700" data-act="reload">Làm mới</button>
-            <button class="px-3 py-1.5 text-xs rounded-md bg-emerald-600 text-white hover:bg-emerald-700" data-act="settable">Đổi số bàn</button>
-            <button class="px-3 py-1.5 text-xs rounded-md bg-amber-600 text-white hover:bg-amber-700" data-act="kick" ${obj.code ? '' : 'disabled'}>Gỡ liên kết</button>
-          </div>
-        </td>
-      `;
+  // ===== Theo dõi mã: nếu bị tắt/xoá/đổi sang máy khác → về gate =====
+  let codeWatcherOff = null;
+  function watchCode(code){
+    if (codeWatcherOff) { codeWatcherOff(); codeWatcherOff = null; }
+    const ref = db.ref('codes/'+code);
+    const cb = ref.on('value', (snap)=>{
+      const v = snap.val();
+      if (!v) {
+        // mã bị xoá
+        LS.removeItem('deviceCode');
+        LS.removeItem('tableId'); LS.removeItem('tableUrl'); LS.removeItem('appState');
+        showCodeGate('Mã đã bị xóa. Vui lòng nhập mã khác.');
+        return;
+      }
+      if (v.enabled === false){
+        LS.removeItem('deviceCode');
+        LS.removeItem('tableId'); LS.removeItem('tableUrl'); LS.removeItem('appState');
+        showCodeGate('Mã đã bị tắt. Vui lòng nhập mã khác.');
+        return;
+      }
+      if (v.boundDeviceId && v.boundDeviceId !== deviceId){
+        LS.removeItem('deviceCode');
+        LS.removeItem('tableId'); LS.removeItem('tableUrl'); LS.removeItem('appState');
+        showCodeGate('Mã đã được sử dụng ở thiết bị khác.');
+        return;
+      }
+    });
+    codeWatcherOff = ()=> ref.off('value', cb);
+  }
 
-      // đổi tên máy
-      tr.querySelector('[data-act="editname"]').addEventListener('click', async () => {
-        const cur = name || '';
-        const v = prompt('Nhập tên máy (để trống để xoá):', cur);
-        if (v === null) return;
-        const nv = String(v).trim();
-        try { await db.ref('devices/' + id + '/name').set(nv || null); } catch(e){ alert('Đổi tên lỗi: '+(e?.message||e)); }
-      });
+  // ===== Sau khi bind xong → vào app bình thường =====
+  function afterBindEnter(){
+    // Nếu vừa reload vì admin reloadAt → quay lại Start Order
+    if (LS.getItem('forceStartAfterReload') === '1'){
+      LS.removeItem('forceStartAfterReload');
+      // nếu chưa có bàn → vẫn sẽ về màn chọn bàn theo redirect-core
+      try{ gotoStart(); }catch(_){}
+    }
+    // cập nhật ngay
+    heartbeat().catch(()=>{});
+    // bắt đầu nhận lệnh
+    listenCommands();
+  }
 
-      // Làm mới: setTable (nếu biết bàn) → reload (để Start Order đúng bàn)
-      tr.querySelector('[data-act="reload"]').addEventListener('click', async () => {
-        try {
-          if (plain) {
-            await db.ref('devices/' + id + '/commands/setTable').set({ value: plain, at: firebase.database.ServerValue.TIMESTAMP });
-          }
-          await db.ref('devices/' + id + '/commands').update({ reloadAt: firebase.database.ServerValue.TIMESTAMP });
-        } catch (e) { alert('Gửi lệnh reload thất bại: ' + (e?.message || e)); }
-      });
+  // ===== Boot =====
+  document.addEventListener('DOMContentLoaded', async ()=>{
+    console.log('[bind] boot deviceId=', deviceId, ' deviceCode=', LS.getItem('deviceCode')||'(none)');
+    // tải links để setTable có url mới (nếu cần)
+    await loadLinks().catch(()=>{});
 
-      // Đổi số bàn: setTable → cập nhật hiển thị → reload
-      tr.querySelector('[data-act="settable"]').addEventListener('click', () => {
-        openTablePicker(TABLE_COUNT, async (tableLabel) => {
-          try {
-            await db.ref('devices/' + id + '/commands/setTable').set({
-              value: tableLabel,
-              at: firebase.database.ServerValue.TIMESTAMP
+    // Ẩn UI app khi chưa có mã (để an toàn, dùng CSS gate của sếp cũng được)
+    // Ở đây không động tới UI cũ — chỉ thêm gate riêng khi cần.
+
+    const code = LS.getItem('deviceCode');
+    if (!code){
+      showCodeGate();
+    }else{
+      // Xác nhận lại tính hợp lệ + (re)bind nếu cần
+      try{
+        const ref = db.ref('codes/'+code);
+        const snap = await ref.once('value');
+        const v = snap.val();
+        if (!v) throw new Error('Mã không tồn tại.');
+        if (v.enabled === false) throw new Error('Mã đã bị tắt.');
+        if (v.boundDeviceId && v.boundDeviceId !== deviceId) throw new Error('Mã đã gắn thiết bị khác.');
+
+        // nếu chưa bound → bind
+        if (!v.boundDeviceId){
+          await ref.transaction(cur=>{
+            if (!cur) return cur;
+            if (cur.enabled === false) return;
+            if (cur.boundDeviceId && cur.boundDeviceId !== deviceId) return;
+            return {
+              ...cur,
+              boundDeviceId: deviceId,
+              boundAt: firebase.database.ServerValue.TIMESTAMP
+            };
+          }, async (err, committed)=>{
+            if (err) throw err;
+            if (!committed) throw new Error('Mã không khả dụng.');
+            await db.ref('devices/'+deviceId).update({
+              code: code,
+              lastSeen: firebase.database.ServerValue.TIMESTAMP,
             });
-            await db.ref('devices/' + id).update({ table: tableLabel, lastKnownTable: tableLabel });
-            await db.ref('devices/' + id + '/commands').update({ reloadAt: firebase.database.ServerValue.TIMESTAMP });
-          } catch (e) { alert('Đổi số bàn lỗi: ' + (e?.message || e)); }
-        });
-      });
-
-      // Gỡ liên kết
-      tr.querySelector('[data-act="kick"]').addEventListener('click', async () => {
-        const code = obj.code;
-        if (!code) return alert('Thiết bị chưa gắn mã.');
-        if (!confirm(`Gỡ liên kết thiết bị này và thu hồi mã ${code}?`)) return;
-        try {
-          await db.ref('codes/' + code).transaction(v => {
-            if (!v) return v;
-            if (v.boundDeviceId === id) return { ...v, boundDeviceId: null, boundAt: null };
-            return v;
           });
-          await db.ref('devices/' + id + '/commands').update({ unbindAt: firebase.database.ServerValue.TIMESTAMP });
-          await db.ref('devices/' + id).update({ code: null, table: null });
-        } catch (e) { alert('Gỡ liên kết thất bại: ' + (e?.message || e)); }
-      });
+        }
 
-      elDevicesTbody.appendChild(tr);
+        // bắt đầu theo dõi mã
+        watchCode(code);
+        // vào app
+        afterBindEnter();
+      }catch(e){
+        console.warn('[bind] Code invalid at boot:', e?.message||e);
+        LS.removeItem('deviceCode');
+        showCodeGate(e?.message || 'Vui lòng nhập mã.');
+      }
     }
-  }
 
-  db.ref('codes').on('value', (snap) => { LAST_CODES = snap.val() || {}; renderCodes(); }, err => showDevError('Lỗi tải mã: ' + (err?.message || err)));
-  db.ref('devices').on('value', (snap) => { LAST_DEVICES = snap.val() || {}; renderDevices(); renderCodes(); }, err => showDevError('Lỗi tải thiết bị: ' + (err?.message || err)));
+    // Heartbeat định kỳ
+    setInterval(()=> heartbeat().catch(()=>{}), 20000);
+    document.addEventListener('visibilitychange', ()=> {
+      if (!document.hidden) heartbeat().catch(()=>{});
+    });
+
+    // Phụ trợ: khi redirect-core đổi state, lần sau heartbeat sẽ ghi stage mới
+    window.addEventListener('storage', (e)=>{
+      if (e.key === 'appState' || e.key === 'tableId') {
+        heartbeat().catch(()=>{});
+      }
+    });
+  });
 })();
