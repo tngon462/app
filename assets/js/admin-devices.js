@@ -1,10 +1,9 @@
 // ===============================================
-// admin-devices.js v1-sync2
+// admin-devices.js v1-sync3
 // - GIỮ UI như v1
-// - Hiển thị bàn: "-", "<bàn>", hoặc "+<bàn>" khi inPOS/stage=pos
-// - Reload: gửi commands/reloadAt (client reload -> nếu có tableNumber tự vào Start Order)
-// - SetTable: commands/setTable + cập nhật cột Bàn nhanh
-// - Unbind: gửi commands/unbindAt (luôn), nếu biết code thì thu hồi trong /codes
+// - Đồng bộ hiển thị bàn: "-", "<bàn>", "+<bàn>" (POS)
+// - Reload/SetTable/Unbind hoạt động
+// - FIX: expose 2 hàm global để hợp HTML v1 (importCodesFromTextarea, sendBroadcastReload)
 // ===============================================
 (function(){
   const devError  = document.getElementById('devError');
@@ -33,7 +32,7 @@
     db = firebase.database();
   }
 
-  // ---- CODES (UI giữ nguyên) ----
+  // ---- CODES ----
   function renderCodes(codes){
     codesBody.innerHTML = '';
     const entries = Object.entries(codes||{}).sort(([a],[b])=> a.localeCompare(b));
@@ -70,12 +69,10 @@
 
       tr.querySelector('[data-act="revoke"]').addEventListener('click', async ()=>{
         try{
-          // Xoá bind tại codes
           const updates = {};
           updates['codes/'+code+'/boundDeviceId'] = null;
-          updates['codes/'+code+'/boundAt'] = null;
+          updates['codes/'+code+'/boundAt']       = null;
           await db.ref().update(updates);
-          // Gửi unbind cho thiết bị nếu biết
           if (boundId){
             await db.ref(`devices/${boundId}/commands/unbindAt`).set(firebase.database.ServerValue.TIMESTAMP);
           }
@@ -91,12 +88,27 @@
     }
   }
 
-  // ---- Helpers hiển thị bàn (theo yêu cầu) ----
+  async function importCodesFromTextarea(){
+    showDevError('');
+    const raw = (txtImport.value||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+    if (raw.length===0){ showDevError('Chưa có mã nào trong ô nhập.'); return; }
+    const updates = {};
+    for (const code of raw){
+      updates['codes/'+code+'/enabled']   = true;
+      updates['codes/'+code+'/createdAt'] = firebase.database.ServerValue.TIMESTAMP;
+    }
+    try{
+      await db.ref().update(updates);
+      txtImport.value = '';
+    }catch(e){ showDevError('Nhập mã thất bại: '+(e?.message||e)); }
+  }
+  // ✅ Expose để hợp HTML v1 (nếu có onclick="importCodesFromTextarea()")
+  window.importCodesFromTextarea = importCodesFromTextarea;
+
+  // ---- Hiển thị bàn theo trạng thái client ----
   function displayTableFromDevice(data){
-    // Có thể là string/number, hoặc object { value, stage, inPOS, ... }
     let raw = data?.table;
 
-    // Ưu tiên object
     if (raw && typeof raw === 'object') {
       const v = (raw.value ?? raw.table ?? '').toString().trim();
       const stage = (raw.stage || raw.view || raw.status || '').toString().toLowerCase();
@@ -110,11 +122,9 @@
       return v || '—';
     }
 
-    // String/number
     if (raw == null) raw = '';
     raw = String(raw).trim();
 
-    // Nếu client có thêm cờ stage/inPOS ở root
     const stageRoot = String(data?.stage || data?.view || data?.status || '').toLowerCase();
     const inPOSroot = (data?.inPOS === true);
 
@@ -143,24 +153,22 @@
       const tr = document.createElement('tr');
       tr.className = 'border-b last:border-0';
       tr.innerHTML = `
-        <tr class="border-b last:border-0">
-          <td class="px-2 py-1 text-xs break-all">${id}</td>
-          <td class="px-2 py-1 font-mono">${code || '—'}</td>
-          <td class="px-2 py-1">${tableD}</td>
-          <td class="px-2 py-1 text-xs">${last? formatTime(last) : '—'}</td>
-          <td class="px-2 py-1">
-            <div class="flex flex-wrap gap-2">
-              <button class="px-2 py-1 text-xs rounded bg-blue-600 text-white hover:bg-blue-700" data-act="reload" data-id="${id}">Làm mới</button>
-              <button class="px-2 py-1 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-700" data-act="settable" data-id="${id}" data-table="${(typeof data?.table==='string' && data.table.startsWith('+'))? data.table.slice(1) : (typeof data?.table==='object'? (data.table.value||'') : (data?.table||''))}">Đổi số bàn</button>
-              <button class="px-2 py-1 text-xs rounded bg-amber-600 text-white hover:bg-amber-700" data-act="unbind" data-id="${id}" data-code="${code}">Gỡ liên kết</button>
-            </div>
-          </td>
-        </tr>
+        <td class="px-2 py-1 text-xs break-all">${id}</td>
+        <td class="px-2 py-1 font-mono">${code || '—'}</td>
+        <td class="px-2 py-1">${tableD}</td>
+        <td class="px-2 py-1 text-xs">${last? formatTime(last) : '—'}</td>
+        <td class="px-2 py-1">
+          <div class="flex flex-wrap gap-2">
+            <button class="px-2 py-1 text-xs rounded bg-blue-600 text-white hover:bg-blue-700" data-act="reload" data-id="${id}">Làm mới</button>
+            <button class="px-2 py-1 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-700" data-act="settable" data-id="${id}" data-table="${(typeof data?.table==='string' && data.table.startsWith('+'))? data.table.slice(1) : (typeof data?.table==='object'? (data.table.value||'') : (data?.table||''))}">Đổi số bàn</button>
+            <button class="px-2 py-1 text-xs rounded bg-amber-600 text-white hover:bg-amber-700" data-act="unbind" data-id="${id}" data-code="${code}">Gỡ liên kết</button>
+          </div>
+        </td>
       `;
-      devicesBody.appendChild(tr.firstElementChild);
+      devicesBody.appendChild(tr);
     }
 
-    // rebind events mỗi lần render (UI v1)
+    // Rebind action buttons (UI v1)
     devicesBody.querySelectorAll('button[data-act="reload"]').forEach(btn=>{
       btn.onclick = async ()=>{
         const id = btn.getAttribute('data-id');
@@ -183,7 +191,7 @@
           await db.ref(`devices/${id}/commands/setTable`).set({
             value: t, at: firebase.database.ServerValue.TIMESTAMP
           });
-          await db.ref(`devices/${id}/table`).set(t); // cảm giác nhanh
+          await db.ref(`devices/${id}/table`).set(t); // cập nhật nhanh cảm giác
         }catch(e){ showDevError('Đổi số bàn thất bại: '+(e?.message||e)); }
       };
     });
@@ -193,10 +201,9 @@
         const id = btn.getAttribute('data-id');
         const code = btn.getAttribute('data-code') || '';
         try{
-          // Gửi lệnh unbind tới THIẾT BỊ (luôn làm)
+          // Luôn gửi lệnh unbind tới thiết bị
           await db.ref(`devices/${id}/commands/unbindAt`).set(firebase.database.ServerValue.TIMESTAMP);
-
-          // Nếu biết code đang gắn, THU HỒI trong /codes
+          // Nếu biết code, thu hồi tại /codes
           if (code) {
             const updates = {};
             updates[`codes/${code}/boundDeviceId`] = null;
@@ -208,15 +215,17 @@
     });
   }
 
-  // ---- Broadcast reload ----
+  // ---- Broadcast reload toàn bộ ----
   async function sendBroadcastReload(){
     showDevError('');
     try{
       await db.ref('broadcast/reloadAt').set(firebase.database.ServerValue.TIMESTAMP);
     }catch(e){ showDevError('Reload toàn bộ thất bại: '+(e?.message||e)); }
   }
+  // ✅ Expose để hợp HTML v1 (nếu có onclick="sendBroadcastReload()")
+  window.sendBroadcastReload = sendBroadcastReload;
 
-  // ---- Wire & live ----
+  // ---- Boot ----
   (async function boot(){
     try{
       await initFirebase();
@@ -229,6 +238,7 @@
         try{ renderDevices(s.val()); }catch(e){ showDevError('Render devices lỗi: '+(e?.message||e)); }
       }, e=> showDevError('Lỗi tải thiết bị: '+(e?.message||e)));
 
+      // Nếu HTML v1 không dùng onclick inline thì vẫn có listener này
       btnImport?.addEventListener('click', importCodesFromTextarea);
       btnBroadcastReload?.addEventListener('click', sendBroadcastReload);
     }catch(e){
