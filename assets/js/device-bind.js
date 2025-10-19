@@ -1,7 +1,7 @@
 // ===============================================
-// device-bind.js v8 (Fail-safe Overlay, Zero Blink)
-// - Dựng overlay ngay lập tức, không ẩn app gốc (overlay che phủ)
-// - Nếu có lỗi JS/Firebase -> hiện lỗi trên overlay, KHÔNG trắng màn
+// device-bind.js v8b (Fail-safe Overlay, Zero Blink)
+// - Luôn dựng overlay, không ẩn app gốc (overlay che phủ)
+// - Fix kiểm tra Firebase config: chấp nhận window.firebaseConfig hoặc firebaseConfig
 // - Admin: reload, setTable (jump Start), unbind (auto reload về gate)
 // ===============================================
 
@@ -81,12 +81,28 @@
   let deviceId = LS.getItem('deviceId');
   if (!deviceId) { deviceId = uuidv4(); LS.setItem('deviceId', deviceId); }
 
-  // ---------- Firebase safe init ----------
+  // ---------- Firebase safe init (ĐÃ SỬA) ----------
   function assertFirebaseReady() {
     if (typeof firebase === 'undefined') throw new Error('Không tải được Firebase SDK.');
-    // firebaseConfig phải đến từ ./assets/js/firebase.js
-    if (typeof window.firebaseConfig === 'undefined') throw new Error('Thiếu cấu hình Firebase (firebaseConfig).');
-    if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(window.firebaseConfig);
+
+    // Nếu đã init rồi thì OK
+    if (firebase.apps && firebase.apps.length) return;
+
+    // Nhận config từ window.firebaseConfig HOẶC biến firebaseConfig toàn cục
+    if (typeof window.firebaseConfig === 'undefined') {
+      try {
+        // eslint-disable-next-line no-undef
+        if (typeof firebaseConfig !== 'undefined') {
+          // gắn tạm lên window để thống nhất
+          window.firebaseConfig = firebaseConfig;
+        }
+      } catch (_) {}
+    }
+    if (typeof window.firebaseConfig === 'undefined') {
+      throw new Error('Thiếu cấu hình Firebase (firebaseConfig).');
+    }
+
+    firebase.initializeApp(window.firebaseConfig);
   }
 
   async function bindCodeToDevice(code){
@@ -189,23 +205,22 @@
       // Luôn dựng overlay trước (tránh nhấp nháy)
       showOverlay();
 
-      // Không ẩn app; overlay che phủ nên người dùng không thao tác xuyên được
       setTableText(LS.getItem('tableNumber') || '');
 
-      // Nếu có mã sẵn -> xác thực
-      const code = LS.getItem('deviceCode');
-
+      // Có mã sẵn?
+      // (auth trước để tránh chờ lần bind)
       assertFirebaseReady();
       await firebase.auth().signInAnonymously().catch((e)=>{ throw new Error('Auth lỗi: '+(e?.message||e)); });
 
+      const code = LS.getItem('deviceCode');
       if (!code) {
-        // Chưa có mã -> giữ overlay và chờ người dùng nhập
+        // Chưa có mã -> chờ người dùng nhập trên overlay
         return;
       }
 
       const snap = await firebase.database().ref('codes/'+code).once('value');
       const data = snap.val();
-      if (!data)                 throw new Error('Mã không tồn tại.');
+      if (!data)                  throw new Error('Mã không tồn tại.');
       if (data.enabled === false) throw new Error('Mã đã bị tắt.');
       if (data.boundDeviceId && data.boundDeviceId !== deviceId) {
         LS.removeItem('deviceCode');
