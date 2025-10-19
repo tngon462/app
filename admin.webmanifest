@@ -1,8 +1,8 @@
 {
   "name": "T-NGON Admin",
   "short_name": "Admin",
-  "start_url": "https://tngon462.github.io/QR/admin.html",
-  "scope": "https://tngon462.github.io/QR/admin.html",
+  "start_url": "https://tngon462.github.io/app/admin.html",
+  "scope": "https://tngon462.github.io/app/admin.html",
   "display": "standalone",
   "orientation": "portrait-primary",
   "theme_color": "#da251d",
