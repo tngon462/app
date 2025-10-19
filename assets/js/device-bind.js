@@ -1,5 +1,8 @@
 // ===============================================
-// device-bind.js v8c (Fail-safe Overlay, Zero Blink + TX fix)
+// device-bind.js v8d (Anti-reload loop, Fail-safe Overlay)
+// - Mỗi reloadAt chỉ xử lý 1 lần (dùng localStorage "stamp")
+// - Broadcast reload xử lý 1 lần/tem thời gian
+// - Vẫn overlay an toàn, không dùng html.gating
 // ===============================================
 (function () {
   const LS = window.localStorage;
@@ -115,32 +118,61 @@
     }, 30*1000);
   }
 
+  // ====== chống reload vòng lặp ======
+  function shouldReloadOnce(key, ts) {
+    // key: 'cmdReloadStamp' hoặc 'broadcastReloadStamp'
+    if (!ts) return false;
+    const last = parseInt(LS.getItem(key)||'0', 10);
+    if (Number(ts) > last) {
+      LS.setItem(key, String(ts));
+      return true;
+    }
+    return false;
+  }
+
   function listenCommands(){
     assertFirebaseReady();
     const cmdRef = firebase.database().ref('devices/'+deviceId+'/commands');
+
     cmdRef.on('value', s=>{
       const c=s.val()||{};
 
-      if (c.reloadAt) { location.reload(true); return; }
+      // 1) Reload (per-device)
+      if (c.reloadAt && shouldReloadOnce('cmdReloadStamp', c.reloadAt)) {
+        // cố gắng dọn lệnh để lần sau không lặp (nếu có quyền)
+        try { cmdRef.child('reloadAt').remove(); } catch(_) {}
+        // dùng setTimeout để tránh đụng onValue ngay frame hiện tại
+        setTimeout(()=> location.reload(true), 50);
+        return;
+      }
 
-      if (c.setTable && c.setTable.value) {
+      // 2) Set table -> nhảy Start Order
+      if (c.setTable && c.setTable.value){
         const t = c.setTable.value;
         LS.setItem('tableNumber', t);
         show('start-screen'); hide('select-table'); hide('pos-container');
         setTableText(t);
         const startBtn = $('start-order'); if (startBtn) { try{ startBtn.scrollIntoView({block:'center'}); }catch(_){ } }
-        cmdRef.child('setTable').remove();
+        // dọn lệnh
+        try { cmdRef.child('setTable').remove(); } catch(_) {}
         firebase.database().ref('devices/'+deviceId).update({ table: t });
       }
 
-      if (c.unbindAt) {
-        try { LS.removeItem('deviceCode'); LS.removeItem('tableNumber'); }
-        finally { location.reload(true); }
+      // 3) Unbind -> xoá mã & reload về gate
+      if (c.unbindAt){
+        try { LS.removeItem('deviceCode'); LS.removeItem('tableNumber'); } finally {
+          setTimeout(()=> location.reload(true), 50);
+        }
       }
     });
 
-    firebase.database().ref('broadcast/reloadAt').on('value', s=>{
-      if (s.val()) location.reload(true);
+    // Broadcast reload toàn bộ (1 lần / timestamp)
+    const bRef = firebase.database().ref('broadcast/reloadAt');
+    bRef.on('value', s=>{
+      const ts = s.val();
+      if (ts && shouldReloadOnce('broadcastReloadStamp', ts)) {
+        setTimeout(()=> location.reload(true), 50);
+      }
     });
   }
 
