@@ -1,16 +1,12 @@
 // ===============================================
-// admin-devices.js v1-sync
-// - GIỮ NGUYÊN UI như bản v1 của bạn
-// - Đồng bộ bàn từ app:
-//     • app ở màn "Chọn bàn" -> hiển thị "-"
-//     • app đang trong POS/iframe -> hiển thị "+<bàn>"
-//     • còn lại -> hiển thị "<bàn>"
-// - Reload từng máy -> chỉ gửi reloadAt (client tự về Start Order nếu còn tableNumber)
-// - Đổi số bàn -> set commands/setTable + cập nhật nhanh cột "Bàn"
-// - Thu hồi / Xoá / Bật-Tắt mã -> giữ nguyên như v1
+// admin-devices.js v1-sync2
+// - GIỮ UI như v1
+// - Hiển thị bàn: "-", "<bàn>", hoặc "+<bàn>" khi inPOS/stage=pos
+// - Reload: gửi commands/reloadAt (client reload -> nếu có tableNumber tự vào Start Order)
+// - SetTable: commands/setTable + cập nhật cột Bàn nhanh
+// - Unbind: gửi commands/unbindAt (luôn), nếu biết code thì thu hồi trong /codes
 // ===============================================
 (function(){
-  // UI refs (giữ nguyên như v1)
   const devError  = document.getElementById('devError');
   const codesBody = document.getElementById('codes-tbody');
   const devicesBody = document.getElementById('devices-tbody');
@@ -24,7 +20,7 @@
     try { const d = new Date(ts); return d.toLocaleString(); } catch(_) { return String(ts); }
   }
 
-  // ==== Firebase init (giữ nguyên tinh thần v1) ====
+  // Firebase
   let db;
   async function initFirebase(){
     if (!firebase.apps.length) {
@@ -37,7 +33,7 @@
     db = firebase.database();
   }
 
-  // ---- CODES (UI & thao tác giữ nguyên v1) ----
+  // ---- CODES (UI giữ nguyên) ----
   function renderCodes(codes){
     codesBody.innerHTML = '';
     const entries = Object.entries(codes||{}).sort(([a],[b])=> a.localeCompare(b));
@@ -68,18 +64,18 @@
       `;
 
       tr.querySelector('[data-act="toggle"]').addEventListener('click', async ()=>{
-        try{
-          await db.ref('codes/'+code+'/enabled').set(!enabled);
-        }catch(e){ showDevError('Đổi trạng thái thất bại: '+(e?.message||e)); }
+        try{ await db.ref('codes/'+code+'/enabled').set(!enabled); }
+        catch(e){ showDevError('Đổi trạng thái thất bại: '+(e?.message||e)); }
       });
 
       tr.querySelector('[data-act="revoke"]').addEventListener('click', async ()=>{
         try{
+          // Xoá bind tại codes
           const updates = {};
           updates['codes/'+code+'/boundDeviceId'] = null;
           updates['codes/'+code+'/boundAt'] = null;
           await db.ref().update(updates);
-
+          // Gửi unbind cho thiết bị nếu biết
           if (boundId){
             await db.ref(`devices/${boundId}/commands/unbindAt`).set(firebase.database.ServerValue.TIMESTAMP);
           }
@@ -87,65 +83,55 @@
       });
 
       tr.querySelector('[data-act="delete"]').addEventListener('click', async ()=>{
-        try{
-          await db.ref('codes/'+code).remove();
-        }catch(e){ showDevError('Xoá mã thất bại: '+(e?.message||e)); }
+        try{ await db.ref('codes/'+code).remove(); }
+        catch(e){ showDevError('Xoá mã thất bại: '+(e?.message||e)); }
       });
 
       codesBody.appendChild(tr);
     }
   }
 
-  async function importCodesFromTextarea(){
-    showDevError('');
-    const raw = (txtImport.value||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-    if (raw.length===0){ showDevError('Chưa có mã nào trong ô nhập.'); return; }
-    const updates = {};
-    for (const code of raw){
-      updates['codes/'+code+'/enabled'] = true;
-      updates['codes/'+code+'/createdAt'] = firebase.database.ServerValue.TIMESTAMP;
-      // giữ nguyên bound nếu đã có
-    }
-    try{
-      await db.ref().update(updates);
-      txtImport.value = '';
-    }catch(e){ showDevError('Nhập mã thất bại: '+(e?.message||e)); }
-  }
-
-  // ---- DEVICES ----
-
-  // Chuẩn hoá hiển thị bàn theo yêu cầu:
-  //  - Nếu app ở màn "Chọn bàn": client nên ghi table="-"
-  //  - Nếu app đang POS/iframe: ưu tiên cờ stage="pos" | inPOS=true -> hiển thị "+<bàn>"
-  //  - Nếu table đã có tiền tố "+" -> giữ nguyên
+  // ---- Helpers hiển thị bàn (theo yêu cầu) ----
   function displayTableFromDevice(data){
-    // 1) raw có thể là string/number hoặc object { value, stage, inPOS, ... }
+    // Có thể là string/number, hoặc object { value, stage, inPOS, ... }
     let raw = data?.table;
 
+    // Ưu tiên object
     if (raw && typeof raw === 'object') {
       const v = (raw.value ?? raw.table ?? '').toString().trim();
       const stage = (raw.stage || raw.view || raw.status || '').toString().toLowerCase();
       const inPOS = (raw.inPOS === true);
 
       if (stage === 'select') return '-';
-      if (stage === 'pos' || inPOS) return v ? ('+' + v) : '+?';
+      if (stage === 'pos' || inPOS) {
+        const val = v || data?.lastKnownTable || '';
+        return val ? ('+' + val) : '+?';
+      }
       return v || '—';
     }
 
-    if (raw == null) return '—';
+    // String/number
+    if (raw == null) raw = '';
     raw = String(raw).trim();
 
-    if (raw === '' || raw === '-') return '-';
+    // Nếu client có thêm cờ stage/inPOS ở root
+    const stageRoot = String(data?.stage || data?.view || data?.status || '').toLowerCase();
+    const inPOSroot = (data?.inPOS === true);
+
+    if (raw === '' || raw === '-') {
+      if (stageRoot === 'pos' || inPOSroot) {
+        const lk = (data?.lastKnownTable ? String(data.lastKnownTable).trim() : '');
+        return lk ? ('+'+lk) : '+?';
+      }
+      return '-';
+    }
+
     if (raw.startsWith('+')) return raw;
-
-    const inPosFlag =
-      data?.inPOS === true ||
-      String(data?.stage||data?.view||data?.status||'').toLowerCase() === 'pos';
-
-    if (inPosFlag) return `+${raw}`;
+    if (stageRoot === 'pos' || inPOSroot) return `+${raw}`;
     return raw;
   }
 
+  // ---- DEVICES ----
   function renderDevices(devices){
     devicesBody.innerHTML = '';
     const entries = Object.entries(devices||{}).sort(([a],[b])=> a.localeCompare(b));
@@ -157,40 +143,39 @@
       const tr = document.createElement('tr');
       tr.className = 'border-b last:border-0';
       tr.innerHTML = `
-        <td class="px-2 py-1 text-xs break-all">${id}</td>
-        <td class="px-2 py-1 font-mono">${code || '—'}</td>
-        <td class="px-2 py-1">${tableD}</td>
-        <td class="px-2 py-1 text-xs">${last? formatTime(last) : '—'}</td>
-        <td class="px-2 py-1">
-          <div class="flex flex-wrap gap-2">
-            <button class="px-2 py-1 text-xs rounded bg-blue-600 text-white hover:bg-blue-700" data-act="reload">Làm mới</button>
-            <button class="px-2 py-1 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-700" data-act="settable">Đổi số bàn</button>
-            <button class="px-2 py-1 text-xs rounded bg-amber-600 text-white hover:bg-amber-700" data-act="unbind">Gỡ liên kết</button>
-          </div>
-        </td>
+        <tr class="border-b last:border-0">
+          <td class="px-2 py-1 text-xs break-all">${id}</td>
+          <td class="px-2 py-1 font-mono">${code || '—'}</td>
+          <td class="px-2 py-1">${tableD}</td>
+          <td class="px-2 py-1 text-xs">${last? formatTime(last) : '—'}</td>
+          <td class="px-2 py-1">
+            <div class="flex flex-wrap gap-2">
+              <button class="px-2 py-1 text-xs rounded bg-blue-600 text-white hover:bg-blue-700" data-act="reload" data-id="${id}">Làm mới</button>
+              <button class="px-2 py-1 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-700" data-act="settable" data-id="${id}" data-table="${(typeof data?.table==='string' && data.table.startsWith('+'))? data.table.slice(1) : (typeof data?.table==='object'? (data.table.value||'') : (data?.table||''))}">Đổi số bàn</button>
+              <button class="px-2 py-1 text-xs rounded bg-amber-600 text-white hover:bg-amber-700" data-act="unbind" data-id="${id}" data-code="${code}">Gỡ liên kết</button>
+            </div>
+          </td>
+        </tr>
       `;
+      devicesBody.appendChild(tr.firstElementChild);
+    }
 
-      // "Làm mới" (reload): chỉ gửi reloadAt
-      tr.querySelector('[data-act="reload"]').addEventListener('click', async ()=>{
+    // rebind events mỗi lần render (UI v1)
+    devicesBody.querySelectorAll('button[data-act="reload"]').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const id = btn.getAttribute('data-id');
         try{
           await db.ref(`devices/${id}/commands/reloadAt`).set(firebase.database.ServerValue.TIMESTAMP);
         }catch(e){ showDevError('Gửi lệnh reload thất bại: '+(e?.message||e)); }
-      });
+      };
+    });
 
-      // "Đổi số bàn": prompt nhanh
-      tr.querySelector('[data-act="settable"]').addEventListener('click', async ()=>{
+    devicesBody.querySelectorAll('button[data-act="settable"]').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const id = btn.getAttribute('data-id');
+        const cur = btn.getAttribute('data-table') || '';
         try{
-          // Lấy gợi ý hiện tại (nếu đang là "+8" thì gợi ý "8")
-          let current = '';
-          if (typeof data?.table === 'object') {
-            current = (data.table.value ?? data.table.table ?? '') || '';
-          } else if (typeof data?.table === 'string' && data.table.startsWith('+')) {
-            current = data.table.replace(/^\+/, '');
-          } else {
-            current = data?.table || '';
-          }
-
-          let t = prompt('Nhập số bàn mới (ví dụ: 5 hoặc T05):', current || '');
+          let t = prompt('Nhập số bàn mới (ví dụ: 5 hoặc T05):', cur);
           if (t===null) return;
           t = String(t).trim();
           if (!t) return;
@@ -198,30 +183,32 @@
           await db.ref(`devices/${id}/commands/setTable`).set({
             value: t, at: firebase.database.ServerValue.TIMESTAMP
           });
-
-          // Cập nhật nhanh cảm giác (client cũng sẽ tự cập nhật lại ngay sau)
-          await db.ref(`devices/${id}/table`).set(t);
+          await db.ref(`devices/${id}/table`).set(t); // cảm giác nhanh
         }catch(e){ showDevError('Đổi số bàn thất bại: '+(e?.message||e)); }
-      });
+      };
+    });
 
-      // "Gỡ liên kết": xoá bound ở codes + đẩy unbindAt cho thiết bị
-      tr.querySelector('[data-act="unbind"]').addEventListener('click', async ()=>{
+    devicesBody.querySelectorAll('button[data-act="unbind"]').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const id = btn.getAttribute('data-id');
+        const code = btn.getAttribute('data-code') || '';
         try{
+          // Gửi lệnh unbind tới THIẾT BỊ (luôn làm)
+          await db.ref(`devices/${id}/commands/unbindAt`).set(firebase.database.ServerValue.TIMESTAMP);
+
+          // Nếu biết code đang gắn, THU HỒI trong /codes
           if (code) {
             const updates = {};
             updates[`codes/${code}/boundDeviceId`] = null;
             updates[`codes/${code}/boundAt`]       = null;
             await db.ref().update(updates);
           }
-          await db.ref(`devices/${id}/commands/unbindAt`).set(firebase.database.ServerValue.TIMESTAMP);
         }catch(e){ showDevError('Gỡ liên kết thất bại: '+(e?.message||e)); }
-      });
-
-      devicesBody.appendChild(tr);
-    }
+      };
+    });
   }
 
-  // ---- Broadcast reload (toàn bộ) ----
+  // ---- Broadcast reload ----
   async function sendBroadcastReload(){
     showDevError('');
     try{
@@ -229,7 +216,7 @@
     }catch(e){ showDevError('Reload toàn bộ thất bại: '+(e?.message||e)); }
   }
 
-  // ---- Boot & live subscribe ----
+  // ---- Wire & live ----
   (async function boot(){
     try{
       await initFirebase();
