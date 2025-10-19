@@ -1,11 +1,12 @@
 // ===============================================
-//  device-bind.js v4
-//  - Gate toàn trang (không Cancel), state machine anti-blink
-//  - Admin commands: reload, setTable (đưa tới màn Start Order), unbind (auto reload về gate)
+//  device-bind.js v4b
+//  - Gate toàn trang (no cancel), state machine anti-blink
+//  - Bật/tắt class `gating` để khóa/mở UI gốc ngay từ đầu
+//  - Admin commands: reload, setTable (nhảy Start Order), unbind (auto reload về gate)
 // ===============================================
 
 if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig); // firebaseConfig load từ /assets/js/firebase.js
+  firebase.initializeApp(firebaseConfig); // từ /assets/js/firebase.js
 }
 firebase.auth().signInAnonymously().catch(console.error);
 
@@ -13,14 +14,13 @@ const LS = window.localStorage;
 const $  = (id) => document.getElementById(id);
 
 // ------- State machine -------
-const STATE = {
-  INIT: 'INIT',
-  GATE: 'GATE',
-  APP:  'APP',
-};
+const STATE = { INIT: 'INIT', GATE: 'GATE', APP: 'APP' };
 let currentState = STATE.INIT;
 
 // ------- Helpers UI -------
+const lockUI   = () => document.documentElement.classList.add('gating');
+const unlockUI = () => document.documentElement.classList.remove('gating');
+
 function show(id){ const el=$(id); if(el) el.classList.remove('hidden'); }
 function hide(id){ const el=$(id); if(el) el.classList.add('hidden'); }
 function setTableText(t){ const el=$('selected-table'); if(el) el.textContent = t||''; }
@@ -45,14 +45,15 @@ function ensureBootShield(){
 function removeBootShield(){ const el=$('boot-shield'); if(el) el.remove(); }
 
 function showCodeGate(message){
+  // Khoá UI app tuyệt đối
+  lockUI();
+  ['select-table','start-screen','pos-container'].forEach(hide);
+
   if (currentState === STATE.GATE) {
     const e=$('code-error'); if(e&&message) e.textContent=message;
     return;
   }
   currentState = STATE.GATE;
-
-  // Ẩn toàn bộ app UI để không “lọt”
-  ['select-table','start-screen','pos-container'].forEach(hide);
 
   let gate = $('code-gate');
   if (!gate){
@@ -85,9 +86,8 @@ function showCodeGate(message){
       setBusy(true);
       try{
         await bindCodeToDevice(raw); // ném lỗi nếu sai/đã dùng
-        // Thành công: remove gate & mở app
-        gate.remove();
-        enterApp();
+        gate.remove();               // đóng gate
+        enterApp();                  // mở app
       }catch(e){
         err.textContent = (e && e.message) ? e.message : 'Không dùng được mã này.';
       }finally{ setBusy(false); }
@@ -140,30 +140,17 @@ function listenCommands(){
     if (c.setTable && c.setTable.value){
       const t = c.setTable.value;
       LS.setItem('tableNumber', t);
-      // chuyển UI sang màn Start Order với số bàn đó
       show('start-screen'); hide('select-table'); hide('pos-container');
       setTableText(t);
-      // Option: auto scroll / focus nút START
       const startBtn = $('start-order'); if (startBtn) { try{ startBtn.scrollIntoView({block:'center'}); }catch(_){ } }
-
-      // dọn lệnh
       cmdRef.child('setTable').remove();
-      // lưu nhanh để admin thấy
       firebase.database().ref('devices/'+deviceId).update({ table: t });
     }
 
-    // Unbind -> dọn & reload về gate (không alert để khỏi kẹt UI)
+    // Unbind -> dọn & reload về gate
     if (c.unbindAt){
-      try {
-        const code = LS.getItem('deviceCode');
-        if (code){
-          // xóa code local
-          LS.removeItem('deviceCode');
-        }
-        LS.removeItem('tableNumber');
-      } finally {
-        location.reload(true);
-      }
+      try { LS.removeItem('deviceCode'); LS.removeItem('tableNumber'); }
+      finally { location.reload(true); } // reload để quay về gate
     }
   });
 
@@ -171,16 +158,19 @@ function listenCommands(){
   firebase.database().ref('broadcast/reloadAt').on('value', s=>{ if(s.val()) location.reload(true); });
 }
 
-// ------- Mở app (chỉ gọi 1 lần) -------
+// ------- Mở app (chỉ 1 lần) -------
 function enterApp(){
   if (currentState === STATE.APP) return;
   currentState = STATE.APP;
 
+  // Mở khóa UI app trước rồi mới gỡ shield để tránh nhấp nháy
+  unlockUI();
   removeBootShield();
-  // Mặc định hiển thị màn “Chọn bàn” (giữ flow cũ)
+
+  // Mặc định về “Chọn bàn” (giữ flow cũ)
   show('select-table'); hide('start-screen'); hide('pos-container');
 
-  // Sync số bàn đang có (nếu có)
+  // Sync số bàn nếu có
   setTableText(LS.getItem('tableNumber') || '');
 
   startHeartbeat();
@@ -189,6 +179,8 @@ function enterApp(){
 
 // ------- Boot -------
 document.addEventListener('DOMContentLoaded', async ()=>{
+  // Khóa UI ngay (phòng trường hợp class chưa set từ <head>)
+  lockUI();
   ensureBootShield();
 
   // Ẩn toàn bộ app UI cho chắc chắn
@@ -208,8 +200,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
       LS.removeItem('deviceCode');
       throw new Error('Mã đã gắn với thiết bị khác.');
     }
-    // OK
-    enterApp();
+    enterApp(); // OK
   }catch(e){
     showCodeGate(e?.message || null);
   }
