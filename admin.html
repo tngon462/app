@@ -81,7 +81,7 @@
       <nav class="p-3 space-y-1">
         <a href="#screen"  id="navScreen"  class="nav-link">Tắt/Bật màn hình</a>
         <a href="#ads"     id="navAds"     class="nav-link">Up ảnh quảng cáo</a>
-        <a href="#devices" id="navDevices" class="nav-link">Thiết bị iPad</a> <!-- ✅ TAB MỚI -->
+        <a href="#devices" id="navDevices" class="nav-link">Thiết bị iPad</a>
       </nav>
       <div class="p-3 text-xs text-gray-400 border-t">
         Phiên bản <span id="ver">—</span>
@@ -90,7 +90,7 @@
 
     <!-- Main content -->
     <main class="content flex-1">
-      <!-- View: Screen control (GIỮ NGUYÊN) -->
+      <!-- View: Screen control -->
       <section id="viewScreen" class="p-4 md:p-6 hidden">
         <h2 class="text-2xl font-bold text-gray-800 mb-4">Điều khiển màn hình tablet</h2>
 
@@ -124,12 +124,12 @@
         </div>
       </section>
 
-      <!-- View: Ads (iframe) (GIỮ NGUYÊN) -->
+      <!-- View: Ads (iframe) -->
       <section id="viewAds" class="hidden">
         <iframe id="ads-iframe" src="about:blank" referrerpolicy="no-referrer"></iframe>
       </section>
 
-      <!-- ✅ View: Thiết bị iPad (MỚI) -->
+      <!-- View: Thiết bị iPad -->
       <section id="viewDevices" class="p-4 md:p-6 hidden">
         <h2 class="text-2xl font-bold text-gray-800 mb-4">Thiết bị iPad & Mã thiết bị</h2>
 
@@ -313,7 +313,7 @@ T02"></textarea>
         });
         await new Promise(r => { const un = firebase.auth().onAuthStateChanged(()=>{ un(); r(); }); });
 
-        // ====== (GIỮ NGUYÊN) GLOBAL SCREEN CONTROL ======
+        // ===== Global screen control (giữ nguyên) =====
         const refScreen = db.ref('control/screen'); // "on" | "off"
         refScreen.once('value').then(snap => { if (!snap.exists()) refScreen.set('on'); });
         refScreen.on('value', (snap) => {
@@ -331,7 +331,7 @@ T02"></textarea>
         }
         toggleEl.addEventListener('change', () => setScreen(toggleEl.checked ? 'on' : 'off'));
 
-        // ===== (GIỮ NGUYÊN) PER-TABLE CONTROLS =====
+        // ===== Per-table controls (giữ nguyên) =====
         const TABLE_COUNT = 15;
         const tablesGrid = document.getElementById('tablesGrid');
         const tableRefs = {};
@@ -411,7 +411,7 @@ T02"></textarea>
         async function refreshTable(i) {
           showError('');
           try {
-            const refSig = db.ref(`signals/${i}`);
+            const refSig = firebase.database().ref(`signals/${i}`);
             await refSig.set({ status: 'expired', ts: firebase.database.ServerValue.TIMESTAMP });
           } catch (e) { showError(`Làm mới Bàn ${i} thất bại: ` + (e?.message || e)); }
         }
@@ -421,7 +421,7 @@ T02"></textarea>
             await refScreen.set('on');
             const updates = {};
             for (let i=1;i<=TABLE_COUNT;i++) updates[`control/tables/${i}/screen`] = 'on';
-            await db.ref().update(updates);
+            await firebase.database().ref().update(updates);
           } catch (e) { showError('Bật tất cả thất bại: ' + (e?.message||e)); }
         });
         btnOff.addEventListener('click', async () => {
@@ -431,8 +431,14 @@ T02"></textarea>
 
         renderPerTableControls();
         route();
+      } catch (e) {
+        console.error(e);
+        showError('Lỗi khởi chạy: ' + (e?.message||e));
+      }
+    })();
+  </script>
 
-  </script
-    <script src="./assets/js/admin-devices.js?v=1"></script>
+  <!-- ✅ Tách riêng logic tab Thiết bị iPad -->
+  <script src="./assets/js/admin-devices.js?v=1"></script>
 </body>
 </html>
