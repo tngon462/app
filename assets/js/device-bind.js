@@ -105,31 +105,33 @@
     firebase.initializeApp(window.firebaseConfig);
   }
 
-  async function bindCodeToDevice(code){
-    assertFirebaseReady();
-    await firebase.auth().signInAnonymously().catch((e)=>{ throw new Error('Auth lỗi: '+(e?.message||e)); });
+async function bindCodeToDevice(code){
+  assertFirebaseReady();
+  await firebase.auth().signInAnonymously().catch((e)=>{ throw new Error('Auth lỗi: '+(e?.message||e)); });
 
-    const codeRef = firebase.database().ref('codes/'+code);
-    await codeRef.transaction(data=>{
-      if(!data) return null;                 // không tồn tại
-      if(data.enabled===false) return;       // bị tắt
+  const codeRef = firebase.database().ref('codes/'+code);
+  await codeRef.transaction(data=>{
+-     if(!data) return null;                 // không tồn tại
+-     if(data.enabled===false) return;       // bị tắt
++     if (!data) return;                     // KHÔNG commit (mã không tồn tại)
++     if (data.enabled === false) return;    // KHÔNG commit (mã bị tắt)
       if(!data.boundDeviceId || data.boundDeviceId===deviceId){
         return {...data, boundDeviceId: deviceId, boundAt: firebase.database.ServerValue.TIMESTAMP};
       }
-      return; // đang gắn máy khác
-    }, (error, committed)=>{
-      if (error) throw error;
-      if (!committed) throw new Error('Mã không khả dụng hoặc đã dùng ở thiết bị khác.');
-    });
+-     return; // đang gắn máy khác
++     return;                                // KHÔNG commit (đang gắn máy khác)
+  }, (error, committed)=>{
+    if (error) throw error;
+    if (!committed) throw new Error('Mã không khả dụng hoặc đã dùng ở thiết bị khác.');
+  });
 
-    await firebase.database().ref('devices/'+deviceId).update({
-      code,
-      lastSeen: firebase.database.ServerValue.TIMESTAMP,
-      info: { ua: navigator.userAgent }
-    });
-    LS.setItem('deviceCode', code);
-  }
-
+  await firebase.database().ref('devices/'+deviceId).update({
+    code,
+    lastSeen: firebase.database.ServerValue.TIMESTAMP,
+    info: { ua: navigator.userAgent }
+  });
+  LS.setItem('deviceCode', code);
+}
   function startHeartbeat(){
     setInterval(()=>{
       try{
