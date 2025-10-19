@@ -1,9 +1,11 @@
 // ===============================================
-// device-bind.js v9c2 (PROD)
+// device-bind.js v9d (PROD)
 // - Gate thực sự chặn: chỉ vào app khi bind mã OK
 // - Auto-bind on boot nếu code có sẵn nhưng chưa bound trong DB
 // - Anti-loop: reloadAt, unbindAt, broadcast.reloadAt (tem localStorage)
-// - Sau reload, nếu đã có tableNumber -> vào thẳng Start Order
+// - Báo số bàn về Admin theo thời gian thực:
+//     • Nếu đang ở màn "Chọn bàn" -> gửi "-" và xóa localStorage.tableNumber
+//     • Nếu ở "Start Order" -> gửi đúng số bàn (ưu tiên localStorage.tableNumber)
 // ===============================================
 (function () {
   const LS = window.localStorage;
@@ -11,69 +13,15 @@
 
   let entered = false;
   let requireGate = false;
-
-  // ---------- Overlay (Gate) ----------
-  function ensureOverlay() {
-    let ov = document.getElementById('code-overlay');
-    if (ov) return ov;
-    ov = document.createElement('div');
-    ov.id = 'code-overlay';
-    ov.style.cssText = 'position:fixed;inset:0;z-index:6000;background:#fff;display:flex;align-items:center;justify-content:center;padding:16px';
-    ov.innerHTML = `
-      <div class="w-full max-w-sm bg-white border border-gray-200 rounded-2xl shadow p-6">
-        <h1 class="text-2xl font-extrabold text-gray-900 mb-3 text-center">Nhập mã iPad</h1>
-        <p class="text-xs text-gray-500 mb-2 text-center">Nhập đúng mã để tiếp tục. Không có nút hủy.</p>
-        <div class="text-[11px] text-gray-500 mb-2"><b>Device ID:</b> <span id="dbg-dev"></span></div>
-        <input id="code-input" type="text" maxlength="20" placeholder="VD: A1B2C3"
-               class="w-full border rounded-lg px-4 py-3 text-center tracking-widest font-mono text-lg"
-               inputmode="latin" autocomplete="one-time-code" />
-        <div id="code-error" class="text-red-600 text-sm mt-2 min-h-[20px]"></div>
-        <button id="code-submit" class="mt-4 w-full rounded-xl bg-blue-600 text-white font-bold py-3 hover:bg-blue-700 transition">XÁC NHẬN</button>
-      </div>`;
-    document.body.appendChild(ov);
-
-    const devSpan = document.getElementById('dbg-dev');
-    if (devSpan) devSpan.textContent = LS.getItem('deviceId') || '(chưa có)';
-
-    const input = document.getElementById('code-input');
-    const btn   = document.getElementById('code-submit');
-    const err   = document.getElementById('code-error');
-
-    function setBusy(b){ btn.disabled=b; btn.textContent=b?'Đang kiểm tra…':'XÁC NHẬN'; }
-    async function submit(){
-      err.textContent='';
-      const code=(input.value||'').trim().toUpperCase();
-      if(!code){ err.textContent='Vui lòng nhập mã.'; return; }
-      setBusy(true);
-      try{
-        await bindCodeToDevice(code);   // ném lỗi nếu sai/không khả dụng
-        hideOverlay();
-        enterAppOnce();                 // chỉ vào app khi bind OK
-      }catch(e){
-        err.textContent = e?.message || 'Không dùng được mã này.';
-      }finally{ setBusy(false); }
-    }
-    btn.addEventListener('click', submit);
-    input.addEventListener('keydown', e=>{ if(e.key==='Enter') submit(); });
-    setTimeout(()=> input?.focus(), 0);
-    return ov;
-  }
-  function showOverlay(msg){
-    if (entered) return;
-    const ov=ensureOverlay(); ov.style.display='flex';
-    if (msg){ const e=document.getElementById('code-error'); if(e) e.textContent=msg; }
-  }
-  function hideOverlay(){ const ov=document.getElementById('code-overlay'); if(ov) ov.style.display='none'; }
-
-  // ---------- UI helpers ----------
-  function setTableText(t){ const el=document.getElementById('selected-table'); if(el) el.textContent=t||''; }
-  function show(id){ const el=document.getElementById(id); if(el) el.classList.remove('hidden'); }
-  function hide(id){ const el=document.getElementById(id); if(el) el.classList.add('hidden'); }
-  function uuidv4(){ return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);}); }
-
-  // ---------- Device ID ----------
   let deviceId = LS.getItem('deviceId');
   if (!deviceId) { deviceId = uuidv4(); LS.setItem('deviceId', deviceId); }
+
+  // ---------- Helpers ----------
+  function uuidv4(){ return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);}); }
+  function setTableText(t){ const el=$('selected-table'); if(el) el.textContent=t||''; }
+  function show(id){ const el=$(id); if(el) el.classList.remove('hidden'); }
+  function hide(id){ const el=$(id); if(el) el.classList.add('hidden'); }
+  function visible(id){ const el=$(id); return !!(el && !el.classList.contains('hidden')); }
 
   // ---------- Firebase ----------
   function assertFirebaseReady() {
@@ -91,7 +39,7 @@
     assertFirebaseReady(); await ensureAuth();
     const codeRef = firebase.database().ref('codes/'+code);
 
-    // Kiểm tra sơ bộ để báo lỗi rõ ràng
+    // Kiểm tra sơ bộ
     const snap0 = await codeRef.once('value');
     if (!snap0.exists()) throw new Error('Mã không tồn tại. Hãy thêm mã trong Admin.');
     const v0 = snap0.val() || {};
@@ -102,12 +50,12 @@
 
     // Transaction chống race
     await codeRef.transaction(data=>{
-      if(!data) return;                      // không commit
-      if(data.enabled===false) return;       // không commit
+      if(!data) return;
+      if(data.enabled===false) return;
       if(!data.boundDeviceId || data.boundDeviceId===deviceId){
         return { ...data, boundDeviceId: deviceId, boundAt: firebase.database.ServerValue.TIMESTAMP };
       }
-      return;                                // đang gắn máy khác
+      return;
     }, (error, committed)=>{
       if(error) throw error;
       if(!committed) throw new Error('Không thể giữ mã (đã bị máy khác chiếm). Thử lại.');
@@ -140,6 +88,45 @@
     return false;
   }
 
+  // ---------- Báo số bàn về Admin (poll nhẹ) ----------
+  let lastSentTable = undefined; // undefined -> chưa gửi
+  function normalizeTableValue(raw){
+    if (!raw) return '-';
+    const s = String(raw).trim();
+    return s ? s : '-';
+  }
+  async function sendTableToAdmin(val){
+    try{
+      await firebase.database().ref('devices/'+deviceId+'/table').set(val);
+      lastSentTable = val;
+    }catch(_){}
+  }
+  function startTableReporter(){
+    // Mỗi 1s kiểm tra màn hình/LS và đẩy về admin nếu khác lần trước
+    setInterval(()=>{
+      try{
+        const onSelect = visible('select-table');
+        const onStart  = visible('start-screen');
+
+        if (onSelect) {
+          // Đang ở màn chọn bàn => xóa bàn cũ trong LS + báo '-'
+          if (LS.getItem('tableNumber')) LS.removeItem('tableNumber');
+          const val = '-';
+          if (lastSentTable !== val) sendTableToAdmin(val);
+          return;
+        }
+
+        let t = LS.getItem('tableNumber');
+        if (!t && onStart) {
+          // Thử lấy từ UI nếu cần
+          const el = $('selected-table'); t = (el && el.textContent) ? el.textContent.trim() : '';
+        }
+        const val = normalizeTableValue(t);
+        if (lastSentTable !== val) sendTableToAdmin(val);
+      }catch(_){}
+    }, 1000);
+  }
+
   // ---------- Commands (trì hoãn 3s sau khi vào app) ----------
   function listenCommandsDelayed(){ setTimeout(listenCommands, 3000); }
   function listenCommands(){
@@ -154,14 +141,14 @@
         return;
       }
 
-      // setTable → nhảy Start Order + lưu local
+      // setTable → nhảy Start Order + lưu local + báo ngay cho admin
       if (c.setTable && c.setTable.value){
         const t=c.setTable.value;
         LS.setItem('tableNumber', t);
         show('start-screen'); hide('select-table'); hide('pos-container');
         setTableText(t);
         try{ cmdRef.child('setTable').remove(); }catch(_){}
-        firebase.database().ref('devices/'+deviceId).update({ table: t });
+        firebase.database().ref('devices/'+deviceId).update({ table: normalizeTableValue(t) });
       }
 
       // unbindAt
@@ -186,6 +173,57 @@
     });
   }
 
+  // ---------- Overlay (Gate) ----------
+  function ensureOverlay() {
+    let ov = $('code-overlay');
+    if (ov) return ov;
+    ov = document.createElement('div');
+    ov.id = 'code-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:6000;background:#fff;display:flex;align-items:center;justify-content:center;padding:16px';
+    ov.innerHTML = `
+      <div class="w-full max-w-sm bg-white border border-gray-200 rounded-2xl shadow p-6">
+        <h1 class="text-2xl font-extrabold text-gray-900 mb-3 text-center">Nhập mã iPad</h1>
+        <p class="text-xs text-gray-500 mb-2 text-center">Nhập đúng mã để tiếp tục. Không có nút hủy.</p>
+        <div class="text-[11px] text-gray-500 mb-2"><b>Device ID:</b> <span id="dbg-dev"></span></div>
+        <input id="code-input" type="text" maxlength="20" placeholder="VD: A1B2C3"
+               class="w-full border rounded-lg px-4 py-3 text-center tracking-widest font-mono text-lg"
+               inputmode="latin" autocomplete="one-time-code" />
+        <div id="code-error" class="text-red-600 text-sm mt-2 min-h-[20px]"></div>
+        <button id="code-submit" class="mt-4 w-full rounded-xl bg-blue-600 text-white font-bold py-3 hover:bg-blue-700 transition">XÁC NHẬN</button>
+      </div>`;
+    document.body.appendChild(ov);
+
+    const devSpan = $('dbg-dev'); if (devSpan) devSpan.textContent = deviceId;
+    const input = $('code-input');
+    const btn   = $('code-submit');
+    const err   = $('code-error');
+
+    function setBusy(b){ btn.disabled=b; btn.textContent=b?'Đang kiểm tra…':'XÁC NHẬN'; }
+    async function submit(){
+      err.textContent='';
+      const code=(input.value||'').trim().toUpperCase();
+      if(!code){ err.textContent='Vui lòng nhập mã.'; return; }
+      setBusy(true);
+      try{
+        await bindCodeToDevice(code);
+        hideOverlay();
+        enterAppOnce(); // chỉ vào app khi bind OK
+      }catch(e){
+        err.textContent = e?.message || 'Không dùng được mã này.';
+      }finally{ setBusy(false); }
+    }
+    btn.addEventListener('click', submit);
+    input.addEventListener('keydown', e=>{ if(e.key==='Enter') submit(); });
+    setTimeout(()=> input?.focus(), 0);
+    return ov;
+  }
+  function showOverlay(msg){
+    if (entered) return;
+    const ov=ensureOverlay(); ov.style.display='flex';
+    if (msg){ const e=$('code-error'); if(e) e.textContent=msg; }
+  }
+  function hideOverlay(){ const ov=$('code-overlay'); if(ov) ov.style.display='none'; }
+
   // ---------- Enter app ----------
   function enterAppOnce(){
     if (entered) return;
@@ -205,6 +243,7 @@
       assertFirebaseReady();
       startHeartbeat();
       listenCommandsDelayed();
+      startTableReporter(); // <-- bắt đầu đồng bộ bàn về Admin
     }catch(e){ console.error('[bind] init after enter:', e); }
   }
 
