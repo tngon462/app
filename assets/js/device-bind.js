@@ -1,20 +1,22 @@
 // assets/js/device-bind.js
-// v10c-transaction-strict + anti-flicker + startupMode=start
-// - TRANSACTION: 1 mã chỉ gắn 1 máy
-// - Bỏ qua lệnh admin cũ bằng timestamp SESSION_TS
-// - Khi admin setTable/reload → set localStorage.startupMode="start" → sau reload vào thẳng Start Order
+// v11: transaction 1-mã-1-máy + anti-flicker + đồng bộ lại START ORDER link
+// - Dùng transaction để claim code duy nhất
+// - Bỏ qua lệnh admin cũ theo SESSION_TS
+// - Luôn đồng bộ lại link START ORDER mỗi khi đổi bàn / reload
 
 (function(){
   const SESSION_TS = Date.now();
   const LS = window.localStorage;
   const $  = (id) => document.getElementById(id);
+  const n  = (x) => (Number.isFinite(+x) ? +x : 0);
 
   function uuidv4(){return'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);});}
-  function n(x){ const v=Number(x); return Number.isFinite(v) ? v : 0; }
 
+  // DeviceId
   let deviceId = LS.getItem('deviceId');
   if (!deviceId){ deviceId = uuidv4(); LS.setItem('deviceId', deviceId); }
 
+  // Firebase
   if (!firebase.apps.length) {
     if (typeof window.firebaseConfig === 'undefined') {
       console.error('[bind] Thiếu firebaseConfig! Hãy load assets/js/firebase.js trước.');
@@ -23,12 +25,9 @@
     firebase.initializeApp(window.firebaseConfig);
   }
   const db = firebase.database();
+  firebase.auth().onAuthStateChanged(u => { if (!u) firebase.auth().signInAnonymously().catch(()=>{}); });
 
-  firebase.auth().onAuthStateChanged((u)=>{
-    if (!u) firebase.auth().signInAnonymously().catch(()=>{});
-  });
-
-  // ---- UI helpers ----
+  // ===== UI helpers =====
   function ensureBootShield(){
     if ($('boot-shield')) return;
     const el = document.createElement('div');
@@ -46,11 +45,65 @@
   function hide(id){ const el=$(id); if(el) el.classList.add('hidden'); }
   function show(id){ const el=$(id); if(el) el.classList.remove('hidden'); }
   function hideAppUI(){ ['select-table','start-screen','pos-container'].forEach(hide); }
-  function setTableText(t){ const el=$('selected-table'); if(el) el.textContent=t||''; }
+  function setTableText(t){ const el=$('selected-table'); if(el) el.textContent = t||''; }
 
+  // ===== Đồng bộ lại START ORDER link/handler =====
+  function applyTableToStartOrder(t){
+    // Nhớ bàn
+    LS.setItem('tableNumber', t||'');
+    // Cập nhật số bàn siêu to
+    setTableText(t||'');
+
+    // Gắn attr/biến
+    const btn = $('start-order');
+    if (btn){
+      btn.setAttribute('data-table', t||'');
+      // Cho các script khác biết bàn đã đổi
+      try {
+        document.dispatchEvent(new CustomEvent('tngon:set-table', { detail: { table: t, source:'device-bind' } }));
+      } catch(_) {}
+
+      // Nếu có hàm “của app” để cập nhật/hỏi URL, ưu tiên dùng:
+      if (typeof window.__updateStartOrder === 'function') {
+        try { window.__updateStartOrder(t); } catch(_) {}
+      } else if (typeof window.__getPosUrl === 'function') {
+        try {
+          const url = window.__getPosUrl(t);
+          if (url && typeof url === 'string') {
+            if (btn.tagName === 'A') btn.setAttribute('href', url);
+            else btn.onclick = () => { location.href = url; };
+          }
+        } catch(_) {}
+      } else {
+        // Fallback tự suy đoán URL nếu là <a> có href dạng ?table=...
+        if (btn.tagName === 'A') {
+          try {
+            const url = new URL(btn.getAttribute('href') || location.href, location.origin);
+            url.searchParams.set('table', t||'');
+            btn.setAttribute('href', url.toString());
+          } catch(_) {
+            // nếu không có href, đặt tạm về chính trang với query
+            btn.setAttribute('href', `?table=${encodeURIComponent(t||'')}`);
+          }
+        } else {
+          // Nếu là <button>, set onclick nhẹ để mở theo query ?table=...
+          btn.onclick = () => {
+            const base = location.pathname.replace(/\/[^/]*$/, '/') || '/';
+            const url  = `${base}?table=${encodeURIComponent(t||'')}`;
+            location.href = url;
+          };
+        }
+      }
+    }
+
+    // Biến toàn cục cho script khác nếu cần
+    window.TNGON_SELECTED_TABLE = t||'';
+  }
+
+  // ===== Gate (nhập mã) =====
   let gateShown = false;
   function showCodeGate(message){
-    if (gateShown) { const e=document.getElementById('code-error'); if(e&&message) e.textContent=message; return; }
+    if (gateShown) { const e=$('code-error'); if(e&&message) e.textContent=message; return; }
     gateShown = true;
 
     const wrap = document.createElement('div');
@@ -82,7 +135,7 @@
         await claimCodeByTransaction(raw);
         LS.setItem('deviceCode', raw);
         const el=$('code-gate'); if(el) el.remove();
-        enterApp(); // vào app
+        enterApp();
       }catch(e){
         err.textContent = e?.message || 'Mã không khả dụng hoặc đã dùng ở máy khác.';
       }finally{ setBusy(false); }
@@ -92,17 +145,17 @@
     setTimeout(()=> input.focus(), 60);
   }
 
-  // ---- TRANSACTION claim ----
+  // ===== TRANSACTION: claim 1-mã-1-máy =====
   async function claimCodeByTransaction(code){
-    const codeRef = db.ref('codes/'+code);
-    const res = await codeRef.transaction((data)=>{
+    const ref = db.ref('codes/'+code);
+    const res = await ref.transaction((data)=>{
       if (!data) return data;
       if (data.enabled === false) return;
       const bound = data.boundDeviceId || null;
       if (bound === null || bound === deviceId){
         return { ...data, boundDeviceId: deviceId, boundAt: firebase.database.ServerValue.TIMESTAMP };
       }
-      return; // không commit
+      return; // abort commit
     }, undefined, false);
 
     if (!res.committed) throw new Error('Mã không khả dụng hoặc đã gắn ở thiết bị khác.');
@@ -114,11 +167,11 @@
     });
   }
 
-  // ---- Heartbeat & commands (lọc theo timestamp mới) ----
+  // ===== Heartbeat & Commands (lọc timestamp) =====
   function startHeartbeat(){
-    setInterval(()=> {
-      db.ref('devices/'+deviceId).update({ lastSeen: firebase.database.ServerValue.TIMESTAMP }).catch(()=>{});
-    }, 30*1000);
+    setInterval(()=> db.ref('devices/'+deviceId)
+      .update({ lastSeen: firebase.database.ServerValue.TIMESTAMP })
+      .catch(()=>{}), 30*1000);
   }
 
   function listenCommands(){
@@ -128,7 +181,7 @@
       const c = s.val() || {};
 
       // reloadAt
-      const ra = Number(c.reloadAt||0);
+      const ra = n(c.reloadAt);
       if (ra && ra > SESSION_TS){
         cmdRef.child('reloadAt').remove().finally(()=> location.reload(true));
         return;
@@ -136,21 +189,24 @@
 
       // setTable
       if (c.setTable && c.setTable.value){
-        const at = Number(c.setTable.at||c.setTable.ts||0);
+        const at = n(c.setTable.at || c.setTable.ts);
         if (at > SESSION_TS){
           const t = String(c.setTable.value).trim();
-          LS.setItem('tableNumber', t);
-          LS.setItem('startupMode', 'start'); // quan trọng: sau reload vào thẳng Start
+          // Đánh dấu để sau reload vào thẳng Start
+          LS.setItem('startupMode', 'start');
+          // Đồng bộ hiển thị + handler ngay (không cần đợi reload)
+          applyTableToStartOrder(t);
+          // Cho admin thấy ngay
           db.ref('devices/'+deviceId).update({ table: t, lastKnownTable: t }).catch(()=>{});
-          // nếu không reload, vẫn đưa ngay về Start Order
-          show('start-screen'); hide('select-table'); hide('pos-container');
-          setTableText(t);
+          // Dọn lệnh
           cmdRef.child('setTable').remove().catch(()=>{});
+          // Giữ nguyên state UI ở màn Start
+          show('start-screen'); hide('select-table'); hide('pos-container');
         }
       }
 
       // unbindAt
-      const ua = Number(c.unbindAt||0);
+      const ua = n(c.unbindAt);
       if (ua && ua > SESSION_TS){
         LS.removeItem('deviceCode');
         LS.removeItem('tableNumber');
@@ -161,75 +217,63 @@
 
     // broadcast reload
     db.ref('broadcast/reloadAt').on('value', s=>{
-      const ts = Number(s.val()||0);
-      if (ts && ts > SESSION_TS){
-        location.reload(true);
-      }
+      const ts = n(s.val());
+      if (ts && ts > SESSION_TS) location.reload(true);
     });
   }
 
-  // ---- Enter app (chọn màn hình theo startupMode) ----
+  // ===== Enter app =====
   let entered = false;
   function enterApp(){
     if (entered) return;
     entered = true;
 
     document.documentElement.classList.remove('gating');
-    const boot = $('boot-shield'); if (boot) boot.remove();
+    removeBootShield();
 
     const wantStart = (LS.getItem('startupMode') === 'start') && !!LS.getItem('tableNumber');
-    if (wantStart){
-      const t = LS.getItem('tableNumber');
+    const t = LS.getItem('tableNumber') || '';
+
+    if (wantStart && t){
       show('start-screen'); hide('select-table'); hide('pos-container');
-      setTableText(t);
-      // xoá cờ sau khi đã vào Start
+      applyTableToStartOrder(t); // <<< quan trọng
+      // xoá cờ sau khi đã set xong
       setTimeout(()=> LS.removeItem('startupMode'), 300);
-    }else{
-      // flow cũ
+    } else {
       show('select-table'); hide('start-screen'); hide('pos-container');
-      setTableText(LS.getItem('tableNumber') || '');
+      applyTableToStartOrder(t); // vẫn cập nhật lại handler/link theo bàn hiện có (nếu có)
     }
 
     startHeartbeat();
     listenCommands();
   }
 
-  // ---- Boot ----
+  // ===== Boot =====
   document.addEventListener('DOMContentLoaded', async ()=>{
     ensureBootShield();
     hideAppUI();
 
-    const savedCode = (LS.getItem('deviceCode')||'').trim().toUpperCase();
-    if (!savedCode){
-      showCodeGate();
-      return;
-    }
+    const saved = (LS.getItem('deviceCode')||'').trim().toUpperCase();
+    if (!saved){ showCodeGate(); return; }
 
     try{
-      const snap = await db.ref('codes/'+savedCode).once('value');
+      const snap = await db.ref('codes/'+saved).once('value');
       const data = snap.val();
       if (!data) throw new Error('Mã không tồn tại.');
       if (data.enabled === false) throw new Error('Mã đã bị tắt.');
-
       const bound = data.boundDeviceId || null;
       if (bound && bound !== deviceId){
         LS.removeItem('deviceCode');
         throw new Error('Mã đã gắn với thiết bị khác.');
       }
-
       if (!bound){
-        await claimCodeByTransaction(savedCode);
-      }else{
-        await db.ref('devices/'+deviceId).update({
-          code: savedCode,
-          lastSeen: firebase.database.ServerValue.TIMESTAMP
-        });
+        await claimCodeByTransaction(saved);
+      } else {
+        await db.ref('devices/'+deviceId).update({ code: saved, lastSeen: firebase.database.ServerValue.TIMESTAMP });
       }
-
       enterApp();
     }catch(e){
       showCodeGate(e?.message || null);
     }
   });
-
 })();
