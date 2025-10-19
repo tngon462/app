@@ -1,9 +1,9 @@
 // ===============================================
-// device-bind.js v9 (PROD)
-// - Gate overlay an toàn (chỉ trước khi vào app)
-// - Auto-bind on boot nếu code chưa gắn
-// - Anti-reload loop (tem localStorage)
-// - Nhận lệnh admin: reload / unbind / setTable (trì hoãn 3s)
+// device-bind.js v9b (PROD + anti-unbind loop)
+// - Gate overlay trước khi vào app; đã vào app thì KHÔNG gate lại
+// - Auto-bind on boot nếu code đang null trong DB
+// - Anti-loop cho reloadAt, unbindAt, broadcast.reloadAt (tem localStorage)
+// - Subscribe commands trễ 3s để né lệnh cũ
 // ===============================================
 (function () {
   const LS = window.localStorage;
@@ -78,7 +78,7 @@
   async function bindCodeToDevice(code){
     assertFirebaseReady(); await ensureAuth();
     const codeRef = firebase.database().ref('codes/'+code);
-    // transaction: chỉ commit khi code tồn tại, enabled và (chưa gắn || là mình)
+    // transaction: commit khi code tồn tại + enabled + (chưa gắn || là mình)
     await codeRef.transaction(data=>{
       if(!data) return;                      // không tồn tại -> không commit
       if(data.enabled===false) return;       // bị tắt -> không commit
@@ -109,8 +109,8 @@
     }, 30_000);
   }
 
-  // ---------- Anti-reload loop ----------
-  function shouldReloadOnce(key, ts){
+  // ---------- Anti-loop helper ----------
+  function shouldHandleOnce(key, ts){
     if(!ts) return false;
     const last = parseInt(LS.getItem(key)||'0',10);
     if(Number(ts) > last){ LS.setItem(key,String(ts)); return true; }
@@ -123,12 +123,14 @@
     const cmdRef = firebase.database().ref('devices/'+deviceId+'/commands');
     cmdRef.on('value', s=>{
       const c=s.val()||{};
-      // reload
-      if (c.reloadAt && shouldReloadOnce('cmdReloadStamp', c.reloadAt)) {
+
+      // reloadAt: chỉ 1 lần/timestamp
+      if (c.reloadAt && shouldHandleOnce('cmdReloadStamp', c.reloadAt)) {
         try{ cmdRef.child('reloadAt').remove(); }catch(_){}
         setTimeout(()=>location.reload(true), 50);
         return;
       }
+
       // setTable → nhảy Start Order
       if (c.setTable && c.setTable.value){
         const t=c.setTable.value;
@@ -138,9 +140,15 @@
         try{ cmdRef.child('setTable').remove(); }catch(_){}
         firebase.database().ref('devices/'+deviceId).update({ table: t });
       }
-      // unbind
-      if (c.unbindAt){
-        try{ LS.removeItem('deviceCode'); LS.removeItem('tableNumber'); }finally{
+
+      // unbindAt: chỉ xử lý 1 lần/timestamp
+      if (c.unbindAt && shouldHandleOnce('cmdUnbindStamp', c.unbindAt)) {
+        try{
+          LS.removeItem('deviceCode');
+          LS.removeItem('tableNumber');
+          // dọn lệnh để khỏi treo
+          cmdRef.child('unbindAt').remove();
+        }finally{
           setTimeout(()=>location.reload(true), 50);
         }
       }
@@ -150,7 +158,7 @@
     const bRef = firebase.database().ref('broadcast/reloadAt');
     bRef.on('value', s=>{
       const ts=s.val();
-      if (ts && shouldReloadOnce('broadcastReloadStamp', ts)) {
+      if (ts && shouldHandleOnce('broadcastReloadStamp', ts)) {
         setTimeout(()=>location.reload(true), 50);
       }
     });
@@ -201,7 +209,7 @@
         throw new Error('Mã đang gắn với thiết bị khác. Vui lòng nhập mã khác.');
       }
 
-      // 🔗 Auto-bind nếu đang null
+      // Auto-bind nếu đang null
       if (!data.boundDeviceId) {
         await bindCodeToDevice(code);
       }
