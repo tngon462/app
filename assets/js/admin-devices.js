@@ -95,8 +95,14 @@
       tr.querySelector('[data-act="toggle"]').addEventListener('click', () => {
         db.ref('codes/' + code).update({ enabled: !obj.enabled });
       });
-      tr.querySelector('[data-act="unbind"]').addEventListener('click', () => {
-        db.ref('codes/' + code).transaction(v => (v ? { ...v, boundDeviceId: null, boundAt: null } : v));
+      tr.querySelector('[data-act="unbind"]').addEventListener('click', async () => {
+        try {
+          // Gỡ liên kết (không tác động tới device)
+          await db.ref('codes/' + code).transaction(v => (v ? { ...v, boundDeviceId: null, boundAt: null } : v));
+          alert('Đã gỡ liên kết mã ' + code);
+        } catch (e) {
+          alert('Gỡ liên kết lỗi: ' + (e?.message || e));
+        }
       });
       tr.querySelector('[data-act="delete"]').addEventListener('click', async () => {
         if (confirm('Xóa mã ' + code + '?')) await db.ref('codes/' + code).remove();
@@ -127,23 +133,51 @@
         <td class="px-2 py-1">${obj.table || '-'}</td>
         <td class="px-2 py-1">${obj.lastSeen ? tsAgo(obj.lastSeen) : '-'}</td>
         <td class="px-2 py-1">
-          <!-- ✅ Hai nút xếp thẳng hàng, style giống nút "Làm mới" -->
           <div class="flex items-center gap-2">
             <button class="px-3 py-1.5 text-xs rounded-md bg-blue-600 text-white hover:bg-blue-700" data-act="reload">Làm mới</button>
             <button class="px-3 py-1.5 text-xs rounded-md bg-blue-600 text-white hover:bg-blue-700" data-act="settable">Đổi số bàn</button>
+            <button class="px-3 py-1.5 text-xs rounded-md bg-blue-600 text-white hover:bg-blue-700" data-act="kick" ${obj.code ? '' : 'disabled'}>Đẩy ra</button>
           </div>
         </td>
       `;
 
+      // Reload trang device
       tr.querySelector('[data-act="reload"]').addEventListener('click', () => {
         db.ref('devices/' + id + '/commands').update({ reloadAt: firebase.database.ServerValue.TIMESTAMP });
       });
 
+      // Đổi số bàn
       tr.querySelector('[data-act="settable"]').addEventListener('click', () => {
         const v = prompt('Nhập số bàn mới (ví dụ: T-12)');
         if (!v) return;
         db.ref('devices/' + id + '/commands/setTable').set({ value: v, at: firebase.database.ServerValue.TIMESTAMP });
         db.ref('devices/' + id).update({ table: v }); // để admin thấy ngay
+      });
+
+      // ✅ Đẩy ra (force unbind): gỡ codes/<code>, gửi lệnh unbind, dọn devices node
+      tr.querySelector('[data-act="kick"]').addEventListener('click', async () => {
+        const code = obj.code;
+        if (!code) return alert('Thiết bị chưa gắn mã.');
+        if (!confirm(`Đẩy thiết bị này ra và giải phóng mã ${code}?`)) return;
+
+        try {
+          // 1) Gỡ liên kết mã nếu đang gắn với đúng device này
+          await db.ref('codes/' + code).transaction(v => {
+            if (!v) return v;
+            if (v.boundDeviceId === id) return { ...v, boundDeviceId: null, boundAt: null };
+            return v; // không đổi nếu đang gắn với device khác
+          });
+
+          // 2) Gửi lệnh unbind xuống máy: máy sẽ xóa localStorage & reload
+          await db.ref('devices/' + id + '/commands').update({ unbindAt: firebase.database.ServerValue.TIMESTAMP });
+
+          // 3) Dọn thông tin hiển thị ở devices để đỡ nhầm
+          await db.ref('devices/' + id).update({ code: null, table: null });
+
+          alert('Đã đẩy thiết bị ra và giải phóng mã.');
+        } catch (e) {
+          alert('Đẩy ra thất bại: ' + (e?.message || e));
+        }
       });
 
       elDevicesTbody.appendChild(tr);
