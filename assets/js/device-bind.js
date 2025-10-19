@@ -1,14 +1,17 @@
 // ===============================================
-// device-bind.js v9b (PROD + anti-unbind loop)
-// - Gate overlay trước khi vào app; đã vào app thì KHÔNG gate lại
-// - Auto-bind on boot nếu code đang null trong DB
+// device-bind.js v9c
+// - Gate chỉ xuất hiện khi KHÔNG có deviceCode trong localStorage
+// - Khi Gate đang mở (requireGate=true) thì BẮT BUỘC bind thành công mới vào app
 // - Anti-loop cho reloadAt, unbindAt, broadcast.reloadAt (tem localStorage)
-// - Subscribe commands trễ 3s để né lệnh cũ
+// - Auto-bind on boot nếu code có sẵn nhưng chưa bound trong DB
+// - Subscribe commands trễ 3s
 // ===============================================
 (function () {
   const LS = window.localStorage;
   const $  = (id) => document.getElementById(id);
+
   let entered = false;
+  let requireGate = false; // <-- nếu true: chỉ khi bindCodeToDevice thành công mới cho vào
 
   // ---------- Overlay ----------
   function ensureOverlay() {
@@ -20,6 +23,8 @@
     ov.innerHTML = `
       <div class="w-full max-w-sm bg-white border border-gray-200 rounded-2xl shadow p-6">
         <h1 class="text-2xl font-extrabold text-gray-900 mb-4 text-center">Nhập mã iPad</h1>
+        <p class="text-xs text-gray-500 mb-2 text-center">Nhập đúng mã để tiếp tục. Không có nút hủy.</p>
+        <div class="text-[11px] text-gray-500 mb-2"><b>Device ID:</b> <span id="dbg-dev"></span></div>
         <input id="code-input" type="text" maxlength="20" placeholder="VD: A1B2C3"
                class="w-full border rounded-lg px-4 py-3 text-center tracking-widest font-mono text-lg"
                inputmode="latin" autocomplete="one-time-code" />
@@ -27,6 +32,9 @@
         <button id="code-submit" class="mt-4 w-full rounded-xl bg-blue-600 text-white font-bold py-3 hover:bg-blue-700 transition">XÁC NHẬN</button>
       </div>`;
     document.body.appendChild(ov);
+
+    const devSpan = document.getElementById('dbg-dev');
+    if (devSpan) devSpan.textContent = LS.getItem('deviceId') || '(chưa có)';
 
     const input = document.getElementById('code-input');
     const btn   = document.getElementById('code-submit');
@@ -39,18 +47,23 @@
       if(!code){ err.textContent='Vui lòng nhập mã.'; return; }
       setBusy(true);
       try{
-        await bindCodeToDevice(code);
+        await bindCodeToDevice(code);   // ném lỗi nếu sai/không khả dụng
         hideOverlay();
-        enterAppOnce();
-      }catch(e){ err.textContent = e?.message || 'Không dùng được mã này.'; }
-      finally{ setBusy(false); }
+        enterAppOnce();                 // ✅ chỉ vào app khi bind OK
+      }catch(e){
+        err.textContent = e?.message || 'Không dùng được mã này.';
+      }finally{ setBusy(false); }
     }
     btn.addEventListener('click', submit);
     input.addEventListener('keydown', e=>{ if(e.key==='Enter') submit(); });
     setTimeout(()=> input?.focus(), 0);
     return ov;
   }
-  function showOverlay(msg){ if(entered) return; const ov=ensureOverlay(); ov.style.display='flex'; if(msg){ const e=document.getElementById('code-error'); if(e) e.textContent=msg; } }
+  function showOverlay(msg){
+    if (entered) return;
+    const ov=ensureOverlay(); ov.style.display='flex';
+    if (msg){ const e=document.getElementById('code-error'); if(e) e.textContent=msg; }
+  }
   function hideOverlay(){ const ov=document.getElementById('code-overlay'); if(ov) ov.style.display='none'; }
 
   // ---------- UI helpers ----------
@@ -78,17 +91,27 @@
   async function bindCodeToDevice(code){
     assertFirebaseReady(); await ensureAuth();
     const codeRef = firebase.database().ref('codes/'+code);
-    // transaction: commit khi code tồn tại + enabled + (chưa gắn || là mình)
+
+    // Kiểm tra sơ bộ để báo lỗi rõ ràng
+    const snap0 = await codeRef.once('value');
+    if (!snap0.exists()) throw new Error('Mã không tồn tại. Hãy thêm mã trong Admin.');
+    const v0 = snap0.val() || {};
+    if (v0.enabled === false) throw new Error('Mã đã bị tắt.');
+    if (v0.boundDeviceId && v0.boundDeviceId !== deviceId) {
+      throw new Error('Mã đang gắn với thiết bị khác. Hãy “Thu hồi” trong Admin rồi nhập lại.');
+    }
+
+    // Transaction chống race
     await codeRef.transaction(data=>{
-      if(!data) return;                      // không tồn tại -> không commit
-      if(data.enabled===false) return;       // bị tắt -> không commit
+      if(!data) return;                      // không commit
+      if(data.enabled===false) return;       // không commit
       if(!data.boundDeviceId || data.boundDeviceId===deviceId){
         return { ...data, boundDeviceId: deviceId, boundAt: firebase.database.ServerValue.TIMESTAMP };
       }
-      return;                                // đang gắn với máy khác -> không commit
+      return;                                // đang gắn máy khác
     }, (error, committed)=>{
       if(error) throw error;
-      if(!committed) throw new Error('Mã không khả dụng hoặc đã dùng ở thiết bị khác.');
+      if(!committed) throw new Error('Không thể giữ mã (đã bị máy khác chiếm). Thử lại.');
     });
 
     await firebase.database().ref('devices/'+deviceId).update({
@@ -96,7 +119,8 @@
       lastSeen: firebase.database.ServerValue.TIMESTAMP,
       info: { ua: navigator.userAgent }
     });
-    LS.setItem('deviceCode', code);
+
+    LS.setItem('deviceCode', code); // ✅ chỉ set khi bind OK
   }
 
   // ---------- Heartbeat ----------
@@ -124,7 +148,7 @@
     cmdRef.on('value', s=>{
       const c=s.val()||{};
 
-      // reloadAt: chỉ 1 lần/timestamp
+      // reloadAt
       if (c.reloadAt && shouldHandleOnce('cmdReloadStamp', c.reloadAt)) {
         try{ cmdRef.child('reloadAt').remove(); }catch(_){}
         setTimeout(()=>location.reload(true), 50);
@@ -141,12 +165,11 @@
         firebase.database().ref('devices/'+deviceId).update({ table: t });
       }
 
-      // unbindAt: chỉ xử lý 1 lần/timestamp
+      // unbindAt
       if (c.unbindAt && shouldHandleOnce('cmdUnbindStamp', c.unbindAt)) {
         try{
           LS.removeItem('deviceCode');
           LS.removeItem('tableNumber');
-          // dọn lệnh để khỏi treo
           cmdRef.child('unbindAt').remove();
         }finally{
           setTimeout(()=>location.reload(true), 50);
@@ -186,37 +209,56 @@
 
   document.addEventListener('DOMContentLoaded', async ()=>{
     try{
-      showOverlay();
-      setTableText(LS.getItem('tableNumber') || '');
-
       assertFirebaseReady();
       await ensureAuth();
 
-      let code = LS.getItem('deviceCode');
-      if (!code) return; // chưa có -> chờ nhập trên overlay
+      const saved = LS.getItem('deviceCode');
 
-      // Kiểm tra code hiện tại
-      const snap = await firebase.database().ref('codes/'+code).once('value');
+      if (!saved) {
+        // ❗Không có deviceCode -> mở Gate thực sự
+        requireGate = true;
+        showOverlay();
+        return;
+      }
+
+      // Có deviceCode -> kiểm tra/tự bind nếu cần rồi vào app
+      const snap = await firebase.database().ref('codes/'+saved).once('value');
       if (!snap.exists()){
-        // mã trong localStorage không còn trong DB → xoá & yêu cầu nhập lại
+        // mã local đã bị xóa trong DB -> bắt nhập lại
+        requireGate = true;
         LS.removeItem('deviceCode');
-        throw new Error('Mã không tồn tại (đã bị xoá). Vui lòng nhập lại.');
+        showOverlay('Mã đã bị xóa. Vui lòng nhập lại.');
+        return;
       }
       const data = snap.val() || {};
-      if (data.enabled === false) throw new Error('Mã đã bị tắt.');
-      if (data.boundDeviceId && data.boundDeviceId !== deviceId) {
+      if (data.enabled === false) {
+        requireGate = true;
         LS.removeItem('deviceCode');
-        throw new Error('Mã đang gắn với thiết bị khác. Vui lòng nhập mã khác.');
+        showOverlay('Mã đã bị tắt. Vui lòng nhập mã khác.');
+        return;
       }
-
-      // Auto-bind nếu đang null
+      if (data.boundDeviceId && data.boundDeviceId !== deviceId) {
+        requireGate = true;
+        LS.removeItem('deviceCode');
+        showOverlay('Mã đang gắn với thiết bị khác. Vui lòng nhập mã khác.');
+        return;
+      }
       if (!data.boundDeviceId) {
-        await bindCodeToDevice(code);
+        // Auto-bind nếu đang null
+        await bindCodeToDevice(saved);
       }
 
+      // ✅ Không mở Gate trong case có deviceCode hợp lệ
+      requireGate = false;
       enterAppOnce();
     }catch(e){
-      showOverlay(e?.message || 'Lỗi khởi động.');
+      // Nếu đang yêu cầu qua Gate thì cứ hiển thị lỗi trên Gate
+      if (requireGate) showOverlay(e?.message || 'Lỗi khởi động.');
+      else {
+        // Mặc định: nếu chưa vào app → mở Gate; đã vào → chỉ log
+        if (!entered) { requireGate = true; showOverlay(e?.message || 'Lỗi khởi động.'); }
+        else console.error(e);
+      }
     }
   });
 })();
