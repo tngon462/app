@@ -1,8 +1,8 @@
 {
-  "name": "T-NGON - Gọi món",
+  "name": "T-NGON - Gọi món v2",
   "short_name": "T-NGON APP",
-  "start_url": "https://tngon462.github.io/QR/redirect.html",
-  "scope": "https://tngon462.github.io/QR/redirect.html",
+  "start_url": "https://tngon462.github.io/app/redirect.html",
+  "scope": "https://tngon462.github.io/app/redirect.html",
   "display": "standalone",
   "orientation": "portrait-primary",
   "theme_color": "#3b82f6",
