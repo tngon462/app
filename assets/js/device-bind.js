@@ -1,19 +1,18 @@
 // ===============================================
-// device-bind.js v9c
-// - Gate chỉ xuất hiện khi KHÔNG có deviceCode trong localStorage
-// - Khi Gate đang mở (requireGate=true) thì BẮT BUỘC bind thành công mới vào app
-// - Anti-loop cho reloadAt, unbindAt, broadcast.reloadAt (tem localStorage)
+// device-bind.js v9c2 (PROD)
+// - Gate thực sự chặn: chỉ vào app khi bind mã OK
 // - Auto-bind on boot nếu code có sẵn nhưng chưa bound trong DB
-// - Subscribe commands trễ 3s
+// - Anti-loop: reloadAt, unbindAt, broadcast.reloadAt (tem localStorage)
+// - Sau reload, nếu đã có tableNumber -> vào thẳng Start Order
 // ===============================================
 (function () {
   const LS = window.localStorage;
   const $  = (id) => document.getElementById(id);
 
   let entered = false;
-  let requireGate = false; // <-- nếu true: chỉ khi bindCodeToDevice thành công mới cho vào
+  let requireGate = false;
 
-  // ---------- Overlay ----------
+  // ---------- Overlay (Gate) ----------
   function ensureOverlay() {
     let ov = document.getElementById('code-overlay');
     if (ov) return ov;
@@ -22,7 +21,7 @@
     ov.style.cssText = 'position:fixed;inset:0;z-index:6000;background:#fff;display:flex;align-items:center;justify-content:center;padding:16px';
     ov.innerHTML = `
       <div class="w-full max-w-sm bg-white border border-gray-200 rounded-2xl shadow p-6">
-        <h1 class="text-2xl font-extrabold text-gray-900 mb-4 text-center">Nhập mã iPad</h1>
+        <h1 class="text-2xl font-extrabold text-gray-900 mb-3 text-center">Nhập mã iPad</h1>
         <p class="text-xs text-gray-500 mb-2 text-center">Nhập đúng mã để tiếp tục. Không có nút hủy.</p>
         <div class="text-[11px] text-gray-500 mb-2"><b>Device ID:</b> <span id="dbg-dev"></span></div>
         <input id="code-input" type="text" maxlength="20" placeholder="VD: A1B2C3"
@@ -49,7 +48,7 @@
       try{
         await bindCodeToDevice(code);   // ném lỗi nếu sai/không khả dụng
         hideOverlay();
-        enterAppOnce();                 // ✅ chỉ vào app khi bind OK
+        enterAppOnce();                 // chỉ vào app khi bind OK
       }catch(e){
         err.textContent = e?.message || 'Không dùng được mã này.';
       }finally{ setBusy(false); }
@@ -120,7 +119,7 @@
       info: { ua: navigator.userAgent }
     });
 
-    LS.setItem('deviceCode', code); // ✅ chỉ set khi bind OK
+    LS.setItem('deviceCode', code); // chỉ set khi bind OK
   }
 
   // ---------- Heartbeat ----------
@@ -155,7 +154,7 @@
         return;
       }
 
-      // setTable → nhảy Start Order
+      // setTable → nhảy Start Order + lưu local
       if (c.setTable && c.setTable.value){
         const t=c.setTable.value;
         LS.setItem('tableNumber', t);
@@ -191,9 +190,17 @@
   function enterAppOnce(){
     if (entered) return;
     entered = true;
+
+    // Nếu đã có số bàn -> vào thẳng Start Order
+    const t = LS.getItem('tableNumber');
     hideOverlay();
-    show('select-table'); hide('start-screen'); hide('pos-container');
-    setTableText(LS.getItem('tableNumber') || '');
+    if (t) {
+      show('start-screen'); hide('select-table'); hide('pos-container');
+      setTableText(t);
+    } else {
+      show('select-table'); hide('start-screen'); hide('pos-container');
+    }
+
     try{
       assertFirebaseReady();
       startHeartbeat();
@@ -215,7 +222,7 @@
       const saved = LS.getItem('deviceCode');
 
       if (!saved) {
-        // ❗Không có deviceCode -> mở Gate thực sự
+        // Không có deviceCode -> Gate bắt buộc
         requireGate = true;
         showOverlay();
         return;
@@ -224,7 +231,6 @@
       // Có deviceCode -> kiểm tra/tự bind nếu cần rồi vào app
       const snap = await firebase.database().ref('codes/'+saved).once('value');
       if (!snap.exists()){
-        // mã local đã bị xóa trong DB -> bắt nhập lại
         requireGate = true;
         LS.removeItem('deviceCode');
         showOverlay('Mã đã bị xóa. Vui lòng nhập lại.');
@@ -244,18 +250,14 @@
         return;
       }
       if (!data.boundDeviceId) {
-        // Auto-bind nếu đang null
         await bindCodeToDevice(saved);
       }
 
-      // ✅ Không mở Gate trong case có deviceCode hợp lệ
       requireGate = false;
       enterAppOnce();
     }catch(e){
-      // Nếu đang yêu cầu qua Gate thì cứ hiển thị lỗi trên Gate
       if (requireGate) showOverlay(e?.message || 'Lỗi khởi động.');
       else {
-        // Mặc định: nếu chưa vào app → mở Gate; đã vào → chỉ log
         if (!entered) { requireGate = true; showOverlay(e?.message || 'Lỗi khởi động.'); }
         else console.error(e);
       }
