@@ -5,7 +5,7 @@
 
   let pressTimer = null;
   let visibleTimer = null;
-  const HOLD_TIME = 4000; // 4s để mở mật khẩu
+  const HOLD_TIME = 3000; // 4s để mở mật khẩu
   const SHOW_FEEDBACK = 1000; // 1s để hiện nút mờ
 
   // CSS feedback (mờ)
