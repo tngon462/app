@@ -15,6 +15,7 @@
       forceStartAfterReload: 'forceStartAfterReload',
       handledReloadAt: 'handledReloadAt',
       handledBroadcastAt: 'handledBroadcastAt',
+      handledUnbindAt: 'handledUnbindAt',        // ✅ NEW: chặn unbindAt lặp
     },
     // db paths
     paths: {
