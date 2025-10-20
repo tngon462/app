@@ -1,117 +1,103 @@
-<script>
-// assets/js/admin-devices.js (list-only to verify data pipe)
+// assets/js/admin-devices.js vFINAL
 (function(){
-  'use strict';
-  if (!window.firebase){ console.warn('[admin-devices] firebase undefined'); return; }
+  const nav=document.querySelector('aside nav');
+  const content=document.querySelector('main.content');
+  if(nav&&!document.getElementById('navDevices')){
+    const a=document.createElement('a');
+    a.id='navDevices'; a.href='#devices'; a.className='nav-link'; a.textContent='Thiết bị';
+    nav.appendChild(a);
+  }
+  if(content&&!document.getElementById('viewDevices')){
+    const s=document.createElement('section');
+    s.id='viewDevices'; s.className='p-4 md:p-6 hidden';
+    s.innerHTML=`
+      <h2 class="text-2xl font-bold mb-4">Thiết bị</h2>
+      <div class="flex gap-2 mb-4">
+        <button id="btnReloadAll" class="bg-blue-600 text-white px-3 py-2 rounded">Reload toàn bộ</button>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white border rounded-xl p-4">
+          <h3 class="font-semibold mb-2">Mã</h3>
+          <textarea id="codesInput" rows="3" class="border p-2 w-full mb-2" placeholder="Mỗi dòng 1 mã"></textarea>
+          <button id="btnAddCodes" class="bg-gray-800 text-white px-3 py-2 rounded mb-3">Thêm mã</button>
+          <div class="overflow-auto max-h-96 border rounded"><table class="min-w-full text-sm">
+            <thead class="bg-gray-100"><tr><th>Mã</th><th>Trạng thái</th><th>Thiết bị</th><th></th></tr></thead>
+            <tbody id="codesBody"></tbody></table></div>
+        </div>
+        <div class="bg-white border rounded-xl p-4">
+          <h3 class="font-semibold mb-2">Thiết bị iPad</h3>
+          <div class="overflow-auto max-h-96 border rounded"><table class="min-w-full text-sm">
+            <thead class="bg-gray-100"><tr><th>ID</th><th>Mã</th><th>Bàn</th><th></th></tr></thead>
+            <tbody id="devBody"></tbody></table></div>
+        </div>
+      </div>`;
+    content.appendChild(s);
+  }
 
-  // chờ tới khi auth ẩn danh xong (admin.html đã signInAnonymously)
-  function readyAuth(){
-    return new Promise(r=>{
-      if (firebase.auth().currentUser) return r();
-      const un = firebase.auth().onAuthStateChanged(()=>{ un(); r(); });
+  const db=firebase.database();
+  const codesBody=document.getElementById('codesBody');
+  const devBody=document.getElementById('devBody');
+
+  // render codes
+  db.ref('codes').on('value',s=>{
+    const data=s.val()||{}; codesBody.innerHTML='';
+    Object.entries(data).forEach(([code,v])=>{
+      const tr=document.createElement('tr'); tr.className='border-b';
+      const on=v.enabled!==false;
+      tr.innerHTML=`
+        <td>${code}</td>
+        <td>${on?'✅':'❌'}</td>
+        <td class="text-xs">${v.boundDeviceId||'-'}</td>
+        <td>
+          <button data-act="toggle" class="bg-gray-700 text-white text-xs px-2 py-1 rounded">${on?'Tắt':'Bật'}</button>
+          <button data-act="del" class="bg-red-600 text-white text-xs px-2 py-1 rounded">Xóa</button>
+        </td>`;
+      tr.querySelector('[data-act="toggle"]').onclick=()=> db.ref('codes/'+code+'/enabled').set(!on);
+      tr.querySelector('[data-act="del"]').onclick=()=> db.ref('codes/'+code).remove();
+      codesBody.appendChild(tr);
     });
-  }
+  });
 
-  function ensureTab(){
-    // thêm link & view nếu chưa có
-    const aside = document.querySelector('aside.drawer nav');
-    if (!aside) return null;
+  // render devices
+  db.ref('devices').on('value',s=>{
+    const data=s.val()||{}; devBody.innerHTML='';
+    Object.entries(data).forEach(([id,v])=>{
+      const tr=document.createElement('tr'); tr.className='border-b';
+      const t=v.stage==='select'?'—':(v.stage==='pos'?('+'+(v.table||'?')):(v.table||'-'));
+      tr.innerHTML=`
+        <td class="text-xs">${id}</td>
+        <td>${v.code||'-'}</td>
+        <td>${t}</td>
+        <td>
+          <button class="bg-blue-600 text-white text-xs px-2 py-1 rounded" data-act="reload">Làm mới</button>
+          <button class="bg-green-600 text-white text-xs px-2 py-1 rounded" data-act="set">Đổi bàn</button>
+          <button class="bg-amber-600 text-white text-xs px-2 py-1 rounded" data-act="unbind" ${v.code?'':'disabled'}>Gỡ</button>
+        </td>`;
+      tr.querySelector('[data-act="reload"]').onclick=()=> db.ref('devices/'+id+'/commands/reloadAt').set(firebase.database.ServerValue.TIMESTAMP);
+      tr.querySelector('[data-act="set"]').onclick=()=>{
+        const n=prompt('Nhập số bàn mới:'); if(!n) return;
+        db.ref('devices/'+id+'/commands/setTable').set({value:String(n),at:firebase.database.ServerValue.TIMESTAMP});
+        db.ref('devices/'+id+'/table').set(String(n));
+      };
+      tr.querySelector('[data-act="unbind"]').onclick=async()=>{
+        if(!confirm('Gỡ thiết bị này?'))return;
+        const code=v.code;
+        if(code) await db.ref('codes/'+code).transaction(c=>{if(c&&c.boundDeviceId===id)return{...c,boundDeviceId:null,boundAt:null};return c;});
+        db.ref('devices/'+id+'/commands/unbindAt').set(firebase.database.ServerValue.TIMESTAMP);
+        db.ref('devices/'+id).update({table:null});
+      };
+      devBody.appendChild(tr);
+    });
+  });
 
-    let navA = document.getElementById('navDevices');
-    if (!navA){
-      navA = document.createElement('a');
-      navA.id = 'navDevices';
-      navA.href = '#devices';
-      navA.className = 'nav-link';
-      navA.textContent = 'Thiết bị';
-      aside.appendChild(navA);
-    }
+  // add codes
+  document.getElementById('btnAddCodes').onclick=async()=>{
+    const raw=document.getElementById('codesInput').value.trim();
+    if(!raw)return alert('Dán danh sách mã');
+    const lines=raw.split(/\r?\n/).map(s=>s.trim().toUpperCase()).filter(Boolean);
+    const upd={}; lines.forEach(c=>upd['codes/'+c] = {enabled:true});
+    await db.ref().update(upd); alert('Đã thêm '+lines.length+' mã'); document.getElementById('codesInput').value='';
+  };
 
-    let view = document.getElementById('viewDevices');
-    if (!view){
-      view = document.createElement('section');
-      view.id = 'viewDevices';
-      view.className = 'p-4 md:p-6 hidden';
-      view.innerHTML = `
-        <h2 class="text-2xl font-bold text-gray-800 mb-4">Thiết bị (đọc từ /devices)</h2>
-        <div id="devError" class="hidden p-3 rounded-lg bg-red-50 text-red-700 text-sm mb-3"></div>
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-5">
-          <table class="min-w-full text-sm">
-            <thead class="bg-gray-100">
-              <tr>
-                <th class="px-2 py-1 text-left">Device ID</th>
-                <th class="px-2 py-1 text-left">Tên</th>
-                <th class="px-2 py-1 text-left">Mã</th>
-                <th class="px-2 py-1 text-left">Bàn</th>
-                <th class="px-2 py-1 text-left">Stage</th>
-                <th class="px-2 py-1 text-left">LastSeen</th>
-              </tr>
-            </thead>
-            <tbody id="devices-tbody"></tbody>
-          </table>
-        </div>`;
-      const main = document.querySelector('main.content');
-      main?.appendChild(view);
-
-      // hook router có sẵn của admin.html
-      const navScreen = document.getElementById('navScreen');
-      const navAds    = document.getElementById('navAds');
-      function setActive(hash) {
-        [navScreen, navAds, navA].forEach(a=>a?.classList.remove('active'));
-        document.getElementById('viewScreen')?.classList.add('hidden');
-        document.getElementById('viewAds')?.classList.add('hidden');
-        view.classList.add('hidden');
-        if (hash==='#devices'){ navA.classList.add('active'); view.classList.remove('hidden'); }
-        else if (hash==='#ads'){ navAds?.classList.add('active'); document.getElementById('viewAds')?.classList.remove('hidden'); }
-        else { navScreen?.classList.add('active'); document.getElementById('viewScreen')?.classList.remove('hidden'); }
-      }
-      window.addEventListener('hashchange', ()=> setActive(location.hash||'#screen'));
-      setActive(location.hash||'#screen');
-    }
-    return view;
-  }
-
-  function ts(x){ try{ return x? new Date(x).toLocaleString(): '—'; }catch(_){ return String(x||'—'); } }
-  function showErr(msg){ const el=document.getElementById('devError'); if(!el) return; el.textContent=msg||''; el.classList.toggle('hidden', !msg); }
-
-  (async function boot(){
-    try{
-      await readyAuth();
-      const view = ensureTab();
-      if (!view) return;
-
-      const tbody = document.getElementById('devices-tbody');
-      const db = firebase.database();
-
-      db.ref('devices').on('value', (snap)=>{
-        const data = snap.val() || {};
-        const rows = Object.entries(data).sort((a,b)=>(b[1]?.lastSeen||0)-(a[1]?.lastSeen||0));
-        tbody.innerHTML = '';
-        if (!rows.length){
-          const tr = document.createElement('tr');
-          tr.innerHTML = `<td colspan="6" class="px-2 py-3 text-center text-gray-500">Chưa có thiết bị nào ghi vào /devices</td>`;
-          tbody.appendChild(tr);
-          return;
-        }
-        rows.forEach(([id, v])=>{
-          const tr = document.createElement('tr');
-          tr.className = 'border-b last:border-0';
-          tr.innerHTML = `
-            <td class="px-2 py-1 text-xs break-all">${id}</td>
-            <td class="px-2 py-1">${v?.name||'—'}</td>
-            <td class="px-2 py-1 font-mono">${v?.code||'—'}</td>
-            <td class="px-2 py-1">${v?.inPOS ? ('+'+(v?.table||'—')) : (v?.table||'—')}</td>
-            <td class="px-2 py-1">${v?.stage||'—'}</td>
-            <td class="px-2 py-1 text-xs">${ts(v?.lastSeen)}</td>
-          `;
-          tbody.appendChild(tr);
-        });
-        showErr('');
-      }, (e)=> showErr('Lỗi đọc /devices: ' + (e?.message||e)));
-    }catch(e){
-      showErr('Lỗi khởi chạy: ' + (e?.message||e));
-    }
-  })();
-
+  document.getElementById('btnReloadAll').onclick=()=> db.ref('broadcast/reloadAt').set(firebase.database.ServerValue.TIMESTAMP);
 })();
-</script>
