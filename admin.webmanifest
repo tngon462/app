@@ -1,6 +1,6 @@
 {
-  "name": "T-NGON Admin",
-  "short_name": "Admin",
+  "name": "T-NGON Admin v2",
+  "short_name": "Admin v2",
   "start_url": "https://tngon462.github.io/app/admin.html",
   "scope": "https://tngon462.github.io/app/admin.html",
   "display": "standalone",
