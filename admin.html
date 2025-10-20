@@ -79,8 +79,9 @@
     <!-- Sidebar / Drawer -->
     <aside id="drawer" class="drawer">
       <nav class="p-3 space-y-1">
-        <a href="#screen" id="navScreen" class="nav-link">Tắt/Bật màn hình</a>
-        <a href="#ads" id="navAds" class="nav-link">Up ảnh quảng cáo</a>
+        <a href="#screen"  id="navScreen"  class="nav-link">Tắt/Bật màn hình</a>
+        <a href="#ads"     id="navAds"     class="nav-link">Up ảnh quảng cáo</a>
+        <a href="#devices" id="navDevices" class="nav-link">Thiết bị</a>
       </nav>
       <div class="p-3 text-xs text-gray-400 border-t">
         Phiên bản <span id="ver">—</span>
@@ -127,6 +128,67 @@
       <section id="viewAds" class="hidden">
         <iframe id="ads-iframe" src="about:blank" referrerpolicy="no-referrer"></iframe>
       </section>
+
+      <!-- View: Thiết bị -->
+      <section id="viewDevices" class="p-4 md:p-6 hidden">
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">Thiết bị iPad & Mã</h2>
+
+        <!-- Hàng nút nhanh -->
+        <div class="flex flex-wrap items-center gap-2 mb-4">
+          <button id="btnReloadAll" class="px-3 py-2 bg-blue-600 text-white rounded">Reload toàn bộ</button>
+          <span class="text-xs text-gray-500">• Dùng khi muốn tất cả iPad tải lại ngay</span>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Khối Codes -->
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-5">
+            <h3 class="text-lg font-semibold mb-3">Danh sách MÃ</h3>
+            <div class="grid grid-cols-1 gap-2 mb-3">
+              <textarea id="codesInput" rows="4" class="w-full p-2 border rounded" placeholder="Mỗi dòng 1 mã, ví dụ:
+A1B2C3
+X9Y8Z7
+T01
+T02"></textarea>
+              <div class="flex items-center gap-2">
+                <button id="btnAddCodes" class="px-3 py-2 bg-gray-800 text-white rounded">Thêm mã</button>
+                <span class="text-xs text-gray-500">• Mã mới mặc định bật (ON)</span>
+              </div>
+            </div>
+            <div class="overflow-auto max-h-96 border rounded">
+              <table class="min-w-full text-sm">
+                <thead class="bg-gray-100">
+                  <tr>
+                    <th class="px-2 py-1 text-left">Mã</th>
+                    <th class="px-2 py-1 text-left">Bật</th>
+                    <th class="px-2 py-1 text-left">Thiết bị</th>
+                    <th class="px-2 py-1 text-left">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="codesBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Khối Devices -->
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-5">
+            <h3 class="text-lg font-semibold mb-3">Thiết bị (iPad)</h3>
+            <div class="overflow-auto max-h-96 border rounded">
+              <table class="min-w-full text-sm">
+                <thead class="bg-gray-100">
+                  <tr>
+                    <th class="px-2 py-1 text-left">Device ID</th>
+                    <th class="px-2 py-1 text-left">Mã</th>
+                    <th class="px-2 py-1 text-left">Bàn</th>
+                    <th class="px-2 py-1 text-left">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="devBody"></tbody>
+              </table>
+            </div>
+            <div id="devError" class="mt-3 hidden p-3 rounded-lg bg-red-50 text-red-700 text-sm"></div>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -148,18 +210,23 @@
     };
 
     // ===== UI refs =====
-    const views = { screen: document.getElementById('viewScreen'), ads: document.getElementById('viewAds') };
-    const navScreen = document.getElementById('navScreen');
-    const navAds = document.getElementById('navAds');
-    const homeBtn = document.getElementById('homeBtn');
-    const connBadge = document.getElementById('connBadge');
-    const pwaBadge = document.getElementById('pwaBadge');
+    const views = {
+      screen:  document.getElementById('viewScreen'),
+      ads:     document.getElementById('viewAds'),
+      devices: document.getElementById('viewDevices')
+    };
+    const navScreen  = document.getElementById('navScreen');
+    const navAds     = document.getElementById('navAds');
+    const navDevices = document.getElementById('navDevices');
+    const homeBtn    = document.getElementById('homeBtn');
+    const connBadge  = document.getElementById('connBadge');
+    const pwaBadge   = document.getElementById('pwaBadge');
     const btnInstall = document.getElementById('btnInstall');
 
     const toggleEl = document.getElementById('screenToggle');
     const statusEl = document.getElementById('screenStatusText');
-    const btnOn = document.getElementById('btnOn');
-    const btnOff = document.getElementById('btnOff');
+    const btnOn    = document.getElementById('btnOn');
+    const btnOff   = document.getElementById('btnOff');
     const errorBox = document.getElementById('errorBox');
 
     // Drawer (mobile)
@@ -170,20 +237,21 @@
     function closeDrawer(){ drawer.classList.remove('open'); drawerMask.classList.remove('show'); }
     btnMenu.addEventListener('click', openDrawer);
     drawerMask.addEventListener('click', closeDrawer);
-    [navScreen, navAds].forEach(a => a.addEventListener('click', () => { if (window.innerWidth < 768) closeDrawer(); }));
+    [navScreen, navAds, navDevices].forEach(a => a.addEventListener('click', () => { if (window.innerWidth < 768) closeDrawer(); }));
 
     function showError(msg) { errorBox.textContent = msg||''; errorBox.classList.toggle('hidden', !msg); }
 
     function setActive(hash) {
-      [navScreen, navAds].forEach(a => a.classList.remove('active'));
-      if (hash === '#ads') navAds.classList.add('active'); else navScreen.classList.add('active');
+      [navScreen, navAds, navDevices].forEach(a => a.classList.remove('active'));
       Object.values(views).forEach(v => v.classList.add('hidden'));
       if (hash === '#ads') {
-        views.ads.classList.remove('hidden');
+        navAds.classList.add('active'); views.ads.classList.remove('hidden');
         const ifr = document.getElementById('ads-iframe');
         if (!ifr.src || ifr.src === 'about:blank') ifr.src = 'https://pic-flame.vercel.app/';
+      } else if (hash === '#devices') {
+        navDevices.classList.add('active'); views.devices.classList.remove('hidden');
       } else {
-        views.screen.classList.remove('hidden');
+        navScreen.classList.add('active'); views.screen.classList.remove('hidden');
       }
     }
     function route() { setActive(location.hash || '#screen'); }
@@ -277,7 +345,6 @@
         const tableRefs = {};
         const tableStates = {};
 
-        // Card mỗi bàn: công tắc + nút "Làm mới" NẰM DƯỚI công tắc
         function makeTableTile(i, onToggle, onRefresh) {
           const card = document.createElement('div');
           card.className = 'bg-white rounded-xl shadow-sm border border-gray-200 p-3 flex flex-col';
@@ -391,119 +458,8 @@
       }
     })();
   </script>
-  // assets/js/device-bind.js vFINAL
-(function(){
-  'use strict';
-  const LS = localStorage;
-  const $ = (id)=>document.getElementById(id);
-  const gotoSelect = window.gotoSelect || (()=>{});
-  const gotoStart  = window.gotoStart  || (()=>{});
-  const gotoPos    = window.gotoPos    || (()=>{});
 
-  function uuid(){return'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);});}
-  let deviceId = LS.getItem('deviceId') || uuid(); LS.setItem('deviceId',deviceId);
-
-  const db = firebase.database();
-
-  // ===== GATE =====
-  function showGate(msg){
-    if($('code-gate')){ const e=$('code-error'); if(e&&msg)e.textContent=msg; return; }
-    const w=document.createElement('div');
-    w.id='code-gate';
-    w.style='position:fixed;inset:0;z-index:9999;background:#fff;';
-    w.innerHTML=`
-    <div class="w-full h-full flex items-center justify-center p-6">
-      <div class="max-w-sm w-full bg-white border rounded-2xl shadow p-6">
-        <h1 class="text-2xl font-bold mb-4 text-center">Nhập mã iPad</h1>
-        <input id="code-input" class="w-full border rounded px-4 py-3 text-center font-mono text-lg" placeholder="VD: A1B2C3" />
-        <div id="code-error" class="text-center text-red-600 text-sm mt-2 h-5"></div>
-        <button id="code-submit" class="mt-4 w-full py-3 bg-blue-600 text-white rounded-xl font-bold">XÁC NHẬN</button>
-      </div>
-    </div>`;
-    document.body.appendChild(w);
-    const input=$('code-input'),btn=$('code-submit'),err=$('code-error');
-    btn.onclick=async ()=>{
-      const code=(input.value||'').trim().toUpperCase();
-      if(!code){ err.textContent='Nhập mã'; return; }
-      try{ await claim(code); w.remove(); enterApp(); }
-      catch(e){ err.textContent=e?.message||'Mã không khả dụng'; }
-    };
-    input.addEventListener('keydown',e=>{if(e.key==='Enter')btn.click();});
-    setTimeout(()=>input.focus(),50);
-  }
-
-  // ===== CLAIM =====
-  async function claim(code){
-    const ref=db.ref('codes/'+code);
-    const res=await ref.transaction(cur=>{
-      if(!cur) return cur;
-      if(cur.enabled===false) return;
-      if(cur.boundDeviceId && cur.boundDeviceId!==deviceId) return;
-      return {...cur,boundDeviceId:deviceId,boundAt:firebase.database.ServerValue.TIMESTAMP};
-    });
-    if(!res.committed) throw new Error('Mã đã dùng hoặc không tồn tại');
-    await db.ref('devices/'+deviceId).update({code,lastSeen:firebase.database.ServerValue.TIMESTAMP});
-    LS.setItem('deviceCode',code);
-    watchCode(code);
-  }
-
-  async function beat(){
-    const code=LS.getItem('deviceCode')||null;
-    const stage=LS.getItem('appState')||'select';
-    const table=LS.getItem('tableId')||null;
-    await db.ref('devices/'+deviceId).update({
-      code,table,stage,inPOS:stage==='pos',
-      lastSeen:firebase.database.ServerValue.TIMESTAMP
-    });
-  }
-
-  function listenCmd(){
-    const ref=db.ref('devices/'+deviceId+'/commands');
-    ref.on('value',s=>{
-      const c=s.val()||{};
-      if(c.reloadAt){ LS.setItem('forceStartAfterReload','1'); location.reload(); return; }
-      if(c.setTable&&c.setTable.value){
-        const t=String(c.setTable.value);
-        LS.setItem('tableId',t);
-        gotoStart();
-        db.ref('devices/'+deviceId).update({table:t});
-        ref.child('setTable').remove();
-      }
-      if(c.unbindAt){
-        LS.clear(); LS.setItem('deviceId',deviceId);
-        showGate('Mã đã bị thu hồi.');
-      }
-    });
-  }
-
-  function watchCode(code){
-    const ref=db.ref('codes/'+code);
-    ref.on('value',s=>{
-      const v=s.val(); if(!v||v.enabled===false||v.boundDeviceId!==deviceId){
-        LS.clear(); LS.setItem('deviceId',deviceId);
-        showGate('Mã bị tắt hoặc chuyển máy khác.');
-      }
-    });
-  }
-
-  function enterApp(){
-    if(LS.getItem('forceStartAfterReload')==='1'){ LS.removeItem('forceStartAfterReload'); gotoStart(); }
-    listenCmd(); beat();
-  }
-
-  document.addEventListener('DOMContentLoaded',async()=>{
-    const code=LS.getItem('deviceCode');
-    if(!code){ showGate(); return; }
-    const v=(await db.ref('codes/'+code).once('value')).val();
-    if(!v||v.enabled===false||v.boundDeviceId&&v.boundDeviceId!==deviceId){
-      LS.clear(); LS.setItem('deviceId',deviceId); showGate(); return;
-    }
-    watchCode(code); enterApp();
-    setInterval(()=>beat(),20000);
-  });
-})();
-  <script src="./assets/js/admin-devices.js?v=final"></script
-<tbody id="codesBody"></tbody>
-<tbody id="devBody"></tbody>
+  <!-- Tab Thiết bị (logic) -->
+  <script src="./assets/js/admin-devices.js?v=final"></script>
 </body>
 </html>
