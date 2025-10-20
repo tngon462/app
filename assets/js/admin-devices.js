@@ -1,21 +1,22 @@
 // assets/js/admin-devices.js
-// Quản lý MÃ & Thiết bị (giữ UI/ID theo admin.html hiện tại)
+// Quản lý MÃ & Thiết bị (nâng cấp, vẫn giữ UI cũ)
 // - Codes: Thêm mã, Bật/Tắt, Xóa (xóa/tắt -> app đang dùng sẽ bị out)
-// - Devices: Reload, Đổi số bàn (popup lưới), Gỡ liên kết
-// - Popup chọn bàn lấy từ links.json (giống màn chọn bàn của app)
+// - Hàng đợi mã: hiển thị mã chưa sử dụng
+// - Devices: Reload, Đổi số bàn (popup lưới), Gỡ liên kết (xác nhận đúng mã), Đặt tên máy, Xoá device nếu không gắn mã
+// - Hiển thị DeviceID rút gọn (4 ký tự đầu). Nhấn để bật/tắt full.
 
 (function(){
   'use strict';
 
   // ---- DOM refs (khớp admin.html hiện tại) ----
-  const elCodesBody   = document.getElementById('codesBody');
-  const elDevBody     = document.getElementById('devBody');
-  const elBtnReloadAll= document.getElementById('btnReloadAll');
+  const elCodesBody    = document.getElementById('codesBody');
+  const elDevBody      = document.getElementById('devBody');
+  const elBtnReloadAll = document.getElementById('btnReloadAll');
 
-  const elCodesInput  = document.getElementById('codesInput');
-  const elBtnAddCodes = document.getElementById('btnAddCodes');
+  const elCodesInput   = document.getElementById('codesInput');
+  const elBtnAddCodes  = document.getElementById('btnAddCodes');
 
-  const elDevError    = document.getElementById('devError');
+  const elDevError     = document.getElementById('devError');
 
   // ---- Guard firebase ----
   if (!window.firebase || !firebase.apps?.length) {
@@ -27,6 +28,44 @@
   // ---- Utils ----
   const showDevError = (msg)=>{ if(!elDevError) return; elDevError.textContent = msg||''; elDevError.classList.toggle('hidden', !msg); };
   const tsStr = (ts)=> { try{ return ts? new Date(ts).toLocaleString(): '—'; }catch{ return String(ts||'—'); } };
+  const sleep = (ms)=> new Promise(r=>setTimeout(r, ms));
+
+  // ---- Khu "Hàng đợi mã" (tự tạo nếu chưa có) ----
+  // Sẽ chèn 1 ô nhỏ phía TRÊN bảng mã hiện tại
+  let elQueueWrap = document.getElementById('codesQueueWrap');
+  let elQueueList = document.getElementById('codesQueue');
+  let elQueueCount = document.getElementById('codesQueueCount');
+
+  (function ensureQueueBox(){
+    if (elQueueWrap && elQueueList) return;
+    if (!elCodesBody) return; // không có bảng codes để neo
+    const tableElm = elCodesBody.closest('table') || elCodesBody.parentElement;
+    const anchor = tableElm ? tableElm : elCodesBody;
+
+    const box = document.createElement('div');
+    box.id = 'codesQueueWrap';
+    box.className = 'mb-3 p-3 rounded-lg border border-emerald-200 bg-emerald-50';
+    box.innerHTML = `
+      <div class="flex items-center justify-between mb-2">
+        <div class="font-semibold text-emerald-800">
+          Hàng đợi mã khả dụng <span id="codesQueueCount" class="text-emerald-600">(0)</span>
+        </div>
+        <button id="btnCopyQueue" class="px-2 py-1 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-700">Copy tất cả</button>
+      </div>
+      <div id="codesQueue" class="flex flex-wrap gap-2 text-sm"></div>
+    `;
+    anchor.parentNode.insertBefore(box, anchor);
+    elQueueWrap = document.getElementById('codesQueueWrap');
+    elQueueList = document.getElementById('codesQueue');
+    elQueueCount= document.getElementById('codesQueueCount');
+
+    const btnCopy = document.getElementById('btnCopyQueue');
+    btnCopy?.addEventListener('click', ()=>{
+      const items = Array.from(elQueueList.querySelectorAll('[data-code]')).map(x=>x.dataset.code);
+      if (!items.length) return alert('Không có mã nào trong hàng đợi.');
+      navigator.clipboard.writeText(items.join('\n')).then(()=> alert('Đã copy danh sách mã khả dụng.'));
+    });
+  })();
 
   // ---- Tải links.json để build lưới bàn ----
   let LINKS_MAP = null;
@@ -49,7 +88,7 @@
     const keys = LINKS_MAP ? Object.keys(LINKS_MAP).sort((a,b)=>Number(a)-Number(b)) : Array.from({length:15},(_,i)=>String(i+1));
 
     const wrap = document.createElement('div');
-    wrap.className = 'fixed inset-0 z-[6000] bg-black/50 flex items-center justify-center p-4';
+    wrap.className = 'fixed inset-0 z-[7000] bg-black/50 flex items-center justify-center p-4';
     wrap.innerHTML = `
       <div class="bg-white rounded-xl shadow-lg w-full max-w-xl p-4">
         <div class="flex items-center justify-between mb-3">
@@ -75,9 +114,30 @@
   }
 
   // ===================== CODES =====================
+  function renderQueueFromCodes(allCodes){
+    if (!elQueueWrap || !elQueueList) return;
+    const entries = Object.entries(allCodes||{});
+    const avail = entries
+      .filter(([_,v])=> v && v.enabled!==false && !v.boundDeviceId)
+      .map(([k,_])=>k)
+      .sort((a,b)=> a.localeCompare(b));
+    elQueueList.innerHTML = '';
+    avail.forEach(code=>{
+      const pill = document.createElement('span');
+      pill.className = 'px-2 py-1 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300';
+      pill.textContent = code;
+      pill.dataset.code = code;
+      elQueueList.appendChild(pill);
+    });
+    if (elQueueCount) elQueueCount.textContent = `(${avail.length})`;
+    elQueueWrap.classList.toggle('hidden', avail.length===0);
+  }
+
   function renderCodes(codes){
     if (!elCodesBody) return;
     elCodesBody.innerHTML = '';
+    renderQueueFromCodes(codes);
+
     const entries = Object.entries(codes||{}).sort(([a],[b])=> a.localeCompare(b));
 
     for (const [code, data] of entries){
@@ -154,23 +214,45 @@
   }
 
   // ===================== DEVICES =====================
+  function maskId(id){
+    if (!id) return '—';
+    if (id.length <= 4) return id;
+    return id.slice(0,4) + '…';
+  }
+
   function renderDevices(devices){
     if (!elDevBody) return;
     elDevBody.innerHTML = '';
     const entries = Object.entries(devices||{}).sort((a,b)=> (b[1]?.lastSeen||0) - (a[1]?.lastSeen||0));
 
     for (const [id, data] of entries){
-      const code  = data?.code  || '';
+      const code   = data?.code  || '';
+      const name   = data?.name  || '';
+      const stage  = data?.stage || 'select';
+      const table  = data?.table || '';
+
       // hiển thị bàn theo quy ước: '-' khi select, số khi start, '+số' khi đang trong POS
       let tableDisp = '—';
-      if (data?.stage === 'select') tableDisp = '—';
-      else if (data?.stage === 'start') tableDisp = data?.table || '—';
-      else if (data?.stage === 'pos') tableDisp = data?.table ? ('+'+data.table) : '+?';
+      if (stage === 'select') tableDisp = '—';
+      else if (stage === 'start') tableDisp = table || '—';
+      else if (stage === 'pos') tableDisp = table ? ('+'+table) : '+?';
+
+      const canDeleteDevice = !code; // chỉ xoá khi không gắn mã
+      const idMasked = maskId(id);
 
       const tr = document.createElement('tr');
       tr.className = 'border-b last:border-0';
       tr.innerHTML = `
-        <td class="px-2 py-1 text-xs break-all">${id}</td>
+        <td class="px-2 py-1 text-xs">
+          <div class="flex items-center gap-2">
+            <span class="font-mono" data-role="devId" data-full="${id}">${idMasked}</span>
+            <button class="px-2 py-0.5 text-[11px] rounded border hover:bg-gray-50" data-act="toggleId">Hiện</button>
+          </div>
+          <div class="text-[11px] text-gray-500 mt-1">
+            Tên: <span data-role="devName">${name || '(chưa đặt)'}</span>
+            <button class="ml-1 px-2 py-0.5 text-[11px] rounded border hover:bg-gray-50" data-act="setName">Đặt tên</button>
+          </div>
+        </td>
         <td class="px-2 py-1 font-mono">${code || '—'}</td>
         <td class="px-2 py-1">${tableDisp}</td>
         <td class="px-2 py-1">
@@ -178,18 +260,39 @@
             <button class="px-2 py-1 text-xs rounded bg-blue-600 text-white hover:bg-blue-700"   data-act="reload">Làm mới</button>
             <button class="px-2 py-1 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-700" data-act="settable">Đổi số bàn</button>
             <button class="px-2 py-1 text-xs rounded bg-amber-600 text-white hover:bg-amber-700"   data-act="unbind" ${code?'':'disabled'}>Gỡ liên kết</button>
+            <button class="px-2 py-1 text-xs rounded ${canDeleteDevice?'bg-gray-200 hover:bg-gray-300':'bg-gray-100 opacity-50 cursor-not-allowed'}" data-act="delDevice" ${canDeleteDevice?'':'disabled'}>Xoá device</button>
           </div>
         </td>
       `;
 
-      // Reload: chỉ gửi reloadAt (client sẽ về Start Order nếu có bàn, còn không vẫn ở Select)
+      // Toggle show/hide full ID
+      tr.querySelector('[data-act="toggleId"]').addEventListener('click', ()=>{
+        const el = tr.querySelector('[data-role="devId"]');
+        if (!el) return;
+        if (el.textContent === idMasked) { el.textContent = id; tr.querySelector('[data-act="toggleId"]').textContent = 'Ẩn'; }
+        else { el.textContent = idMasked; tr.querySelector('[data-act="toggleId"]').textContent = 'Hiện'; }
+      });
+
+      // Đặt tên
+      tr.querySelector('[data-act="setName"]').addEventListener('click', async ()=>{
+        const current = name || '';
+        const v = prompt('Nhập tên máy (để trống để xoá):', current);
+        if (v === null) return;
+        try{
+          const newName = String(v).trim();
+          if (newName) await db.ref(`devices/${id}/name`).set(newName);
+          else await db.ref(`devices/${id}/name`).remove();
+        }catch(e){ showDevError('Đặt tên lỗi: '+(e?.message||e)); }
+      });
+
+      // Reload: chỉ gửi reloadAt
       tr.querySelector('[data-act="reload"]').addEventListener('click', async ()=>{
         try{
           await db.ref(`devices/${id}/commands/reloadAt`).set(firebase.database.ServerValue.TIMESTAMP);
         }catch(e){ showDevError('Gửi reload lỗi: '+(e?.message||e)); }
       });
 
-      // Đổi số bàn: hiện popup lưới giống app → gửi setTable
+      // Đổi số bàn: popup lưới → gửi setTable
       tr.querySelector('[data-act="settable"]').addEventListener('click', ()=>{
         openTablePicker(async (tableLabel)=>{
           try{
@@ -197,16 +300,21 @@
               value: tableLabel,
               at: firebase.database.ServerValue.TIMESTAMP
             });
-            // cập nhật hiển thị nhanh cho admin
+            // cập nhật hiển thị nhanh
             await db.ref(`devices/${id}`).update({ table: tableLabel, stage: 'start' });
           }catch(e){ showDevError('Đổi số bàn lỗi: '+(e?.message||e)); }
         });
       });
 
-      // Gỡ liên kết: thu hồi code + đẩy unbind xuống máy
+      // Gỡ liên kết (có xác nhận code)
       tr.querySelector('[data-act="unbind"]').addEventListener('click', async ()=>{
         if (!code) return alert('Thiết bị chưa gắn mã.');
-        if (!confirm(`Gỡ liên kết thiết bị này và thu hồi mã ${code}?`)) return;
+        const verify = prompt(`Nhập lại MÃ đang gắn để gỡ liên kết (mã hiện tại: ${code}):`);
+        if (verify === null) return;
+        if (String(verify).trim().toUpperCase() !== String(code).toUpperCase()){
+          alert('Mã xác nhận không khớp. Hủy thao tác.');
+          return;
+        }
         try{
           // nếu codes/<code> đang bound đúng id → gỡ
           await db.ref('codes/'+code).transaction(cur=>{
@@ -221,6 +329,15 @@
           // dọn hiển thị
           await db.ref(`devices/${id}`).update({ code:null, table:null, stage:'select' });
         }catch(e){ showDevError('Gỡ liên kết lỗi: '+(e?.message||e)); }
+      });
+
+      // Xoá device (chỉ khi không gắn mã)
+      tr.querySelector('[data-act="delDevice"]').addEventListener('click', async ()=>{
+        if (!canDeleteDevice) return;
+        if (!confirm('Xoá thiết bị khỏi danh sách? (Chỉ xoá node devices, không ảnh hưởng codes)')) return;
+        try{
+          await db.ref(`devices/${id}`).remove();
+        }catch(e){ showDevError('Xoá device lỗi: '+(e?.message||e)); }
       });
 
       elDevBody.appendChild(tr);
