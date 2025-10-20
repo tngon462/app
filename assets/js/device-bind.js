@@ -1,4 +1,4 @@
-<script>
+
 /**
  * device-bind.js
  * - Gate nhập mã lần đầu
@@ -234,4 +234,4 @@
     window.addEventListener('storage', (e)=>{ if (e.key==='appState' || e.key==='tableId') heartbeat().catch(()=>{}); });
   });
 })();
-</script>
+
