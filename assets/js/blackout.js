@@ -1,10 +1,11 @@
-// assets/js/blackout.js (code-based screen control)
-// Ưu tiên: global control/screen -> per-code control/codes/{CODE}/screen
+// assets/js/blackout.js
+// Điều khiển “màn đen” theo GLOBAL + THEO BÀN (tableId hiện tại của iPad)
+// Ưu tiên: control/screen == 'off'  || control/tables/{tableId}/screen == 'off'  => phủ đen
+
 (function(){
   'use strict';
 
   const LS = localStorage;
-  let db = null;
 
   // ===== Overlay đen =====
   let overlay = null;
@@ -14,8 +15,7 @@
     overlay.id = 'tn-blackout';
     overlay.style.cssText = `
       position:fixed; inset:0; z-index:9999;
-      background:#000; opacity:1; display:none;
-      touch-action:none;`;
+      background:#000; opacity:1; display:none; touch-action:none;`;
     document.body.appendChild(overlay);
     return overlay;
   }
@@ -27,22 +27,25 @@
     if (!window.firebase || !firebase.apps?.length) return null;
     return firebase.database();
   }
+  let db = null;
 
-  // ===== Subscribe logic =====
-  let unSubGlobal = null;
-  let unSubCode   = null;
-  let currentCode = null;
-  let globalState = 'on';   // 'on' | 'off'
-  let codeState   = null;   // 'on' | 'off' | null
+  // ===== Trạng thái hiện tại =====
+  let globalState = 'on';     // 'on' | 'off'
+  let tableState  = null;     // 'on' | 'off' | null (null = chưa đặt riêng)
+  let currentTableId = null;
 
   function apply(){
-    // Nếu global off hoặc code off => đen
-    const off = (String(globalState||'on') === 'off') || (String(codeState||'on') === 'off');
+    const off = (String(globalState||'on') === 'off') || (String(tableState||'on') === 'off');
     if (off) showBlack(); else hideBlack();
   }
 
+  // ===== Subscribe GLOBAL =====
+  let unSubGlobal = null;
   function subGlobal(){
     if (!db) return;
+    if (unSubGlobal) { try{ unSubGlobal(); }catch(_){}
+      unSubGlobal = null;
+    }
     const ref = db.ref('control/screen');
     const cb = ref.on('value', s=>{
       globalState = s.exists() ? String(s.val()||'on') : 'on';
@@ -51,31 +54,48 @@
     unSubGlobal = ()=> ref.off('value', cb);
   }
 
-  function subCode(code){
-    if (unSubCode) { try{ unSubCode(); }catch(_){} unSubCode=null; }
-    codeState = null;
-    if (!db || !code) { apply(); return; }
-    const ref = db.ref('control/codes/'+code+'/screen');
+  // ===== Subscribe THEO BÀN =====
+  let unSubTable = null;
+  function readTableId(){
+    // redirect-core.js / device-bind đã lưu tableId vào localStorage
+    const t = LS.getItem('tableId');
+    return t && String(t).trim() ? String(t).trim() : null;
+  }
+  function subTable(tableId){
+    if (unSubTable){ try{ unSubTable(); }catch(_){}
+      unSubTable = null;
+    }
+    tableState = null; // reset
+    if (!db || !tableId){ apply(); return; }
+
+    const ref = db.ref('control/tables/'+tableId+'/screen');
     const cb = ref.on('value', s=>{
-      codeState = s.exists() ? String(s.val()||'on') : null; // null = không đặt riêng theo mã
+      tableState = s.exists() ? String(s.val()||'on') : null;
       apply();
     });
-    unSubCode = ()=> ref.off('value', cb);
+    unSubTable = ()=> ref.off('value', cb);
   }
 
-  function readCurrentCode(){
-    return LS.getItem('deviceCode') || null;
-  }
-
-  // Khi đổi code (unbind/bind) từ device-bind → re-sub
-  window.addEventListener('storage', (e)=>{
-    if (e.key === 'deviceCode'){
-      const newCode = readCurrentCode();
-      if (newCode !== currentCode){
-        currentCode = newCode;
-        subCode(currentCode);
-      }
+  // ===== Theo dõi đổi bàn =====
+  function resubIfTableChanged(){
+    const t = readTableId();
+    if (t !== currentTableId){
+      currentTableId = t;
+      subTable(currentTableId);
     }
+  }
+
+  // Nghe thay đổi localStorage từ cùng tab/app
+  window.addEventListener('storage', (e)=>{
+    if (e.key === 'tableId' || e.key === 'appState'){
+      resubIfTableChanged();
+    }
+  });
+
+  // Một số code phía client có phát sự kiện tuỳ chỉnh khi admin “Đổi số bàn”
+  // (bind-commands.js có thể dispatch 'tngon:tableChanged'), nghe luôn cho chắc:
+  window.addEventListener('tngon:tableChanged', ()=>{
+    resubIfTableChanged();
   });
 
   // ===== Boot =====
@@ -86,9 +106,10 @@
     // Global
     subGlobal();
 
-    // Per-code
-    currentCode = readCurrentCode();
-    subCode(currentCode);
-    apply(); // initial
+    // Theo bàn hiện tại (nếu chưa chọn bàn -> chỉ theo global)
+    currentTableId = readTableId();
+    subTable(currentTableId);
+
+    apply();
   });
 })();
