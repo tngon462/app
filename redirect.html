@@ -127,31 +127,31 @@
   <!-- Nút bí mật (trái) -->
   <button id="back-btn-start" class="secret-btn" aria-label="hidden-back-start">◀</button>
 
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js?v1"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js?v1"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js?v1"></script>
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js?v=1"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js?v=1"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js?v=1"></script>
 
-  <!-- Config/init Firebase -->
-  <script src="./assets/js/firebase.js?v=5"></script>
+<!-- Config/init Firebase: PHẢI cùng cấu hình với admin -->
+<script src="./assets/js/firebase.js?v=5"></script>
 
-  <!-- Core   <script src="./assets/js/redirect-core.js?v=6.2"></script>  -->
+<!-- Luồng UI cũ (bắt buộc bật lại; cung cấp gotoSelect/gotoStart/gotoPos) -->
+<script src="./assets/js/redirect-core.js?v=6.2"></script>
 
-  <!-- Bootstrap cuối -->
-<script src="./assets/js/device-bind.js"></script>
-
-  <script src="./assets/js/bind-config.js"></script>
+<!-- Khối bind: các module con trước, bootstrap sau cùng -->
+<script src="./assets/js/bind-config.js"></script>
 <script src="./assets/js/bind-gate.js"></script>
-<script src="./assets/js/bind-core.js"></script>
 <script src="./assets/js/bind-claim.js"></script>
 <script src="./assets/js/bind-heartbeat.js"></script>
 <script src="./assets/js/bind-commands.js"></script>
 
-  
-  <!-- Các file phụ -->
-  <script src="./assets/js/blackout.js?v=2"></script>
-  <script src="./assets/js/nosleep.js?v=2"></script>
-  
+<!-- Bootstrap cuối cùng để chạy mọi thứ (phụ thuộc các file trên) -->
+<script src="./assets/js/device-bind.js?v=1"></script>
+
+<!-- Phụ trợ khác (không ảnh hưởng thứ tự trên) -->
+<script src="./assets/js/blackout.js?v=2"></script>
+<script src="./assets/js/nosleep.js?v=2"></script>
+<!-- <script src="./assets/js/sw-register.js?v=3"></script>  (bật lại khi cần) -->
   
   <!-- Chặn pinch-zoom/double-tap  <script src="./assets/js/sw-register.js?v=3"></script>
      -->
