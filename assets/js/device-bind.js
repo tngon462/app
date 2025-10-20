@@ -8,7 +8,17 @@
 
 (function(){
   'use strict';
+// === Seen markers để chống lặp lệnh
+let seenReloadAt   = Number(localStorage.getItem('cmdSeen:reload'))   || 0;
+let seenUnbindAt   = Number(localStorage.getItem('cmdSeen:unbind'))   || 0;
+let seenSetTableAt = Number(localStorage.getItem('cmdSeen:setTable')) || 0;
 
+function markSeen(key, ts){
+  if (!ts) return;
+  if (key==='reload'){ seenReloadAt = ts; localStorage.setItem('cmdSeen:reload', String(ts)); }
+  if (key==='unbind'){ seenUnbindAt = ts; localStorage.setItem('cmdSeen:unbind', String(ts)); }
+  if (key==='setTable'){ seenSetTableAt = ts; localStorage.setItem('cmdSeen:setTable', String(ts)); }
+}
   // ===== Helpers =====
   const LS = window.localStorage;
   const $  = (id)=> document.getElementById(id);
@@ -175,56 +185,76 @@
   }
 
   // ===== Nghe lệnh admin (nghe ngay từ boot) =====
-  function startCommandListener(){
-    if (window.__tngon_cmd_listening) return; // tránh gắn 2 lần
-    window.__tngon_cmd_listening = true;
+ function startCommandListener(){
+  if (window.__tngon_cmd_listening) return;
+  window.__tngon_cmd_listening = true;
 
-    const cmdRef = db.ref('devices/'+deviceId+'/commands');
-    cmdRef.on('value', (snap)=>{
-      const c = snap.val() || {};
+  const cmdRef = db.ref('devices/'+deviceId+'/commands');
 
-      // 1) Reload
-      if (c.reloadAt){
-        try{ LS.setItem('forceStartAfterReload','1'); }catch(_){}
-        location.reload();
-        return;
-      }
+  cmdRef.on('value', (snap)=>{
+    const c = snap.val() || {};
 
-      // 2) Set table (không reload)
-      if (c.setTable && c.setTable.value){
+    // --- Reload ---
+    const rTs = Number(c.reloadAt || 0);
+    if (rTs && rTs > seenReloadAt){
+      console.log('[bind] command: reloadAt', rTs);
+      markSeen('reload', rTs);
+      try{ localStorage.setItem('forceStartAfterReload','1'); }catch(_){}
+      // KHÔNG xoá lệnh: admin có thể xem lịch sử; client đã đánh dấu seen
+      location.reload();
+      return;
+    }
+
+    // --- Set Table ---
+    const hasSet = c.setTable && (c.setTable.value!=null) && (c.setTable.at!=null);
+    if (hasSet){
+      const sTs = Number(c.setTable.at || 0);
+      if (sTs > seenSetTableAt){
         const t = String(c.setTable.value);
+        console.log('[bind] command: setTable', { at:sTs, value:t });
+        markSeen('setTable', sTs);
+
+        // map link
         const url = getLinkForTable(t) || tableUrl() || '';
         setTableLocal(t, url);
-        // cho redirect-core biết (nếu nó lắng nghe)
+        // cho UI biết (nếu có listener)
         window.dispatchEvent(new CustomEvent('tngon:tableChanged', { detail:{ table:t, url } }));
-        // về Start
+        // chuyển về Start (không reload)
         gotoStart();
         // cập nhật nhanh cho admin
         db.ref('devices/'+deviceId).update({ table: t || null }).catch(()=>{});
-        // dọn lệnh
+        // KHÔNG bắt buộc xoá lệnh, nhưng có thể dọn để admin đẩy lại cùng bàn
         cmdRef.child('setTable').remove().catch(()=>{});
       }
+    }
 
-      // 3) Unbind
-      if (c.unbindAt){
-        const code = LS.getItem('deviceCode');
-        LS.removeItem('deviceCode');
-        setTableLocal(null, null);
-        LS.removeItem('appState');
-        db.ref('devices/'+deviceId).update({ code:null, table:null, stage:'select', inPOS:false }).catch(()=>{});
-        // Mở gate ngay (không reload)
-        showGate('Mã đã bị thu hồi. Vui lòng nhập mã khác.');
-      }
-    });
+    // --- Unbind ---
+    const uTs = Number(c.unbindAt || 0);
+    if (uTs && uTs > seenUnbindAt){
+      console.log('[bind] command: unbindAt', uTs);
+      markSeen('unbind', uTs);
 
-    // Broadcast reload toàn quán
-    db.ref('broadcast/reloadAt').on('value', s=>{
-      if (s.val()){
-        try{ LS.setItem('forceStartAfterReload','1'); }catch(_){}
-        location.reload();
-      }
-    });
-  }
+      const code = localStorage.getItem('deviceCode');
+      localStorage.removeItem('deviceCode');
+      setTableLocal(null, null);
+      localStorage.removeItem('appState');
+      db.ref('devices/'+deviceId).update({ code:null, table:null, stage:'select', inPOS:false }).catch(()=>{});
+      // mở gate ngay (không reload) để nhập lại
+      showGate('Mã đã bị thu hồi. Vui lòng nhập mã khác.');
+    }
+  });
+
+  // Broadcast reload toàn quán – cũng chống lặp
+  db.ref('broadcast/reloadAt').on('value', s=>{
+    const ts = Number(s.val() || 0);
+    if (ts && ts > seenReloadAt){
+      console.log('[bind] broadcast reloadAt', ts);
+      markSeen('reload', ts);
+      try{ localStorage.setItem('forceStartAfterReload','1'); }catch(_){}
+      location.reload();
+    }
+  });
+}
 
   // ===== BOOT =====
   document.addEventListener('DOMContentLoaded', async ()=>{
