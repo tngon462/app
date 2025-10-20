@@ -141,20 +141,24 @@
 <!-- Luồng UI cũ (bắt buộc bật lại; cung cấp gotoSelect/gotoStart/gotoPos) -->
 <script src="./assets/js/redirect-core.js?v=6.2d"></script>
 
-<!-- Khối bind: các module con trước, bootstrap sau cùng -->
-<script src="./assets/js/bind-config.js"></script>
-<script src="./assets/js/bind-gate.js"></script>
-<script src="./assets/js/bind-claim.js"></script>
-<script src="./assets/js/bind-heartbeat.js"></script>
-<script src="./assets/js/bind-commands.js"></script>
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js?v=1"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js?v=1"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js?v=1"></script>
 
-<!-- Bootstrap cuối cùng để chạy mọi thứ (phụ thuộc các file trên) -->
-<script src="./assets/js/device-bind.js?v=2"></script>
+  <!-- Config/init Firebase -->
+  <script src="./assets/js/firebase.js?v=5"></script>
 
-<!-- Phụ trợ khác (không ảnh hưởng thứ tự trên) -->
-<script src="./assets/js/blackout.js?v=2"></script>
-<script src="./assets/js/nosleep.js?v=2"></script>
-<!-- <script src="./assets/js/sw-register.js?v=3"></script>  (bật lại khi cần) -->
+  <!-- Core (bản sếp đang dùng, đã load links.json OK) -->
+  <script src="./assets/js/redirect-core.js?v=6.2d"></script>
+
+  <!-- BIND: chỉ 1 file, đảm bảo file này TỒN TẠI đúng đường dẫn -->
+  <script src="./assets/js/device-bind.js?v=2"></script>
+
+  <!-- Các file phụ -->
+  <script src="./assets/js/blackout.js?v=2"></script>
+  <script src="./assets/js/nosleep.js?v=2"></script>
+  <!-- <script src="./assets/js/sw-register.js?v=3"></script> -->
   
   <!-- Chặn pinch-zoom/double-tap  <script src="./assets/js/sw-register.js?v=3"></script>
      -->
