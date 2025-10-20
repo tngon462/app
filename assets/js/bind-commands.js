@@ -36,7 +36,10 @@
         const last = Number(ls.get(cfg.lsKeys.handledReloadAt) || 0);
         const ts   = Number(c.reloadAt);
         if (ts > last){
-          try { ls.set(cfg.lsKeys.handledReloadAt, String(ts)); ls.set(cfg.lsKeys.forceStartAfterReload, '1'); } catch(_){}
+          try {
+            ls.set(cfg.lsKeys.handledReloadAt, String(ts));
+            ls.set(cfg.lsKeys.forceStartAfterReload, '1');
+          } catch(_){}
           location.reload();
           return;
         }
@@ -50,15 +53,22 @@
         cmdRef.child('setTable').remove().catch(()=>{});
       }
 
-      // unbindAt
+      // ✅ unbindAt (CHẶN LẶP THEO TIMESTAMP)
       if (c.unbindAt){
-        // xóa local → hiện gate
-        ls.del(cfg.lsKeys.deviceCode);
-        ls.del(cfg.lsKeys.tableId);
-        ls.del(cfg.lsKeys.tableUrl);
-        ls.del(cfg.lsKeys.appState);
-        ls.del(cfg.lsKeys.forceStartAfterReload);
-        TNGON.showCodeGate('Mã đã bị thu hồi. Vui lòng nhập mã khác.');
+        const last = Number(ls.get(cfg.lsKeys.handledUnbindAt) || 0);
+        const ts   = Number(c.unbindAt);
+        if (ts > last){
+          try {
+            ls.set(cfg.lsKeys.handledUnbindAt, String(ts));
+          } catch(_){}
+          // xóa local → hiện gate
+          ls.del(cfg.lsKeys.deviceCode);
+          ls.del(cfg.lsKeys.tableId);
+          ls.del(cfg.lsKeys.tableUrl);
+          ls.del(cfg.lsKeys.appState);
+          ls.del(cfg.lsKeys.forceStartAfterReload);
+          TNGON.showCodeGate('Mã đã bị thu hồi. Vui lòng nhập mã khác.');
+        }
       }
     });
 
@@ -69,7 +79,10 @@
       if (!ts) return;
       const last = Number(ls.get(cfg.lsKeys.handledBroadcastAt) || 0);
       if (ts > last){
-        try { ls.set(cfg.lsKeys.handledBroadcastAt, String(ts)); ls.set(cfg.lsKeys.forceStartAfterReload, '1'); } catch(_){}
+        try {
+          ls.set(cfg.lsKeys.handledBroadcastAt, String(ts));
+          ls.set(cfg.lsKeys.forceStartAfterReload, '1');
+        } catch(_){}
         location.reload();
       }
     });
