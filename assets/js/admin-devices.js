@@ -1,7 +1,11 @@
 // assets/js/admin-devices.js (safe build)
+// Quản lý MÃ & THIẾT BỊ – GIỮ UI CŨ, CHỈ THÊM TÍNH NĂNG
 // - Đợi DOM + đảm bảo auth ẩn danh trước khi thao tác DB
 // - Chịu được khác biệt ID giữa các bản admin.html (codesBody|codes-tbody, devBody|devices-tbody, ...)
-// - Không phá UI cũ. Nếu thiếu container -> log cảnh báo nhưng không crash.
+// - Hàng đợi mã khả dụng (pill) + Copy nhanh
+// - Codes: Bật/Tắt, Xóa (đang dùng mà tắt/xóa -> app bị out về gate)
+// - Devices: Reload, Đổi số bàn (popup lưới), Gỡ liên kết (yêu cầu nhập lại mã), Đặt tên máy, Ẩn/Hiện ID, Xóa device khi không còn code
+// - Không phá layout cũ. Nếu thiếu container -> chỉ cảnh báo (console) nhưng không crash.
 
 (function(){
   'use strict';
@@ -10,7 +14,6 @@
   const $id = (id)=> document.getElementById(id);
   const log  = (...a)=> console.log('[admin-devices]', ...a);
   const warn = (...a)=> console.warn('[admin-devices]', ...a);
-  const nowTs = ()=> Date.now();
 
   let db = null;
 
@@ -183,6 +186,7 @@
           const next = !enabled;
           await db.ref('codes/'+code+'/enabled').set(next);
           if (boundId && next===false){
+            // đang dùng mà tắt -> đẩy app về gate
             await db.ref(`devices/${boundId}/commands/unbindAt`).set(firebase.database.ServerValue.TIMESTAMP);
           }
         }catch(e){ showDevError('Đổi trạng thái mã lỗi: '+(e?.message||e)); }
@@ -266,6 +270,7 @@
           </div>
         </td>`;
 
+      // Ẩn/Hiện ID
       tr.querySelector('[data-act="toggleId"]').addEventListener('click', ()=>{
         const el = tr.querySelector('[data-role="devId"]');
         if (!el) return;
@@ -273,6 +278,7 @@
         else { el.textContent = idMasked; tr.querySelector('[data-act="toggleId"]').textContent = 'Hiện'; }
       });
 
+      // Đặt tên máy
       tr.querySelector('[data-act="setName"]').addEventListener('click', async ()=>{
         const v = prompt('Nhập tên máy (để trống để xoá):', name || '');
         if (v === null) return;
@@ -283,21 +289,24 @@
         }catch(e){ showDevError('Đặt tên lỗi: '+(e?.message||e)); }
       });
 
+      // Làm mới (reload)
       tr.querySelector('[data-act="reload"]').addEventListener('click', async ()=>{
         try{
           await db.ref(`devices/${id}/commands/reloadAt`).set(firebase.database.ServerValue.TIMESTAMP);
         }catch(e){ showDevError('Gửi reload lỗi: '+(e?.message||e)); }
       });
 
+      // Đổi số bàn (popup)
       tr.querySelector('[data-act="settable"]').addEventListener('click', ()=>{
         openTablePicker(async (tableLabel)=>{
           try{
             await db.ref(`devices/${id}/commands/setTable`).set({ value: tableLabel, at: firebase.database.ServerValue.TIMESTAMP });
-            await db.ref(`devices/${id}`).update({ table: tableLabel, stage:'start' });
+            await db.ref(`devices/${id}`).update({ table: tableLabel, stage:'start' }); // để admin thấy ngay
           }catch(e){ showDevError('Đổi số bàn lỗi: '+(e?.message||e)); }
         });
       });
 
+      // Gỡ liên kết (bắt nhập lại mã để tránh nhầm)
       tr.querySelector('[data-act="unbind"]').addEventListener('click', async ()=>{
         if (!code) return alert('Thiết bị chưa gắn mã.');
         const verify = prompt(`Nhập lại MÃ đang gắn để gỡ liên kết (mã hiện tại: ${code}):`);
@@ -317,6 +326,7 @@
         }catch(e){ showDevError('Gỡ liên kết lỗi: '+(e?.message||e)); }
       });
 
+      // Xóa device (chỉ khi không còn code)
       tr.querySelector('[data-act="delDevice"]').addEventListener('click', async ()=>{
         if (code) return; // phòng double-click khi nút chưa disabled
         if (!confirm('Xoá thiết bị khỏi danh sách? (Chỉ xoá node devices, không ảnh hưởng codes)')) return;
