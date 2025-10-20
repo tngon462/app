@@ -1,134 +1,94 @@
-// assets/js/blackout.js
-// Điều khiển màn đen + “làm mới” theo từng bàn qua Firebase
-(function () {
+// assets/js/blackout.js (code-based screen control)
+// Ưu tiên: global control/screen -> per-code control/codes/{CODE}/screen
+(function(){
   'use strict';
 
-  // UI refs
-  const overlayEl    = document.getElementById('screen-overlay');
-  const posContainer = document.getElementById('pos-container');
-  const posFrame     = document.getElementById('pos-frame');
-  const startScreen  = document.getElementById('start-screen');
-  const selectTable  = document.getElementById('select-table');
+  const LS = localStorage;
+  let db = null;
 
-  // State
-  let globalState = 'on';
-  let localState  = 'on';
-  let tableId     = null;
-  let db          = null;
+  // ===== Overlay đen =====
+  let overlay = null;
+  function ensureOverlay(){
+    if (overlay) return overlay;
+    overlay = document.createElement('div');
+    overlay.id = 'tn-blackout';
+    overlay.style.cssText = `
+      position:fixed; inset:0; z-index:9999;
+      background:#000; opacity:1; display:none;
+      touch-action:none;`;
+    document.body.appendChild(overlay);
+    return overlay;
+  }
+  function showBlack(){ ensureOverlay().style.display = 'block'; }
+  function hideBlack(){ ensureOverlay().style.display = 'none'; }
 
-  const bound = { global: null, perTable: null, signal: null };
+  // ===== Firebase guard =====
+  function getDb(){
+    if (!window.firebase || !firebase.apps?.length) return null;
+    return firebase.database();
+  }
 
-  // Helpers
-  function setOverlayVisible(show) {
-    if (!overlayEl) return;
-    overlayEl.style.display = show ? 'block' : 'none';
+  // ===== Subscribe logic =====
+  let unSubGlobal = null;
+  let unSubCode   = null;
+  let currentCode = null;
+  let globalState = 'on';   // 'on' | 'off'
+  let codeState   = null;   // 'on' | 'off' | null
 
-    // Đồng bộ video NoSleep nếu bạn có expose
-    try {
-      if (show) {
-        window.NoSleepVideo?.pause?.();
-      } else {
-        window.NoSleepVideo?.play?.();
+  function apply(){
+    // Nếu global off hoặc code off => đen
+    const off = (String(globalState||'on') === 'off') || (String(codeState||'on') === 'off');
+    if (off) showBlack(); else hideBlack();
+  }
+
+  function subGlobal(){
+    if (!db) return;
+    const ref = db.ref('control/screen');
+    const cb = ref.on('value', s=>{
+      globalState = s.exists() ? String(s.val()||'on') : 'on';
+      apply();
+    });
+    unSubGlobal = ()=> ref.off('value', cb);
+  }
+
+  function subCode(code){
+    if (unSubCode) { try{ unSubCode(); }catch(_){} unSubCode=null; }
+    codeState = null;
+    if (!db || !code) { apply(); return; }
+    const ref = db.ref('control/codes/'+code+'/screen');
+    const cb = ref.on('value', s=>{
+      codeState = s.exists() ? String(s.val()||'on') : null; // null = không đặt riêng theo mã
+      apply();
+    });
+    unSubCode = ()=> ref.off('value', cb);
+  }
+
+  function readCurrentCode(){
+    return LS.getItem('deviceCode') || null;
+  }
+
+  // Khi đổi code (unbind/bind) từ device-bind → re-sub
+  window.addEventListener('storage', (e)=>{
+    if (e.key === 'deviceCode'){
+      const newCode = readCurrentCode();
+      if (newCode !== currentCode){
+        currentCode = newCode;
+        subCode(currentCode);
       }
-    } catch (_) {}
-  }
-  function updateOverlay() {
-    setOverlayVisible(globalState === 'off' || localState === 'off');
-  }
-  function resetToStart() {
-    posContainer?.classList.add('hidden');
-    if (posFrame) posFrame.src = 'about:blank';
-    startScreen?.classList.remove('hidden');
-    selectTable?.classList.add('hidden');
-    try { localStorage.setItem('appState', 'start'); } catch (_) {}
-  }
-
-  function detachAll() {
-    if (!db) return;
-    if (bound.global)    { db.ref('control/screen').off('value', bound.global); bound.global = null; }
-    if (tableId && bound.perTable) { db.ref(`control/tables/${tableId}/screen`).off('value', bound.perTable); bound.perTable = null; }
-    if (tableId && bound.signal)   { db.ref(`signals/${tableId}`).off('value', bound.signal); bound.signal = null; }
-  }
-
-  function attachAll() {
-    if (!db) return;
-
-    // Toàn quán
-    bound.global = (snap) => {
-      const v = (snap && snap.val()) || 'on';
-      globalState = String(v).toLowerCase() === 'off' ? 'off' : 'on';
-      updateOverlay();
-    };
-    db.ref('control/screen').on('value', bound.global);
-
-    // Theo bàn
-    if (tableId) {
-      bound.perTable = (snap) => {
-        const v = (snap && snap.val()) || 'on';
-        localState = String(v).toLowerCase() === 'off' ? 'off' : 'on';
-        updateOverlay();
-      };
-      db.ref(`control/tables/${tableId}/screen`).on('value', bound.perTable);
-
-      // Tín hiệu làm mới
-      bound.signal = (snap) => {
-        if (!snap || !snap.exists()) return;
-        const val = snap.val() || {};
-        if (val.status === 'expired') {
-          resetToStart();
-          try {
-            db.ref(`signals/${tableId}`).set({
-              status: 'ok',
-              ts: firebase.database.ServerValue.TIMESTAMP
-            });
-          } catch (_) {}
-        }
-      };
-      db.ref(`signals/${tableId}`).on('value', bound.signal);
-    }
-  }
-
-  function readTableId() {
-    try { return window.tableId || localStorage.getItem('tableId') || null; }
-    catch (_) { return null; }
-  }
-
-  function bindAll() {
-    tableId = readTableId();
-    detachAll();
-    attachAll();
-    updateOverlay();
-  }
-
-  // Thay đổi tableId (khi chọn bàn ở tab hiện tại)
-  window.addEventListener('storage', (e) => {
-    if (e && e.key === 'tableId') bindAll();
-  });
-
-  // CÁCH 1: chờ initFirebase nếu có
-  (async () => {
-    if (window.initFirebase) {
-      try { db = await window.initFirebase; } catch (_) {}
-    }
-    // CÁCH 2: fallback nếu event chưa tới
-    if (!db && window.firebase && firebase.database) {
-      try { db = firebase.database(); } catch (_) {}
-    }
-    if (db) bindAll();
-  })();
-
-  // CÁCH 3: vẫn nghe sự kiện firebase-ready (nếu file khác có phát)
-  window.addEventListener('firebase-ready', (ev) => {
-    if (ev?.detail?.db) {
-      db = ev.detail.db;
-      bindAll();
     }
   });
 
-  // Expose nhỏ để test
-  window.__blackout = {
-    refresh() { bindAll(); },
-    forceOn()  { globalState = 'on'; localState = 'on'; updateOverlay(); },
-    forceOff() { globalState = 'off'; localState = 'off'; updateOverlay(); },
-  };
+  // ===== Boot =====
+  document.addEventListener('DOMContentLoaded', ()=>{
+    db = getDb();
+    if (!db){ console.warn('[blackout] Firebase chưa sẵn sàng'); return; }
+
+    // Global
+    subGlobal();
+
+    // Per-code
+    currentCode = readCurrentCode();
+    subCode(currentCode);
+    apply(); // initial
+  });
 })();
