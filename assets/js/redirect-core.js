@@ -1,9 +1,9 @@
 <script>
 /**
- * redirect-core.js (ổn định, không thay DOM body)
- * - Màn chọn bàn / start / pos qua 3 khối #select-table, #start-screen, #pos-container
- * - Load links.json; cung cấp window.getLinkForTable()
- * - KHÔNG reload khi đổi bàn từ admin; chỉ cập nhật số bàn + link và về màn Start
+ * assets/js/redirect-core.js (safe fallback)
+ * - Giữ nguyên 3 màn: #select-table, #start-screen, #pos-container
+ * - Load links.json; nếu lỗi vẫn render fallback 1..15
+ * - Expose: window.gotoSelect/gotoStart/gotoPos + window.getLinkForTable
  */
 (function(){
   'use strict';
@@ -57,7 +57,7 @@
   function gotoPos(url){
     const t = getTable();
     const finalUrl = url || t.url;
-    if (!finalUrl){ gotoSelect(false); return; }
+    if (!finalUrl){ alert('Chưa có link POS của bàn này.'); gotoSelect(false); return; }
     if (iframe) iframe.src = finalUrl;
     hide(elSelect); hide(elStart); show(elPos);
     setState('pos');
@@ -71,37 +71,43 @@
   // ----- links.json -----
   let LINKS_MAP = null;
   function cb(u){ return u + (u.includes('?')?'&':'?') + 'cb=' + Date.now(); }
+
   async function loadLinks(){
     try{
-      const res = await fetch(cb('./links.json'), {cache:'no-store'});
+      const res = await fetch(cb('./links.json'), { cache:'no-store' });
       if (!res.ok) throw new Error('HTTP '+res.status);
       const data = await res.json();
-      const map = data.links || data;
+      const map = data?.links || data;
       if (!map || typeof map !== 'object' || Array.isArray(map)) throw new Error('invalid links.json shape');
       LINKS_MAP = map;
       window.LINKS_MAP = map;
+      console.log('[redirect-core] links.json loaded:', Object.keys(map).length, 'entries');
       return map;
     }catch(e){
-      console.error('[redirect-core] loadLinks error:', e);
-      LINKS_MAP = null; window.LINKS_MAP = null;
+      console.error('[redirect-core] loadLinks FAILED:', e);
+      LINKS_MAP = null;
+      window.LINKS_MAP = null;
       return null;
     }
   }
-  window.getLinkForTable = function(t){ return (LINKS_MAP && (t in LINKS_MAP)) ? LINKS_MAP[t] : null; };
+  window.getLinkForTable = function(t){
+    if (!LINKS_MAP) return null;
+    return (t in LINKS_MAP) ? LINKS_MAP[t] : null;
+  };
 
-  function renderTables(map){
+  function renderTablesFromMap(map){
     const wrap = $('table-container');
     if (!wrap) return;
     wrap.innerHTML = '';
     wrap.classList.add('place-items-center','justify-center');
 
-    Object.keys(map).sort((a,b)=>Number(a)-Number(b)).forEach(key=>{
+    Object.keys(map).sort((a,b)=> Number(a)-Number(b)).forEach(key=>{
       const url = map[key];
       const btn = document.createElement('button');
       btn.className = 'flex items-center justify-center rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold shadow px-4 py-3 sm:px-6 sm:py-4 w-28 h-20 sm:w-40 sm:h-28 text-sm sm:text-lg';
       btn.textContent = 'Bàn ' + key;
       btn.addEventListener('click', ()=>{
-        setTable(key, url);
+        setTable(key, url || null);
         if (elTable) elTable.textContent = key;
         gotoStart();
       });
@@ -109,10 +115,35 @@
     });
   }
 
+  function renderTablesFallback(count=15){
+    const wrap = $('table-container');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    wrap.classList.add('place-items-center','justify-center');
+
+    for (let i=1;i<=count;i++){
+      const key = String(i);
+      const btn = document.createElement('button');
+      btn.className = 'flex items-center justify-center rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold shadow px-4 py-3 sm:px-6 sm:py-4 w-28 h-20 sm:w-40 sm:h-28 text-sm sm:text-lg';
+      btn.textContent = 'Bàn ' + key;
+      btn.addEventListener('click', ()=>{
+        const url = window.getLinkForTable ? window.getLinkForTable(key) : null;
+        setTable(key, url || null);
+        if (elTable) elTable.textContent = key;
+        gotoStart();
+      });
+      wrap.appendChild(btn);
+    }
+  }
+
   if (btnStart){
     btnStart.addEventListener('click', ()=>{
       const {url} = getTable();
-      if (!url){ alert('Chưa có link POS của bàn này.'); gotoSelect(false); return; }
+      if (!url){
+        alert('Chưa có link POS của bàn này.');
+        gotoSelect(false);
+        return;
+      }
       gotoPos(url);
     });
   }
@@ -120,17 +151,17 @@
   // Admin đổi bàn từ xa (device-bind phát event này)
   window.addEventListener('tngon:tableChanged', (ev)=>{
     const { table, url } = ev.detail || {};
-    if (table){
-      setTable(table, url ?? window.getLinkForTable?.(table) ?? LS.getItem(LS_TURL) ?? null);
-      if (elTable) elTable.textContent = table;
-      gotoStart();
-    }
+    if (!table) return;
+    setTable(table, url ?? window.getLinkForTable?.(table) ?? LS.getItem(LS_TURL) ?? null);
+    if (elTable) elTable.textContent = table;
+    gotoStart();
   });
 
   // Boot
   (async function(){
     const map = await loadLinks();
-    if (map) renderTables(map);
+    if (map) renderTablesFromMap(map);
+    else     renderTablesFallback(15); // vẫn hiện nút chọn bàn để dùng tạm
 
     const state = getState();
     const {id, url} = getTable();
