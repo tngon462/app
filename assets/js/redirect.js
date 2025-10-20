@@ -1,53 +1,50 @@
-// redirect-core.js
-document.addEventListener("DOMContentLoaded", async () => {
-  try {
-    const res = await fetch("./links.json?" + Date.now());
-    const data = await res.json();
-    const links = data.links;
+<script>
+// ... các phần khác giữ nguyên
 
-    const container = document.getElementById("table-container");
-    const selectTable = document.getElementById("select-table");
-    const startScreen = document.getElementById("start-screen");
-    const posContainer = document.getElementById("pos-container");
-    const posFrame = document.getElementById("pos-frame");
-    const selectedTable = document.getElementById("selected-table");
-    const startBtn = document.getElementById("start-order");
-
-    Object.keys(links).forEach((key) => {
-      const btn = document.createElement("button");
-      btn.textContent = "Bàn " + key;
-      btn.className =
-        "px-6 py-3 rounded-lg bg-blue-500 text-white font-bold hover:bg-blue-700 w-28 h-20 text-xl shadow";
-
-      btn.addEventListener("click", () => {
-        selectTable.classList.add("hidden");
-        startScreen.classList.remove("hidden");
-        selectedTable.textContent = key;
-
-        startBtn.setAttribute("data-url", links[key]);
-
-        // Lưu & set global cho blackout.js
-        localStorage.setItem("tableId", key);
-        localStorage.setItem("tableUrl", links[key]);
-        localStorage.setItem("appState", "start");
-        window.tableId = key;
-      });
-
-      container.appendChild(btn);
+// GỠ LIÊN KẾT (force unbind an toàn)
+async function forceUnbindDevice(db, deviceId, code){
+  // 1) clear codes/<code> bằng transaction (chỉ khi đang gắn deviceId này)
+  if (code){
+    await db.ref('codes/'+code).transaction(v=>{
+      if (!v) return v;
+      if (v.boundDeviceId === deviceId){
+        return { ...v, boundDeviceId: null, boundAt: null };
+      }
+      return v; // đang gắn máy khác → không đụng
     });
-
-    // Bắt đầu gọi món
-    startBtn.addEventListener("click", (e) => {
-      const url = e.target.getAttribute("data-url");
-      if (!url) return;
-
-      startScreen.classList.add("hidden");
-      posContainer.classList.remove("hidden");
-      posFrame.src = url;
-
-      localStorage.setItem("appState", "pos");
-    });
-  } catch (err) {
-    console.error("Lỗi load links.json:", err);
   }
+  // 2) gửi lệnh unbindAt xuống máy
+  await db.ref('devices/'+deviceId+'/commands/unbindAt').set(firebase.database.ServerValue.TIMESTAMP);
+  // 3) dọn hiển thị ở devices (không bắt buộc, giúp UI rõ ràng)
+  await db.ref('devices/'+deviceId).update({ code:null, table:null });
+}
+
+// Ví dụ gắn vào nút:
+btnUnbind.addEventListener('click', async ()=>{
+  try{
+    await forceUnbindDevice(db, id, obj.code || null);
+    alert('Đã gỡ liên kết.');
+  }catch(e){ alert('Gỡ liên kết lỗi: '+(e?.message||e)); }
 });
+
+// ĐỔI BÀN: set commands/setTable, KHÔNG reload
+btnSetTable.addEventListener('click', ()=>{
+  openTablePicker(15, async (label)=>{
+    try{
+      await db.ref('devices/'+id+'/commands/setTable')
+        .set({ value: label, at: firebase.database.ServerValue.TIMESTAMP });
+      await db.ref('devices/'+id).update({ table: label });
+    }catch(e){ alert('Đổi bàn lỗi: '+(e?.message||e)); }
+  });
+});
+
+// LÀM MỚI: chỉ reload (không thu hồi mã)
+btnReload.addEventListener('click', async ()=>{
+  try{
+    await db.ref('devices/'+id+'/commands/reloadAt')
+      .set(firebase.database.ServerValue.TIMESTAMP);
+  }catch(e){ alert('Reload lỗi: '+(e?.message||e)); }
+});
+
+// ... phần còn lại giữ nguyên
+</script>
