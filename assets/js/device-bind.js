@@ -188,20 +188,54 @@
       }
 
       // setTable: KHÔNG reload — chỉ đổi bàn & link rồi gotoStart
-      if (c.setTable && c.setTable.value){
-        const table = String(c.setTable.value);
-        let url = LS.getItem(LS_TABLE_URL) || '';
-        if (LINKS_MAP && LINKS_MAP[table]) url = LINKS_MAP[table];
+    //  if (c.setTable && c.setTable.value){
+       // const table = String(c.setTable.value);
+      //  let url = LS.getItem(LS_TABLE_URL) || '';
+    //    if (LINKS_MAP && LINKS_MAP[table]) url = LINKS_MAP[table];
 
-        if (table) LS.setItem(LS_TABLE_ID, table);
-        if (url)   LS.setItem(LS_TABLE_URL, url);
+   //     if (table) LS.setItem(LS_TABLE_ID, table);
+     //   if (url)   LS.setItem(LS_TABLE_URL, url);
 
-        try{ gotoStart(); }catch(_){}
-        db.ref('devices/'+deviceId).update({ table: table || null, stage: 'start' });
-        // dọn lệnh để lần sau vẫn chạy
-        cmdRef.child('setTable').remove().catch(()=>{});
-      }
+   //     try{ gotoStart(); }catch(_){}
+   //     db.ref('devices/'+deviceId).update({ table: table || null, stage: 'start' });
+    //    // dọn lệnh để lần sau vẫn chạy
+   //     cmdRef.child('setTable').remove().catch(()=>{});
+   //   }
 
+
+// 2) setTable: KHÔNG reload — chỉ đổi bàn & link rồi gotoStart
+if (c.setTable && c.setTable.value){
+  (async () => {
+    const table = String(c.setTable.value).trim();
+    if (!table) { cmdRef.child('setTable').remove().catch(()=>{}); return; }
+
+    // Nếu links.json chưa tải thì tải lại
+    if (!LINKS_MAP) {
+      try { await loadLinks(); } catch(_){}
+    }
+
+    // Tìm URL đúng của bàn
+    let url = LS.getItem(LS_TABLE_URL) || '';
+    if (LINKS_MAP && LINKS_MAP[table]) url = LINKS_MAP[table];
+
+    // Ghi lại vào localStorage
+    LS.setItem(LS_TABLE_ID, table);
+    if (url) LS.setItem(LS_TABLE_URL, url);
+    // Cho blackout.js biết
+    window.tableId = table;
+
+    // Báo cho các script khác biết có thay đổi bàn
+    try { window.dispatchEvent(new CustomEvent('tngon:tableChanged', { detail: { table, url } })); } catch(_){}
+
+    // Cập nhật cho admin thấy ngay
+    db.ref('devices/'+deviceId).update({ table, stage: 'start' });
+    try { gotoStart(); } catch(_){}
+
+    // Xóa lệnh setTable sau khi thực hiện
+    cmdRef.child('setTable').remove().catch(()=>{});
+  })();
+}
+      
       // unbindAt: về gate, xóa code & bàn (KHÔNG reload)
       if (c.unbindAt){
         LS.removeItem(LS_DEVICE_CODE);
