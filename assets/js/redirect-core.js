@@ -1,4 +1,3 @@
-<script>
 /**
  * assets/js/redirect-core.js (safe fallback)
  * - Giữ nguyên 3 màn: #select-table, #start-screen, #pos-container
@@ -171,4 +170,3 @@
   })();
 
 })();
-</script>
