@@ -46,7 +46,6 @@
       border-right:1px solid #e5e7eb; transform:translateX(-100%); transition:transform .2s ease; z-index:40; }
     .drawer.open { transform:translateX(0); }
     .drawer-mask { position:fixed; inset:0; background:rgba(0,0,0,.25); display:none; z-index:30; }
-    .drawer-mask.show { display:block; }
 
     /* On md+ keep static sidebar */
     @media (min-width:768px){
@@ -79,8 +78,10 @@
     <!-- Sidebar / Drawer -->
     <aside id="drawer" class="drawer">
       <nav class="p-3 space-y-1">
-        <a href="#screen" id="navScreen" class="nav-link">Tắt/Bật màn hình</a>
-        <a href="#ads" id="navAds" class="nav-link">Up ảnh quảng cáo</a>
+        <a href="#screen"  id="navScreen"  class="nav-link">Tắt/Bật màn hình</a>
+        <a href="#ads"     id="navAds"     class="nav-link">Up ảnh quảng cáo</a>
+        <!-- ✅ Thêm tab Thiết bị -->
+        <a href="#devices" id="navDevices" class="nav-link">Thiết bị</a>
       </nav>
       <div class="p-3 text-xs text-gray-400 border-t">
         Phiên bản <span id="ver">—</span>
@@ -127,6 +128,12 @@
       <section id="viewAds" class="hidden">
         <iframe id="ads-iframe" src="about:blank" referrerpolicy="no-referrer"></iframe>
       </section>
+
+      <!-- ✅ View: Thiết bị (để admin-devices.js render nội dung) -->
+      <section id="viewDevices" class="hidden p-4 md:p-6">
+        <!-- admin-devices.js sẽ tự render UI vào đây -->
+        <div id="modal-root"></div>
+      </section>
     </main>
   </div>
 
@@ -148,12 +155,17 @@
     };
 
     // ===== UI refs =====
-    const views = { screen: document.getElementById('viewScreen'), ads: document.getElementById('viewAds') };
-    const navScreen = document.getElementById('navScreen');
-    const navAds = document.getElementById('navAds');
-    const homeBtn = document.getElementById('homeBtn');
-    const connBadge = document.getElementById('connBadge');
-    const pwaBadge = document.getElementById('pwaBadge');
+    const views = {
+      screen:  document.getElementById('viewScreen'),
+      ads:     document.getElementById('viewAds'),
+      devices: document.getElementById('viewDevices') // ✅ thêm
+    };
+    const navScreen  = document.getElementById('navScreen');
+    const navAds     = document.getElementById('navAds');
+    const navDevices = document.getElementById('navDevices'); // ✅ thêm
+    const homeBtn    = document.getElementById('homeBtn');
+    const connBadge  = document.getElementById('connBadge');
+    const pwaBadge   = document.getElementById('pwaBadge');
     const btnInstall = document.getElementById('btnInstall');
 
     const toggleEl = document.getElementById('screenToggle');
@@ -170,19 +182,26 @@
     function closeDrawer(){ drawer.classList.remove('open'); drawerMask.classList.remove('show'); }
     btnMenu.addEventListener('click', openDrawer);
     drawerMask.addEventListener('click', closeDrawer);
-    [navScreen, navAds].forEach(a => a.addEventListener('click', () => { if (window.innerWidth < 768) closeDrawer(); }));
+    [navScreen, navAds, navDevices].forEach(a => a.addEventListener('click', () => {
+      if (window.innerWidth < 768) closeDrawer();
+    }));
 
     function showError(msg) { errorBox.textContent = msg||''; errorBox.classList.toggle('hidden', !msg); }
 
     function setActive(hash) {
-      [navScreen, navAds].forEach(a => a.classList.remove('active'));
-      if (hash === '#ads') navAds.classList.add('active'); else navScreen.classList.add('active');
+      [navScreen, navAds, navDevices].forEach(a => a?.classList.remove('active'));
       Object.values(views).forEach(v => v.classList.add('hidden'));
+
       if (hash === '#ads') {
+        navAds?.classList.add('active');
         views.ads.classList.remove('hidden');
         const ifr = document.getElementById('ads-iframe');
         if (!ifr.src || ifr.src === 'about:blank') ifr.src = 'https://pic-flame.vercel.app/';
+      } else if (hash === '#devices') {
+        navDevices?.classList.add('active');
+        views.devices.classList.remove('hidden');
       } else {
+        navScreen?.classList.add('active');
         views.screen.classList.remove('hidden');
       }
     }
@@ -250,11 +269,8 @@
 
         // ===== Global control =====
         const refScreen = db.ref('control/screen'); // "on" | "off"
-
-        // Nếu chưa có giá trị -> tự khởi tạo "on"
         refScreen.once('value').then(snap => { if (!snap.exists()) refScreen.set('on'); });
 
-        // Subscribe trạng thái toàn quán
         refScreen.on('value', (snap) => {
           showError('');
           const v = snap.exists() ? snap.val() : 'on';
@@ -277,7 +293,6 @@
         const tableRefs = {};
         const tableStates = {};
 
-        // Card mỗi bàn: công tắc + nút "Làm mới" NẰM DƯỚI công tắc
         function makeTableTile(i, onToggle, onRefresh) {
           const card = document.createElement('div');
           card.className = 'bg-white rounded-xl shadow-sm border border-gray-200 p-3 flex flex-col';
@@ -352,7 +367,6 @@
           }
         }
 
-        // Làm mới 1 bàn → ghi vào signals/<ban>
         async function refreshTable(i) {
           showError('');
           try {
@@ -366,7 +380,6 @@
           }
         }
 
-        // Nút Bật/Tắt tất cả
         btnOn.addEventListener('click', async () => {
           try {
             await refScreen.set('on');
@@ -391,11 +404,11 @@
       }
     })();
   </script>
-<!-- Tab Thiết bị & Mã (tự chèn UI, không phá layout cũ) -->
-  <script src="./assets/js/admin-common.js"></script>
-<script src="./assets/js/admin-screen.js"></script>
-<script src="./assets/js/admin-ads.js"></script>
-<script src="./assets/js/admin-devices.js?v1.0"></script>
 
+  <!-- Các script module của admin (có thể thêm version để tránh cache) -->
+  <script src="./assets/js/admin-common.js?v=1"></script>
+  <script src="./assets/js/admin-screen.js?v=1"></script>
+  <script src="./assets/js/admin-ads.js?v=1"></script>
+  <script src="./assets/js/admin-devices.js?v=1"></script>
 </body>
 </html>
