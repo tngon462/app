@@ -1,84 +1,111 @@
-// device-bind.js (bootstrap)
-// Khởi chạy bind flow, không đụng UI core của app.
-
+// assets/js/device-bind.js vFINAL
 (function(){
   'use strict';
-  window.TNGON = window.TNGON || {};
-  const cfg = TNGON.bindCfg;
-  const ls  = TNGON.ls;
+  const LS = localStorage;
+  const $ = (id)=>document.getElementById(id);
+  const gotoSelect = window.gotoSelect || (()=>{});
+  const gotoStart  = window.gotoStart  || (()=>{});
+  const gotoPos    = window.gotoPos    || (()=>{});
 
-  // Hàm này được bind-gate gọi sau khi claimCode thành công
-  TNGON.afterBindEnter = function(){
-    // nếu vừa reload bằng lệnh admin → quay lại Start Order
-    if (ls.get(cfg.lsKeys.forceStartAfterReload) === '1'){
-      ls.del(cfg.lsKeys.forceStartAfterReload);
-      // nếu chưa có bàn → redirect-core sẽ tự trả về màn chọn bàn
-      TNGON.gotoStart();
-    }
-    // bắt đầu heartbeat và lắng nghe lệnh
-    TNGON.startHeartbeat();
-    TNGON.listenAdminCommands();
-  };
+  function uuid(){return'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);});}
+  let deviceId = LS.getItem('deviceId') || uuid(); LS.setItem('deviceId',deviceId);
 
-  document.addEventListener('DOMContentLoaded', async ()=>{
-    if (!window.firebase || !firebase.apps?.length){
-      console.error('[device-bind] Firebase chưa sẵn sàng. Hãy load firebase.js trước.');
-      return;
-    }
+  const db = firebase.database();
 
-    const deviceId = TNGON.ensureDeviceId();
-    console.log('[device-bind] deviceId =', deviceId, ' code =', ls.get(cfg.lsKeys.deviceCode) || '(none)');
+  // ===== GATE =====
+  function showGate(msg){
+    if($('code-gate')){ const e=$('code-error'); if(e&&msg)e.textContent=msg; return; }
+    const w=document.createElement('div');
+    w.id='code-gate';
+    w.style='position:fixed;inset:0;z-index:9999;background:#fff;';
+    w.innerHTML=`
+    <div class="w-full h-full flex items-center justify-center p-6">
+      <div class="max-w-sm w-full bg-white border rounded-2xl shadow p-6">
+        <h1 class="text-2xl font-bold mb-4 text-center">Nhập mã iPad</h1>
+        <input id="code-input" class="w-full border rounded px-4 py-3 text-center font-mono text-lg" placeholder="VD: A1B2C3" />
+        <div id="code-error" class="text-center text-red-600 text-sm mt-2 h-5"></div>
+        <button id="code-submit" class="mt-4 w-full py-3 bg-blue-600 text-white rounded-xl font-bold">XÁC NHẬN</button>
+      </div>
+    </div>`;
+    document.body.appendChild(w);
+    const input=$('code-input'),btn=$('code-submit'),err=$('code-error');
+    btn.onclick=async ()=>{
+      const code=(input.value||'').trim().toUpperCase();
+      if(!code){ err.textContent='Nhập mã'; return; }
+      try{ await claim(code); w.remove(); enterApp(); }
+      catch(e){ err.textContent=e?.message||'Mã không khả dụng'; }
+    };
+    input.addEventListener('keydown',e=>{if(e.key==='Enter')btn.click();});
+    setTimeout(()=>input.focus(),50);
+  }
 
-    // load links để setTable lấy đúng URL
-    await TNGON.loadLinks().catch(()=>{});
+  // ===== CLAIM =====
+  async function claim(code){
+    const ref=db.ref('codes/'+code);
+    const res=await ref.transaction(cur=>{
+      if(!cur) return cur;
+      if(cur.enabled===false) return;
+      if(cur.boundDeviceId && cur.boundDeviceId!==deviceId) return;
+      return {...cur,boundDeviceId:deviceId,boundAt:firebase.database.ServerValue.TIMESTAMP};
+    });
+    if(!res.committed) throw new Error('Mã đã dùng hoặc không tồn tại');
+    await db.ref('devices/'+deviceId).update({code,lastSeen:firebase.database.ServerValue.TIMESTAMP});
+    LS.setItem('deviceCode',code);
+    watchCode(code);
+  }
 
-    const code = ls.get(cfg.lsKeys.deviceCode);
-    if (!code){
-      // chưa có mã → gate
-      TNGON.showCodeGate();
-    } else {
-      // xác thực lại mã, bind nếu cần, rồi vào app
-      try{
-        const ref  = firebase.database().ref(cfg.paths.codes + '/' + code);
-        const snap = await ref.once('value');
-        const v    = snap.val();
-        if (!v) throw new Error('Mã không tồn tại.');
-        if (v.enabled === false) throw new Error('Mã đã bị tắt.');
-        if (v.boundDeviceId && v.boundDeviceId !== deviceId) throw new Error('Mã đã gắn thiết bị khác.');
+  async function beat(){
+    const code=LS.getItem('deviceCode')||null;
+    const stage=LS.getItem('appState')||'select';
+    const table=LS.getItem('tableId')||null;
+    await db.ref('devices/'+deviceId).update({
+      code,table,stage,inPOS:stage==='pos',
+      lastSeen:firebase.database.ServerValue.TIMESTAMP
+    });
+  }
 
-        if (!v.boundDeviceId){
-          // (re)bind an toàn
-          await ref.transaction(cur=>{
-            if (!cur) return cur;
-            if (cur.enabled === false) return;
-            if (cur.boundDeviceId && cur.boundDeviceId !== deviceId) return;
-            return { ...cur, boundDeviceId: deviceId, boundAt: firebase.database.ServerValue.TIMESTAMP };
-          }, async (err, committed)=>{
-            if (err) throw err;
-            if (!committed) throw new Error('Mã không khả dụng.');
-            await firebase.database().ref(cfg.paths.devices + '/' + deviceId).update({
-              code: code,
-              lastSeen: firebase.database.ServerValue.TIMESTAMP,
-            });
-          });
-        }
-
-        // start watcher + heartbeat + commands
-        TNGON.watchCode(code);
-        TNGON.afterBindEnter();
-      }catch(e){
-        console.warn('[device-bind] boot code invalid:', e?.message||e);
-        ls.del(cfg.lsKeys.deviceCode);
-        TNGON.showCodeGate(e?.message || 'Vui lòng nhập mã.');
+  function listenCmd(){
+    const ref=db.ref('devices/'+deviceId+'/commands');
+    ref.on('value',s=>{
+      const c=s.val()||{};
+      if(c.reloadAt){ LS.setItem('forceStartAfterReload','1'); location.reload(); return; }
+      if(c.setTable&&c.setTable.value){
+        const t=String(c.setTable.value);
+        LS.setItem('tableId',t);
+        gotoStart();
+        db.ref('devices/'+deviceId).update({table:t});
+        ref.child('setTable').remove();
       }
-    }
-
-    // Heartbeat định kỳ + khi đổi state/bàn
-    setInterval(()=> TNGON.kickHeartbeat(), 20000);
-    window.addEventListener('storage', (e)=>{
-      if (e.key === cfg.lsKeys.appState || e.key === cfg.lsKeys.tableId){
-        TNGON.kickHeartbeat();
+      if(c.unbindAt){
+        LS.clear(); LS.setItem('deviceId',deviceId);
+        showGate('Mã đã bị thu hồi.');
       }
     });
+  }
+
+  function watchCode(code){
+    const ref=db.ref('codes/'+code);
+    ref.on('value',s=>{
+      const v=s.val(); if(!v||v.enabled===false||v.boundDeviceId!==deviceId){
+        LS.clear(); LS.setItem('deviceId',deviceId);
+        showGate('Mã bị tắt hoặc chuyển máy khác.');
+      }
+    });
+  }
+
+  function enterApp(){
+    if(LS.getItem('forceStartAfterReload')==='1'){ LS.removeItem('forceStartAfterReload'); gotoStart(); }
+    listenCmd(); beat();
+  }
+
+  document.addEventListener('DOMContentLoaded',async()=>{
+    const code=LS.getItem('deviceCode');
+    if(!code){ showGate(); return; }
+    const v=(await db.ref('codes/'+code).once('value')).val();
+    if(!v||v.enabled===false||v.boundDeviceId&&v.boundDeviceId!==deviceId){
+      LS.clear(); LS.setItem('deviceId',deviceId); showGate(); return;
+    }
+    watchCode(code); enterApp();
+    setInterval(()=>beat(),20000);
   });
 })();
