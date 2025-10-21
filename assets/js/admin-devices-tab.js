@@ -1,5 +1,5 @@
 <!-- assets/js/admin-devices-tab.js (auto-build containers) -->
-<script>
+
 (function(){
   'use strict';
 
@@ -287,4 +287,4 @@
     }
   });
 })();
-</script>
+
