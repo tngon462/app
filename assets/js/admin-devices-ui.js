@@ -1,37 +1,33 @@
 // assets/js/admin-devices-ui.js
-// UI-ONLY patch cho tab Thiết bị:
-// - Đẩy block Thiết bị lên đầu trang (trước phần mã/khác)
-// - Phóng to nút thao tác của Thiết bị (≈2x)
-// - Sắp xếp hàng thiết bị theo số bàn (table), thiết bị chưa có bàn để cuối
-// Không đổi logic đọc/ghi Firebase; chỉ thao tác DOM/CSS.
+// UI-ONLY cho tab Thiết bị:
+// - ĐẨY "Thiết bị (iPad)" lên đầu trang, bất kể render muộn
+// - Phóng to nút ≈2x
+// - Sắp xếp danh sách theo số bàn (thiết bị chưa có bàn xuống cuối)
+// - Không đổi logic đọc/ghi; chỉ thao tác DOM.
 
 (function () {
   'use strict';
 
-  const $ = (id) => document.getElementById(id);
+  const $ = (sel, root=document) => root.querySelector(sel);
 
-  // ===== 1) CSS phóng to nút – chỉ áp dụng trong bảng Thiết bị
+  // ===== 1) CSS phóng to nút và căn hàng =====
   function injectStyles() {
+    if ($('style[data-tngon-ui="devices"]')) return;
     const css = `
-      /* Khung tổng thể của bảng thiết bị: tự co giãn nút */
-      #devices-table, #devices_tbody, #devBody, #devices-tbody {
-        --btn-scale: 1.9; /* ~2x */
-      }
-      /* Chỉ phóng to nút thao tác của thiết bị */
-      .tngon-dev-actions [data-act],
-      tr .tngon-dev-btn {
-        font-size: calc(0.75rem * var(--btn-scale));
+      [data-tngon-devices-wrapper] .tngon-dev-actions [data-act],
+      [data-tngon-devices-wrapper] .tngon-dev-btn {
+        font-size: calc(0.75rem * 1.9);
         line-height: 1.15;
-        padding: calc(0.375rem * var(--btn-scale)) calc(0.5rem * var(--btn-scale));
-        border-radius: calc(0.375rem * var(--btn-scale));
+        padding: calc(0.375rem * 1.9) calc(0.5rem * 1.9);
+        border-radius: calc(0.375rem * 1.9);
       }
-
-      /* Giãn dòng cao hơn cho row thiết bị để dễ bấm */
-      tr.tngon-dev-row > td { padding-top: .6rem; padding-bottom: .6rem; }
-
-      /* Giới hạn chiều rộng cột ID cho gọn */
-      .tngon-dev-id { max-width: 280px; }
-      .tngon-dev-id .font-mono { word-break: break-all; }
+      [data-tngon-devices-wrapper] tr.tngon-dev-row > td { padding-top:.6rem; padding-bottom:.6rem; }
+      [data-tngon-devices-wrapper] .tngon-dev-id { max-width: 280px; }
+      [data-tngon-devices-wrapper] .tngon-dev-id .font-mono { word-break: break-all; }
+      [data-tngon-devices-wrapper] .tngon-card {
+        background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin-bottom:16px;
+      }
+      [data-tngon-devices-wrapper] .tngon-title { font-size:1.125rem; font-weight:700; color:#111827; margin-bottom:10px; }
     `;
     const el = document.createElement('style');
     el.setAttribute('data-tngon-ui', 'devices');
@@ -39,147 +35,114 @@
     document.head.appendChild(el);
   }
 
-  // ===== 2) Đưa block "Thiết bị" lên đầu (trước các phần khác)
-  function moveDevicesBlockUp() {
-    // tìm tbody thiết bị
-    const devBody =
-      $('#devBody') || $('#devices-tbody') || $('#devices_tbody');
-    if (!devBody) return;
+  // ===== 2) Tìm tbody devices theo nhiều ID
+  function findDevBody() {
+    return document.getElementById('devBody')
+        || document.getElementById('devices-tbody')
+        || document.getElementById('devices_tbody');
+  }
 
-    // block “bảng thiết bị” là table gần nhất bao quanh tbody
+  // ===== 3) Tạo wrapper ở đầu trang & đưa bảng thiết bị lên
+  function ensureDevicesAtTop(devBody) {
+    // Main content (đa số admin dùng .content)
+    const main = $('main.content') || $('main') || document.body;
+
+    // Nếu đã có wrapper → thôi
+    if ($('[data-tngon-devices-wrapper]')) return;
+
+    // Tìm table chứa tbody
     const devTable = devBody.closest('table') || devBody.parentElement;
     if (!devTable) return;
 
-    // section/card bao quanh bảng (ưu tiên container to nhất hợp lý)
-    let devSection = devTable.closest('section') || devTable.closest('.card') || devTable;
+    // Tạo card wrapper ở đầu main
+    const wrapper = document.createElement('section');
+    wrapper.setAttribute('data-tngon-devices-wrapper', '1');
+    wrapper.className = 'tngon-card';
+    // Tiêu đề mặc định (không ảnh hưởng logic)
+    const title = document.createElement('div');
+    title.className = 'tngon-title';
+    title.textContent = 'Thiết bị (iPad)';
+    wrapper.appendChild(title);
 
-    // chèn devSection lên đầu vùng content/main
-    const main =
-      document.querySelector('main.content') ||
-      document.querySelector('main') ||
-      document.body;
+    // Đưa table hiện có vào wrapper (di chuyển node – không mất event listener của các nút)
+    wrapper.appendChild(devTable);
 
-    if (main && devSection && devSection.parentElement !== main) {
-      // nếu section đang ở nơi khác, clone & move (đảm bảo không mất event)
-      main.insertBefore(devSection, main.firstChild);
-    } else if (main && devSection) {
-      // đã nằm trong main: đảm bảo nó là phần tử đầu
-      if (main.firstElementChild !== devSection) {
-        main.insertBefore(devSection, main.firstElementChild);
-      }
-    }
-
-    // Thêm class hook cho các nút trong bảng thiết bị
-    devBody.classList.add('tngon-dev-actions-root');
+    // Chèn wrapper lên đầu main
+    main.insertBefore(wrapper, main.firstChild);
   }
 
-  // ===== 3) Sắp xếp theo số bàn (chỉ UI)
-  function parseTableNumberFromCell(td) {
-    if (!td) return Number.POSITIVE_INFINITY;
-    let txt = (td.textContent || '').trim();
-    // màn POS hiển thị dạng "+12" -> bỏ dấu +
-    if (txt.startsWith('+')) txt = txt.slice(1);
-    // dấu "—" hoặc rỗng => coi như vô hạn
-    const n = parseInt(txt, 10);
+  // ===== 4) Sắp xếp theo số bàn (col 3 mặc định: [ID/Tên] [Code] [Bàn] [Actions])
+  function parseTable(t) {
+    if (!t) return Number.POSITIVE_INFINITY;
+    let s = (t.textContent || '').trim();
+    if (s.startsWith('+')) s = s.slice(1);
+    const n = parseInt(s, 10);
     return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
   }
 
-  function sortDeviceRowsByTable() {
-    const devBody =
-      $('#devBody') || $('#devices-tbody') || $('#devices_tbody');
+  function sortDevices() {
+    const devBody = findDevBody();
     if (!devBody) return;
-
     const rows = Array.from(devBody.querySelectorAll('tr'));
     if (!rows.length) return;
 
-    // tìm cột "bàn" (ở code hiện tại cột bàn là TD thứ 3: [ID/Tên], [Code], [Bàn], [Actions])
-    // an toàn hơn: lấy theo text header nếu có, còn không fallback index=2
-    let tableColIndex = 2;
-
-    // clone rows & sort
+    const tableColIndex = 2; // cột bàn
     const sorted = rows
-      .map((tr) => {
-        const tds = tr.children;
-        const tdTable = tds[tableColIndex];
-        const key = parseTableNumberFromCell(tdTable);
-        return { tr, key };
-      })
-      .sort((a, b) => a.key - b.key)
-      .map((x) => x.tr);
+      .map(tr => ({ tr, key: parseTable(tr.children[tableColIndex]) }))
+      .sort((a,b)=> a.key - b.key)
+      .map(x=>x.tr);
 
-    // replace order
-    sorted.forEach((tr) => devBody.appendChild(tr));
+    sorted.forEach(tr => devBody.appendChild(tr));
   }
 
-  // Quan sát thay đổi của tbody để sort lại mỗi khi admin-devices.js render xong
-  let mo = null;
-  function attachSortObserver() {
-    const devBody =
-      $('#devBody') || $('#devices-tbody') || $('#devices_tbody');
-    if (!devBody) return;
-
-    // sort ngay lần đầu
-    sortDeviceRowsByTable();
-
-    // mỗi khi nội dung thay đổi -> sort lại
-    mo?.disconnect?.();
-    mo = new MutationObserver(() => {
-      // debounce nhẹ cho batch changes
-      clearTimeout(attachSortObserver._t);
-      attachSortObserver._t = setTimeout(sortDeviceRowsByTable, 30);
-    });
-    mo.observe(devBody, { childList: true, subtree: false });
-  }
-
-  // ===== 4) Thêm class vào các nút hiện có (để áp CSS phóng to)
+  // ===== 5) Decorate nút hiện có (để áp style phóng to)
   function decorateButtons() {
-    const devBody =
-      $('#devBody') || $('#devices-tbody') || $('#devices_tbody');
+    const devBody = findDevBody();
     if (!devBody) return;
 
-    // Gắn class cho cell action & nút
-    Array.from(devBody.querySelectorAll('tr')).forEach((tr) => {
+    Array.from(devBody.querySelectorAll('tr')).forEach(tr => {
       tr.classList.add('tngon-dev-row');
-
-      // cell cuối là actions
       const actionsTd = tr.lastElementChild;
       if (actionsTd) actionsTd.classList.add('tngon-dev-actions');
-
-      // gắn class chung cho các button có data-act
-      actionsTd?.querySelectorAll('[data-act]').forEach((btn) => {
+      actionsTd?.querySelectorAll('[data-act]').forEach(btn => {
         btn.classList.add('tngon-dev-btn');
       });
 
-      // cột ID – thêm class để CSS gọn gàng
       const idTd = tr.querySelector('td:first-child');
       if (idTd) idTd.classList.add('tngon-dev-id');
     });
   }
 
-  // Quan sát để auto-decorate sau mỗi lần bảng render lại
-  let mo2 = null;
-  function attachDecorObserver() {
-    const devBody =
-      $('#devBody') || $('#devices-tbody') || $('#devices_tbody');
-    if (!devBody) return;
-
-    // decorate ngay
-    decorateButtons();
-
-    mo2?.disconnect?.();
-    mo2 = new MutationObserver(() => {
-      // mỗi lần render lại -> decorate lại
-      clearTimeout(attachDecorObserver._t);
-      attachDecorObserver._t = setTimeout(decorateButtons, 10);
+  // ===== 6) Quan sát để đảm bảo: khi admin-devices.js render xong → move/sort/decorate
+  function attachObserver() {
+    const bodyObserver = new MutationObserver(() => {
+      const devBody = findDevBody();
+      if (!devBody) return;
+      ensureDevicesAtTop(devBody);
+      decorateButtons();
+      sortDevices();
     });
-    mo2.observe(devBody, { childList: true, subtree: true });
+    bodyObserver.observe(document.body, { childList: true, subtree: true });
   }
 
-  // ===== Boot
-  document.addEventListener('DOMContentLoaded', () => {
+  // ===== 7) Poll nhẹ phòng khi DOMContentLoaded chạy sớm
+  function waitAndRun() {
     injectStyles();
-    moveDevicesBlockUp();
-    attachDecorObserver();
-    attachSortObserver();
-  });
+    attachObserver();
+
+    let tries = 0;
+    const tick = setInterval(() => {
+      tries++;
+      const devBody = findDevBody();
+      if (devBody) {
+        ensureDevicesAtTop(devBody);
+        decorateButtons();
+        sortDevices();
+        clearInterval(tick);
+      }
+      if (tries > 80) clearInterval(tick); // ~8s là đủ
+    }, 100);
+  }
+
+  document.addEventListener('DOMContentLoaded', waitAndRun);
 })();
