@@ -1,245 +1,255 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8" />
-  <title>T-NGON Admin</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#da251d" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="T-NGON Admin" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta charset="UTF-8" />
+<title>T-NGON Admin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#da251d" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="T-NGON Admin" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://www.googleapis.com" crossorigin>
-  <link rel="preconnect" href="https://tngon-b37d6-default-rtdb.asia-southeast1.firebasedatabase.app" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://tngon-b37d6-default-rtdb.asia-southeast1.firebasedatabase.app" crossorigin>
 
-  <!-- Icons / Manifest -->
-  <link rel="icon" sizes="192x192" href="./icons/icon-192.png" />
-  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
-  <link rel="manifest" href="./admin.webmanifest" />
+<!-- Icons / Manifest -->
+<link rel="icon" sizes="192x192" href="./icons/icon-192.png" />
+<link rel="apple-touch-icon" href="./icons/icon-192.png" />
+<link rel="manifest" href="./admin.webmanifest" />
 
-  <!-- Tailwind -->
-  <script src="https://cdn.tailwindcss.com"></script>
+<!-- Tailwind -->
+<script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Firebase (compat) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<!-- Firebase (compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
-
-<style>
-  /* ====== Toggle switch chuẩn dạng gạt ====== */
-  .toggle input {
-    display: none;
-  }
-  .toggle label {
-    width: 50px;
-    height: 28px;
-    border-radius: 999px;
-    display: inline-block;
-    position: relative;
-    background: #e5e7eb; /* xám nhạt */
-    cursor: pointer;
-    transition: background 0.25s;
-  }
-  .toggle label::after {
-    content: "";
-    position: absolute;
-    top: 3px;
-    left: 3px;
-    width: 22px;
-    height: 22px;
-    border-radius: 999px;
-    background: #fff;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-    transition: transform 0.25s;
-  }
-  .toggle input:checked + label {
-    background: #10b981; /* xanh lá */
-  }
-  .toggle input:checked + label::after {
-    transform: translateX(22px);
-  }
-  /* Khi disabled */
-  .toggle input:disabled + label {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-</style>
-  
-  <style>
-  /* Khôi phục nút trong TAB Thiết bị (ở dưới “Thiết bị iPad”) */
-  #viewDevices #btnReloadAll,
-  #viewDevices #btnToggleAll,
-  #viewDevices #btnPowerOnAll,
-  #viewDevices #btnPowerOffAll {
-    display: inline-block !important;
-  }
-</style>
-
-  <style>
-  /* Ẩn 3 nút trên cùng (nằm cạnh menu tabs) */
-  #devicesHeaderActions {
+  /* Ẩn 3 nút thanh trên cùng */
+  #devices-toolbar,
+  #btnToggleAll,
+  #btnReloadAll,
+  #btnOn,      /* nếu còn nút “Bật toàn bộ” cũ */
+  #btnOff {    /* nếu còn nút “Tắt toàn bộ” cũ */
     display: none !important;
   }
 </style>
-  
-  <style>
-    html, body { height:100%; background:#f6f7f9; }
-    .app-badge { font-size:12px; padding:2px 6px; border-radius:6px; border:1px solid #e5e7eb; color:#6b7280; }
-  </style>
+ 
+
+<style>
+/* ====== Toggle switch chuẩn dạng gạt ====== */
+.toggle input {
+display: none;
+}
+.toggle label {
+width: 50px;
+height: 28px;
+border-radius: 999px;
+display: inline-block;
+position: relative;
+background: #e5e7eb; /* xám nhạt */
+cursor: pointer;
+transition: background 0.25s;
+}
+.toggle label::after {
+content: "";
+position: absolute;
+top: 3px;
+left: 3px;
+width: 22px;
+height: 22px;
+border-radius: 999px;
+background: #fff;
+box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+transition: transform 0.25s;
+}
+.toggle input:checked + label {
+background: #10b981; /* xanh lá */
+}
+.toggle input:checked + label::after {
+transform: translateX(22px);
+}
+/* Khi disabled */
+.toggle input:disabled + label {
+opacity: 0.5;
+cursor: not-allowed;
+}
+</style>
+
+<style>
+/* Khôi phục nút trong TAB Thiết bị (ở dưới “Thiết bị iPad”) */
+#viewDevices #btnReloadAll,
+#viewDevices #btnToggleAll,
+#viewDevices #btnPowerOnAll,
+#viewDevices #btnPowerOffAll {
+display: inline-block !important;
+}
+</style>
+
+<style>
+/* Ẩn 3 nút trên cùng (nằm cạnh menu tabs) */
+#devicesHeaderActions {
+display: none !important;
+}
+</style>
+
+<style>
+html, body { height:100%; background:#f6f7f9; }
+.app-badge { font-size:12px; padding:2px 6px; border-radius:6px; border:1px solid #e5e7eb; color:#6b7280; }
+</style>
 </head>
 <body class="bg-gray-50">
-  <!-- Topbar -->
-  <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-3 md:px-6">
-    <div class="flex items-center gap-3">
-      <img src="./icons/icon-72.png" alt="logo" class="w-8 h-8 rounded-md" />
-      <button id="homeBtn" class="text-xl font-extrabold tracking-wide text-[#da251d]">T-NGON Admin</button>
-      <span id="pwaBadge" class="app-badge hidden">Installed</span>
-    </div>
-    <div class="flex items-center gap-2">
-      <button id="btnInstall" class="px-3 py-1.5 rounded-md bg-[#da251d] text-white text-sm hidden">Cài đặt ứng dụng</button>
-      <div id="connBadge" class="text-xs text-gray-500">Đang kiểm tra kết nối…</div>
-    </div>
-  </header>
+<!-- Topbar -->
+<header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-3 md:px-6">
+<div class="flex items-center gap-3">
+<img src="./icons/icon-72.png" alt="logo" class="w-8 h-8 rounded-md" />
+<button id="homeBtn" class="text-xl font-extrabold tracking-wide text-[#da251d]">T-NGON Admin</button>
+<span id="pwaBadge" class="app-badge hidden">Installed</span>
+</div>
+<div class="flex items-center gap-2">
+<button id="btnInstall" class="px-3 py-1.5 rounded-md bg-[#da251d] text-white text-sm hidden">Cài đặt ứng dụng</button>
+<div id="connBadge" class="text-xs text-gray-500">Đang kiểm tra kết nối…</div>
+</div>
+</header>
 
-  <!-- Main -->
-  <main class="content flex-1">
-    <!-- Tabs -->
-    <div class="sticky top-0 z-20 bg-white border-b border-gray-200 px-4 md:px-6 py-3">
-      <div class="flex items-center gap-2">
-        <button id="tabDevices" class="px-3 py-1.5 rounded-lg bg-blue-600 text-white">Thiết bị</button>
-        <button id="tabCodes"   class="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200">Mã</button>
-        <button id="tabAds"     class="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200">Up ảnh quảng cáo</button>
+<!-- Main -->
+<main class="content flex-1">
+<!-- Tabs -->
+<div class="sticky top-0 z-20 bg-white border-b border-gray-200 px-4 md:px-6 py-3">
+<div class="flex items-center gap-2">
+<button id="tabDevices" class="px-3 py-1.5 rounded-lg bg-blue-600 text-white">Thiết bị</button>
+<button id="tabCodes"   class="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200">Mã</button>
+<button id="tabAds"     class="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200">Up ảnh quảng cáo</button>
 
-        
-      </div>
-    </div>
 
-    <!-- View: Devices -->
-    <section id="viewDevices" class="p-4 md:p-6">
-      <h2 class="text-2xl font-bold text-gray-800 mb-4">Thiết bị (iPad)</h2>
-      <!-- Grid card thiết bị -->
-      <div id="devCards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3"></div>
-      <div id="devError" class="mt-4 hidden p-3 rounded-lg bg-red-50 text-red-700 text-sm"></div>
-    </section>
+</div>
+</div>
 
-    <!-- View: Codes -->
-    <section id="viewCodes" class="p-4 md:p-6 hidden">
-      <h2 class="text-2xl font-bold text-gray-800 mb-4">Thiết bị iPad & Mã</h2>
+<!-- View: Devices -->
+<section id="viewDevices" class="p-4 md:p-6">
+<h2 class="text-2xl font-bold text-gray-800 mb-4">Thiết bị (iPad)</h2>
+<!-- Grid card thiết bị -->
+<div id="devCards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3"></div>
+<div id="devError" class="mt-4 hidden p-3 rounded-lg bg-red-50 text-red-700 text-sm"></div>
+</section>
 
-      <div class="flex flex-col lg:flex-row gap-4">
-        <!-- Add codes -->
-        <div class="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div class="flex items-center justify-between">
-            <div class="text-lg font-semibold">Danh sách MÃ</div>
-            <button id="btnAddCodes" class="px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700">Thêm mã</button>
-          </div>
-          <textarea id="codesInput" class="w-full mt-3 h-40 border rounded-lg p-3 font-mono" placeholder="Mỗi dòng 1 mã, ví dụ:
+<!-- View: Codes -->
+<section id="viewCodes" class="p-4 md:p-6 hidden">
+<h2 class="text-2xl font-bold text-gray-800 mb-4">Thiết bị iPad & Mã</h2>
+
+<div class="flex flex-col lg:flex-row gap-4">
+<!-- Add codes -->
+<div class="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+<div class="flex items-center justify-between">
+<div class="text-lg font-semibold">Danh sách MÃ</div>
+<button id="btnAddCodes" class="px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700">Thêm mã</button>
+</div>
+<textarea id="codesInput" class="w-full mt-3 h-40 border rounded-lg p-3 font-mono" placeholder="Mỗi dòng 1 mã, ví dụ:
 A1B2C3
 X9Y8Z7
 T01"></textarea>
 
-          <div id="codesQueueWrap" class="mt-4 hidden p-3 rounded-lg border border-emerald-200 bg-emerald-50">
-            <div class="flex items-center justify-between mb-2">
-              <div class="font-semibold text-emerald-800">Hàng đợi mã khả dụng <span id="codesQueueCount" class="text-emerald-600">(0)</span></div>
-              <button id="btnCopyQueue" class="px-2 py-1 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-700">Copy tất cả</button>
-            </div>
-            <div id="codesQueue" class="flex flex-wrap gap-2 text-sm"></div>
-          </div>
-        </div>
+<div id="codesQueueWrap" class="mt-4 hidden p-3 rounded-lg border border-emerald-200 bg-emerald-50">
+<div class="flex items-center justify-between mb-2">
+<div class="font-semibold text-emerald-800">Hàng đợi mã khả dụng <span id="codesQueueCount" class="text-emerald-600">(0)</span></div>
+<button id="btnCopyQueue" class="px-2 py-1 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-700">Copy tất cả</button>
+</div>
+<div id="codesQueue" class="flex flex-wrap gap-2 text-sm"></div>
+</div>
+</div>
 
-        <!-- Codes table -->
-        <div class="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div class="text-lg font-semibold mb-3">Danh sách mã</div>
-          <div class="overflow-auto">
-            <table class="w-full text-sm">
-              <thead class="text-left text-gray-500">
-                <tr>
-                  <th class="px-2 py-1">Mã</th>
-                  <th class="px-2 py-1">Bật</th>
-                  <th class="px-2 py-1">Đang gắn</th>
-                  <th class="px-2 py-1">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody id="codesBody"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </section>
+<!-- Codes table -->
+<div class="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+<div class="text-lg font-semibold mb-3">Danh sách mã</div>
+<div class="overflow-auto">
+<table class="w-full text-sm">
+<thead class="text-left text-gray-500">
+<tr>
+<th class="px-2 py-1">Mã</th>
+<th class="px-2 py-1">Bật</th>
+<th class="px-2 py-1">Đang gắn</th>
+<th class="px-2 py-1">Thao tác</th>
+</tr>
+</thead>
+<tbody id="codesBody"></tbody>
+</table>
+</div>
+</div>
+</div>
+</section>
 
-    <!-- View: Ads -->
-    <section id="viewAds" class="p-0 hidden">
-      <iframe id="ads-iframe" src="https://pic-flame.vercel.app/" referrerpolicy="no-referrer" style="width:100%;height:calc(100vh - 64px);border:0;background:#fff;"></iframe>
-    </section>
-  </main>
+<!-- View: Ads -->
+<section id="viewAds" class="p-0 hidden">
+<iframe id="ads-iframe" src="https://pic-flame.vercel.app/" referrerpolicy="no-referrer" style="width:100%;height:calc(100vh - 64px);border:0;background:#fff;"></iframe>
+</section>
+</main>
 
-  <!-- Modal root (popup Đổi bàn / Action sheet) -->
-  <div id="modal-root"></div>
+<!-- Modal root (popup Đổi bàn / Action sheet) -->
+<div id="modal-root"></div>
 
-  <script>
-    // ===== App version =====
-    const APP_VERSION = "1.3.3";
-  </script>
+<script>
+// ===== App version =====
+const APP_VERSION = "1.3.3";
+</script>
 
-  <script>
-    // ===== Firebase config =====
-    const firebaseConfig = {
-      apiKey: "AIzaSyB4u2G41xdGkgBC0KltleRpcg5Lwru2RIU",
-      authDomain: "tngon-b37d6.firebaseapp.com",
-      databaseURL: "https://tngon-b37d6-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "tngon-b37d6",
-      storageBucket: "tngon-b37d6.firebasestorage.app",
-      messagingSenderId: "580319242104",
-      appId: "1:580319242104:web:6922e4327bdc8286c30a8d",
-      measurementId: "G-LHEH8ZC6SL"
-    };
+<script>
+// ===== Firebase config =====
+const firebaseConfig = {
+apiKey: "AIzaSyB4u2G41xdGkgBC0KltleRpcg5Lwru2RIU",
+authDomain: "tngon-b37d6.firebaseapp.com",
+databaseURL: "https://tngon-b37d6-default-rtdb.asia-southeast1.firebasedatabase.app",
+projectId: "tngon-b37d6",
+storageBucket: "tngon-b37d6.firebasestorage.app",
+messagingSenderId: "580319242104",
+appId: "1:580319242104:web:6922e4327bdc8286c30a8d",
+measurementId: "G-LHEH8ZC6SL"
+};
 
-    // ===== Basic init + PWA =====
-    const connBadge = document.getElementById('connBadge');
-    const pwaBadge  = document.getElementById('pwaBadge');
-    const btnInstall= document.getElementById('btnInstall');
-    const homeBtn   = document.getElementById('homeBtn');
-    homeBtn.addEventListener('click', ()=> location.href = location.pathname);
+// ===== Basic init + PWA =====
+const connBadge = document.getElementById('connBadge');
+const pwaBadge  = document.getElementById('pwaBadge');
+const btnInstall= document.getElementById('btnInstall');
+const homeBtn   = document.getElementById('homeBtn');
+homeBtn.addEventListener('click', ()=> location.href = location.pathname);
 
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw-admin.js').catch(()=>{});
-    }
-    let deferredPrompt = null;
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault(); deferredPrompt = e; btnInstall.classList.remove('hidden');
-    });
-    btnInstall.addEventListener('click', async ()=> {
-      if (!deferredPrompt) return;
-      deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
-      btnInstall.classList.add('hidden');
-      deferredPrompt = null;
-    });
-    window.addEventListener('appinstalled', ()=>{ pwaBadge.classList.remove('hidden'); btnInstall.classList.add('hidden'); });
+if ('serviceWorker' in navigator) {
+navigator.serviceWorker.register('./sw-admin.js').catch(()=>{});
+}
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+e.preventDefault(); deferredPrompt = e; btnInstall.classList.remove('hidden');
+});
+btnInstall.addEventListener('click', async ()=> {
+if (!deferredPrompt) return;
+deferredPrompt.prompt();
+await deferredPrompt.userChoice;
+btnInstall.classList.add('hidden');
+deferredPrompt = null;
+});
+window.addEventListener('appinstalled', ()=>{ pwaBadge.classList.remove('hidden'); btnInstall.classList.add('hidden'); });
 
-    // Firebase init + connection badge
-    (function initFirebase(){
-      try {
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
-        db.ref('.info/connected').on('value', s=>{
-          const ok = !!s.val();
-          connBadge.textContent = ok ? 'Đã kết nối Firebase' : 'Mất kết nối Firebase';
-          connBadge.className = ok ? 'text-xs text-emerald-600' : 'text-xs text-red-600';
-        });
-      } catch(e) {
-        connBadge.textContent = 'Firebase init lỗi';
-        connBadge.className = 'text-xs text-red-600';
-        console.error(e);
-      }
-    })();
-  </script>
+// Firebase init + connection badge
+(function initFirebase(){
+try {
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+db.ref('.info/connected').on('value', s=>{
+const ok = !!s.val();
+connBadge.textContent = ok ? 'Đã kết nối Firebase' : 'Mất kết nối Firebase';
+connBadge.className = ok ? 'text-xs text-emerald-600' : 'text-xs text-red-600';
+});
+} catch(e) {
+connBadge.textContent = 'Firebase init lỗi';
+connBadge.className = 'text-xs text-red-600';
+console.error(e);
+}
+})();
+</script>
 
-  <!-- Router + feature scripts -->
-  <script src="./assets/js/admin-tabs.js"></script>
-  <script src="./assets/js/admin-devices-tab.js"></script>
-  <script src="./assets/js/admin-codes-tab.js"></script>
+<!-- Router + feature scripts -->
+<script src="./assets/js/admin-tabs.js"></script>
+<script src="./assets/js/admin-devices-tab.js"></script>
+<script src="./assets/js/admin-codes-tab.js"></script>
 </body>
 </html>
