@@ -302,12 +302,6 @@
             <div class="text-xs text-gray-700 mt-1">Bàn: ${tableDisp}</div>
             <div class="text-xs text-gray-700">Mã: ${code || '—'}</div>
           </div>
-          <div class="flex items-center gap-2 select-none" data-role="switch-wrap">
-            <div class="toggle ${hasTable?'':'opacity-50'}">
-              <input type="checkbox" id="sw-${id}" ${isOn?'checked':''} ${hasTable?'':'disabled'}>
-              <label for="sw-${id}" aria-label="Bật/Tắt theo bàn"></label>
-            </div>
-          </div>
         </div>
       `;
 
