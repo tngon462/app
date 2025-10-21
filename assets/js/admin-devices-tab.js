@@ -1,19 +1,20 @@
 (function(){
   'use strict';
 
-  // 22---------- helpers ----------
+  // -------- helpers --------
   const $  = (sel, root=document)=> root.querySelector(sel);
   const $$ = (sel, root=document)=> Array.from(root.querySelectorAll(sel));
-  const log  = (...a)=> console.log('[devices-tab]', ...a);
-  const warn = (...a)=> console.warn('[devices-tab]', ...a);
-  const mask = (id)=> (!id ? '—' : (id.length<=4 ? id : id.slice(0,4)+'…'));
+  const log = (...a)=> console.log('[devices-tab]', ...a);
+  const warn= (...a)=> console.warn('[devices-tab]', ...a);
+  const mask= (id)=> (!id ? '—' : (id.length<=4 ? id : id.slice(0,4)+'…'));
+  const safeRemove = (n)=>{ if (n && n.isConnected && n.parentNode) n.parentNode.removeChild(n); };
 
   const view = document.getElementById('viewDevices');
   if (!view) { warn('Không thấy #viewDevices'); return; }
 
-  // ---------- Firebase + auth ẩn danh ----------
+  // -------- Firebase + auth --------
   async function ensureDB(){
-    if (!window.firebase || !firebase.apps?.length) throw new Error('Firebase chưa init trước file này');
+    if (!window.firebase || !firebase.apps?.length) throw new Error('Firebase chưa init');
     if (!firebase.auth().currentUser){
       await firebase.auth().signInAnonymously();
       await new Promise(res=>{
@@ -23,18 +24,16 @@
     return firebase.database();
   }
 
-  // ---------- links.json để chọn bàn ----------
+  // -------- links.json --------
   let LINKS_MAP = null;
   async function loadLinks(){
     try{
       const res = await fetch('./links.json?cb='+Date.now(), { cache:'no-store' });
       const data = await res.json();
       LINKS_MAP = data.links || data;
-    }catch(e){
-      LINKS_MAP = null;
-      warn('Không tải được links.json, vẫn gửi số bàn được.');
-    }
+    }catch(e){ LINKS_MAP=null; warn('Không tải được links.json'); }
   }
+
   function openTablePicker(onPick){
     const keys = LINKS_MAP ? Object.keys(LINKS_MAP).sort((a,b)=>Number(a)-Number(b))
                            : Array.from({length:15},(_,i)=> String(i+1));
@@ -49,18 +48,19 @@
         <div id="tp-grid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-[70vh] overflow-auto"></div>
       </div>`;
     document.body.appendChild(wrap);
+
     const grid = wrap.querySelector('#tp-grid');
     keys.forEach(k=>{
       const b=document.createElement('button');
       b.className='px-3 py-3 rounded-lg border text-sm font-semibold hover:bg-blue-50';
       b.textContent='Bàn '+k;
-      b.addEventListener('click', ()=>{ try{ onPick(k); } finally { document.body.removeChild(wrap);} });
+      b.addEventListener('click', ()=>{ try{ onPick(k); } finally { safeRemove(wrap); }});
       grid.appendChild(b);
     });
-    wrap.querySelector('#tp-close').addEventListener('click', ()=> document.body.removeChild(wrap));
+    wrap.querySelector('#tp-close').addEventListener('click', ()=> safeRemove(wrap));
   }
 
-  // ---------- Toolbar trên cùng ----------
+  // -------- Toolbar --------
   function ensureToolbar(db){
     let bar = $('#devices-toolbar', view);
     if (bar) return;
@@ -110,7 +110,7 @@
     });
   }
 
-  // ---------- containers để render ----------
+  // -------- Containers --------
   function pickContainers(){
     let tbody = document.getElementById('devBody') || document.getElementById('devices-tbody') || document.getElementById('devices_tbody');
     let grid  = document.getElementById('devicesGrid') || document.getElementById('devices-cards');
@@ -118,15 +118,15 @@
       grid = document.createElement('div');
       grid.id='devicesGrid';
       grid.className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3';
-      const anchor = $('#viewDevices h3')?.parentNode === view ? $('#viewDevices h3') : null;
-      if (anchor) view.insertBefore(grid, anchor.nextSibling);
+      const title = $('#viewDevices h3');
+      if (title && title.parentNode===view) view.insertBefore(grid, title.nextSibling);
       else view.appendChild(grid);
       warn('Không thấy tbody → dùng lưới devicesGrid.');
     }
     return { tbody, grid };
   }
 
-  // ---------- Popup hành động ----------
+  // -------- Popup hành động --------
   function openActionPopup(db, id, data){
     const code  = data?.code  || '';
     const name  = data?.name  || '';
@@ -144,7 +144,8 @@
 
         <div class="text-sm text-gray-600 mb-3">
           <div>ID đầy đủ: <span class="font-mono break-all">${id}</span></div>
-          <div>Tên hiện tại: <strong>${name || '(chưa đặt)'}</strong> <button id="act-rename" class="ml-1 px-2 py-0.5 text-xs rounded border hover:bg-gray-50">Đổi tên</button></div>
+          <div>Tên hiện tại: <strong>${name || '(chưa đặt)'}</strong>
+            <button id="act-rename" class="ml-1 px-2 py-0.5 text-xs rounded border hover:bg-gray-50">Đổi tên</button></div>
           <div>Mã đang gắn: <span class="font-mono">${code || '—'}</span></div>
           <div>Bàn: <strong>${stage==='pos' ? ('+'+(table||'?')) : (stage==='start'? (table||'—') : '—')}</strong></div>
         </div>
@@ -157,7 +158,7 @@
         </div>
       </div>`;
     document.body.appendChild(wrap);
-    $('#devact-close', wrap).addEventListener('click', ()=> document.body.removeChild(wrap));
+    $('#devact-close', wrap).addEventListener('click', ()=> safeRemove(wrap));
 
     // Đổi tên
     $('#act-rename', wrap).addEventListener('click', async ()=>{
@@ -167,7 +168,7 @@
         const newName = String(v).trim();
         if (newName) await db.ref(`devices/${id}/name`).set(newName);
         else await db.ref(`devices/${id}/name`).remove();
-        document.body.removeChild(wrap);
+        safeRemove(wrap);
       }catch(e){ alert('Đặt tên lỗi: '+(e?.message||e)); }
     });
 
@@ -175,7 +176,7 @@
     $('#act-reload', wrap).addEventListener('click', async ()=>{
       try{
         await db.ref(`devices/${id}/commands/reloadAt`).set(firebase.database.ServerValue.TIMESTAMP);
-        document.body.removeChild(wrap);
+        safeRemove(wrap);
       }catch(e){ alert('Gửi reload lỗi: '+(e?.message||e)); }
     });
 
@@ -184,9 +185,10 @@
       openTablePicker(async (label)=>{
         try{
           await db.ref(`devices/${id}/commands/setTable`).set({ value: label, at: firebase.database.ServerValue.TIMESTAMP });
-          await db.ref(`devices/${id}`).update({ table: label, stage: 'start' });
-          document.body.removeChild(wrap);
+          await db.ref(`devices/${id}`).update({ table: label, stage:'start' });
         }catch(e){ alert('Đổi bàn lỗi: '+(e?.message||e)); }
+        // đóng popup an toàn
+        safeRemove(wrap);
       });
     });
 
@@ -206,26 +208,38 @@
         });
         await db.ref(`devices/${id}/commands/unbindAt`).set(firebase.database.ServerValue.TIMESTAMP);
         await db.ref(`devices/${id}`).update({ code:null, table:null, stage:'select' });
-        document.body.removeChild(wrap);
+        safeRemove(wrap);
       }catch(e){ alert('Gỡ liên kết lỗi: '+(e?.message||e)); }
     });
 
-    // Xoá device (chỉ khi không gắn mã)
+    // Xoá device
     $('#act-delete', wrap).addEventListener('click', async ()=>{
-      if (code) return; // đã bị disabled từ UI rồi
+      if (code) return;
       if (!confirm('Xoá thiết bị khỏi danh sách?')) return;
-      try{
-        await db.ref(`devices/${id}`).remove();
-        document.body.removeChild(wrap);
-      }catch(e){ alert('Xoá device lỗi: '+(e?.message||e)); }
+      try{ await db.ref(`devices/${id}`).remove(); safeRemove(wrap); }
+      catch(e){ alert('Xoá device lỗi: '+(e?.message||e)); }
     });
   }
 
-  // ---------- render bảng ----------
+  // -------- sắp xếp theo bàn để không “nhảy” --------
+  function sortByTableThenId(entries){
+    const toNum = (d)=> {
+      const t = (d?.table ?? '').toString();
+      const n = parseInt(t, 10);
+      return isFinite(n) ? n : 99999; // thiết bị chưa có bàn -> xuống cuối
+    };
+    return entries.sort((a,b)=>{
+      const ta = toNum(a[1]), tb = toNum(b[1]);
+      if (ta!==tb) return ta - tb;
+      return a[0].localeCompare(b[0]); // id
+    });
+  }
+
+  // -------- render bảng --------
   function renderTable(tbody, db, devices){
     if (!tbody) return;
     tbody.innerHTML='';
-    const list = Object.entries(devices||{}).sort((a,b)=> (b[1]?.lastSeen||0) - (a[1]?.lastSeen||0));
+    const list = sortByTableThenId(Object.entries(devices||{}));
     if (!list.length){
       const tr=document.createElement('tr');
       tr.innerHTML=`<td colspan="4" class="px-2 py-3 text-center text-sm text-gray-500">Chưa có thiết bị nào.</td>`;
@@ -250,11 +264,11 @@
     }
   }
 
-  // ---------- render lưới widget ----------
+  // -------- render lưới widget --------
   function renderGrid(grid, db, devices){
     if (!grid) return;
     grid.innerHTML='';
-    const list = Object.entries(devices||{}).sort((a,b)=> (b[1]?.lastSeen||0) - (a[1]?.lastSeen||0));
+    const list = sortByTableThenId(Object.entries(devices||{}));
     if (!list.length){
       const p=document.createElement('div');
       p.className='text-center text-sm text-gray-500 py-3';
@@ -279,7 +293,7 @@
     }
   }
 
-  // ---------- boot ----------
+  // -------- boot --------
   document.addEventListener('DOMContentLoaded', async ()=>{
     try{
       const db = await ensureDB();
@@ -287,8 +301,6 @@
       ensureToolbar(db);
 
       const { tbody, grid } = pickContainers();
-      log('Containers:', { hasTbody: !!tbody, hasGrid: !!grid });
-
       db.ref('devices').on('value', s=>{
         const v = s.val() || {};
         if (tbody) renderTable(tbody, db, v);
