@@ -1,397 +1,396 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8" />
-  <title>T-NGON Admin (All-in-One)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#da251d" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="T-NGON Admin" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta charset="UTF-8" />
+<title>T-NGON Admin (All-in-One)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#da251d" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="T-NGON Admin" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://www.googleapis.com" crossorigin>
-  <link rel="preconnect" href="https://tngon-b37d6-default-rtdb.asia-southeast1.firebasedatabase.app" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://tngon-b37d6-default-rtdb.asia-southeast1.firebasedatabase.app" crossorigin>
 
-  <!-- Icons / Manifest -->
-  <link rel="icon" sizes="192x192" href="./icons/icon-192.png" />
-  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
-  <link rel="manifest" href="./admin.webmanifest" />
+<!-- Icons / Manifest -->
+<link rel="icon" sizes="192x192" href="./icons/icon-192.png" />
+<link rel="apple-touch-icon" href="./icons/icon-192.png" />
+<link rel="manifest" href="./admin.webmanifest" />
 
-  <!-- Tailwind -->
-  <script src="https://cdn.tailwindcss.com"></script>
+<!-- Tailwind -->
+<script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Firebase (compat) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<!-- Firebase (compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
-  <style>
-    html, body { height: 100%; background:#f6f7f9; }
-    .app-badge { font-size:12px; padding:2px 6px; border-radius:6px; border:1px solid #e5e7eb; color:#6b7280; }
+<style>
+html, body { height: 100%; background:#f6f7f9; }
+.app-badge { font-size:12px; padding:2px 6px; border-radius:6px; border:1px solid #e5e7eb; color:#6b7280; }
 
-    /* Toggle switch dạng gạt – ẩn hoàn toàn checkbox (không còn ô vuông/dấu tick) */
-    .toggle input { display:none; }
-    .toggle label{
-      width:56px; height:32px; border-radius:999px; display:inline-block; position:relative;
-      background:#e5e7eb; transition:.25s; cursor:pointer;
-    }
-    .toggle label::after{
-      content:""; position:absolute; top:4px; left:4px; width:24px; height:24px; border-radius:999px;
-      background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:.25s;
-    }
-    .toggle input:checked + label{ background:#10b981; }
-    .toggle input:checked + label::after{ transform:translateX(24px); }
-    .toggle input:disabled + label{ opacity:.5; cursor:not-allowed; }
+/* Toggle switch dạng gạt – ẩn hoàn toàn checkbox (không còn ô vuông/dấu tick) */
+.toggle input { display:none; }
+.toggle label{
+width:56px; height:32px; border-radius:999px; display:inline-block; position:relative;
+background:#e5e7eb; transition:.25s; cursor:pointer;
+}
+.toggle label::after{
+content:""; position:absolute; top:4px; left:4px; width:24px; height:24px; border-radius:999px;
+background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:.25s;
+}
+.toggle input:checked + label{ background:#10b981; }
+.toggle input:checked + label::after{ transform:translateX(24px); }
+.toggle input:disabled + label{ opacity:.5; cursor:not-allowed; }
 
-    /* Ẩn mọi toolbar “trên cùng cạnh menu tabs” nếu có */
-    #devicesHeaderActions{ display:none !important; }
-  </style>
+/* Ẩn mọi toolbar “trên cùng cạnh menu tabs” nếu có */
+#devicesHeaderActions{ display:none !important; }
+</style>
 </head>
 <body class="bg-gray-50">
-  <!-- Topbar -->
-  <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-3 md:px-6">
-    <div class="flex items-center gap-3">
-      <img src="./icons/icon-72.png" alt="logo" class="w-8 h-8 rounded-md" />
-      <button id="homeBtn" class="text-xl font-extrabold tracking-wide text-[#da251d]">T-NGON Admin</button>
-      <span id="pwaBadge" class="app-badge hidden">Installed</span>
-    </div>
-    <div class="flex items-center gap-2">
-      <button id="btnInstall" class="px-3 py-1.5 rounded-md bg-[#da251d] text-white text-sm hidden">Cài đặt ứng dụng</button>
-      <div id="connBadge" class="text-xs text-gray-500">Đang kiểm tra kết nối…</div>
-    </div>
-  </header>
+<!-- Topbar -->
+<header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-3 md:px-6">
+<div class="flex items-center gap-3">
+<img src="./icons/icon-72.png" alt="logo" class="w-8 h-8 rounded-md" />
+<button id="homeBtn" class="text-xl font-extrabold tracking-wide text-[#da251d]">T-NGON Admin</button>
+<span id="pwaBadge" class="app-badge hidden">Installed</span>
+</div>
+<div class="flex items-center gap-2">
+<button id="btnInstall" class="px-3 py-1.5 rounded-md bg-[#da251d] text-white text-sm hidden">Cài đặt ứng dụng</button>
+<div id="connBadge" class="text-xs text-gray-500">Đang kiểm tra kết nối…</div>
+</div>
+</header>
 
-  <!-- Main -->
-  <main class="content flex-1">
-    <!-- Tabs -->
-    <div class="sticky top-0 z-20 bg-white border-b border-gray-200 px-4 md:px-6 py-3">
-      <div class="flex items-center gap-2">
-        <button id="tabDevices" class="px-3 py-1.5 rounded-lg bg-blue-600 text-white">Thiết bị</button>
-        <button id="tabCodes"   class="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200">Mã</button>
-        <button id="tabAds"     class="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200">Up ảnh quảng cáo</button>
-      </div>
-    </div>
+<!-- Main -->
+<main class="content flex-1">
+<!-- Tabs -->
+<div class="sticky top-0 z-20 bg-white border-b border-gray-200 px-4 md:px-6 py-3">
+<div class="flex items-center gap-2">
+<button id="tabDevices" class="px-3 py-1.5 rounded-lg bg-blue-600 text-white">Thiết bị</button>
+<button id="tabCodes"   class="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200">Mã</button>
+<button id="tabAds"     class="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200">Up ảnh quảng cáo</button>
+</div>
+</div>
 
-    <!-- View: Devices -->
-    <section id="viewDevices" class="p-4 md:p-6">
-      <h2 class="text-2xl font-bold text-gray-800 mb-4">Thiết bị (iPad)</h2>
+<!-- View: Devices -->
+<section id="viewDevices" class="p-4 md:p-6">
+<h2 class="text-2xl font-bold text-gray-800 mb-4">Thiết bị (iPad)</h2>
 
-      <!-- Toolbar trong TAB Thiết bị -->
-      <div id="devices-toolbar" class="flex flex-wrap items-center gap-2 mb-4">
-        <button id="btnReloadAll" class="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Reload toàn bộ</button>
-        <button id="btnToggleAll" class="px-3 py-2 rounded bg-gray-800 text-white hover:bg-black">Tắt toàn bộ</button>
-        <span class="text-xs text-gray-500">• Tác động toàn bộ iPad</span>
-      </div>
+<!-- Toolbar trong TAB Thiết bị -->
+<div id="devices-toolbar" class="flex flex-wrap items-center gap-2 mb-4">
+<button id="btnReloadAll" class="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Reload toàn bộ</button>
+<button id="btnToggleAll" class="px-3 py-2 rounded bg-gray-800 text-white hover:bg-black">Tắt toàn bộ</button>
+<span class="text-xs text-gray-500">• Tác động toàn bộ iPad</span>
+</div>
 
-      <!-- Grid card thiết bị -->
-      <div id="devCards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3"></div>
-      <div id="devError" class="mt-4 hidden p-3 rounded-lg bg-red-50 text-red-700 text-sm"></div>
-    </section>
+<!-- Grid card thiết bị -->
+<div id="devCards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3"></div>
+<div id="devError" class="mt-4 hidden p-3 rounded-lg bg-red-50 text-red-700 text-sm"></div>
+</section>
 
-    <!-- View: Codes -->
-    <section id="viewCodes" class="p-4 md:p-6 hidden">
-      <h2 class="text-2xl font-bold text-gray-800 mb-4">Thiết bị iPad & Mã</h2>
+<!-- View: Codes -->
+<section id="viewCodes" class="p-4 md:p-6 hidden">
+<h2 class="text-2xl font-bold text-gray-800 mb-4">Thiết bị iPad & Mã</h2>
 
-      <div class="flex flex-col lg:flex-row gap-4">
-        <!-- Add codes -->
-        <div class="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div class="flex items-center justify-between">
-            <div class="text-lg font-semibold">Danh sách MÃ</div>
-            <button id="btnAddCodes" class="px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700">Thêm mã</button>
-          </div>
-          <textarea id="codesInput" class="w-full mt-3 h-40 border rounded-lg p-3 font-mono" placeholder="Mỗi dòng 1 mã, ví dụ:
+<div class="flex flex-col lg:flex-row gap-4">
+<!-- Add codes -->
+<div class="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+<div class="flex items-center justify-between">
+<div class="text-lg font-semibold">Danh sách MÃ</div>
+<button id="btnAddCodes" class="px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700">Thêm mã</button>
+</div>
+<textarea id="codesInput" class="w-full mt-3 h-40 border rounded-lg p-3 font-mono" placeholder="Mỗi dòng 1 mã, ví dụ:
 A1B2C3
 X9Y8Z7
 T01"></textarea>
 
-          <div id="codesQueueWrap" class="mt-4 hidden p-3 rounded-lg border border-emerald-200 bg-emerald-50">
-            <div class="flex items-center justify-between mb-2">
-              <div class="font-semibold text-emerald-800">Hàng đợi mã khả dụng <span id="codesQueueCount" class="text-emerald-600">(0)</span></div>
-              <button id="btnCopyQueue" class="px-2 py-1 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-700">Copy tất cả</button>
-            </div>
-            <div id="codesQueue" class="flex flex-wrap gap-2 text-sm"></div>
+<div id="codesQueueWrap" class="mt-4 hidden p-3 rounded-lg border border-emerald-200 bg-emerald-50">
+<div class="flex items-center justify-between mb-2">
+<div class="font-semibold text-emerald-800">Hàng đợi mã khả dụng <span id="codesQueueCount" class="text-emerald-600">(0)</span></div>
+<button id="btnCopyQueue" class="px-2 py-1 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-700">Copy tất cả</button>
+</div>
+<div id="codesQueue" class="flex flex-wrap gap-2 text-sm"></div>
+</div>
+</div>
+
+<!-- Codes table -->
+<div class="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+<div class="text-lg font-semibold mb-3">Danh sách mã</div>
+<div class="overflow-auto">
+<table class="w-full text-sm">
+<thead class="text-left text-gray-500">
+<tr>
+<th class="px-2 py-1">Mã</th>
+<th class="px-2 py-1">Bật</th>
+<th class="px-2 py-1">Đang gắn</th>
+<th class="px-2 py-1">Thao tác</th>
+</tr>
+</thead>
+<tbody id="codesBody"></tbody>
+</table>
+</div>
+</div>
+</div>
+</section>
+
+<!-- View: Ads -->
+<section id="viewAds" class="p-0 hidden">
+<iframe id="ads-iframe" src="https://pic-flame.vercel.app/" referrerpolicy="no-referrer" style="width:100%;height:calc(100vh - 64px);border:0;background:#fff;"></iframe>
+</section>
+</main>
+
+<!-- Modal root (popup Đổi bàn / Action sheet) -->
+<div id="modal-root"></div>
+
+<script>
+// ===== App version =====
+const APP_VERSION = "1.3.3";
+
+// ===== Firebase config =====
+const firebaseConfig = {
+apiKey: "AIzaSyB4u2G41xdGkgBC0KltleRpcg5Lwru2RIU",
+authDomain: "tngon-b37d6.firebaseapp.com",
+databaseURL: "https://tngon-b37d6-default-rtdb.asia-southeast1.firebasedatabase.app",
+projectId: "tngon-b37d6",
+storageBucket: "tngon-b37d6.firebasestorage.app",
+messagingSenderId: "580319242104",
+appId: "1:580319242104:web:6922e4327bdc8286c30a8d",
+measurementId: "G-LHEH8ZC6SL"
+};
+
+// ===== Basic init + PWA =====
+const connBadge = document.getElementById('connBadge');
+const pwaBadge  = document.getElementById('pwaBadge');
+const btnInstall= document.getElementById('btnInstall');
+const homeBtn   = document.getElementById('homeBtn');
+homeBtn.addEventListener('click', ()=> location.href = location.pathname);
+
+if ('serviceWorker' in navigator) {
+navigator.serviceWorker.register('./sw-admin.js').catch(()=>{});
+}
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+e.preventDefault(); deferredPrompt = e; btnInstall.classList.remove('hidden');
+});
+btnInstall.addEventListener('click', async ()=> {
+if (!deferredPrompt) return;
+deferredPrompt.prompt();
+await deferredPrompt.userChoice;
+btnInstall.classList.add('hidden');
+deferredPrompt = null;
+});
+window.addEventListener('appinstalled', ()=>{ pwaBadge.classList.remove('hidden'); btnInstall.classList.add('hidden'); });
+
+// Firebase init + connection badge
+(function initFirebase(){
+try {
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+db.ref('.info/connected').on('value', s=>{
+const ok = !!s.val();
+connBadge.textContent = ok ? 'Đã kết nối Firebase' : 'Mất kết nối Firebase';
+connBadge.className = ok ? 'text-xs text-emerald-600' : 'text-xs text-red-600';
+});
+} catch(e) {
+connBadge.textContent = 'Firebase init lỗi';
+connBadge.className = 'text-xs text-red-600';
+console.error(e);
+}
+})();
+</script>
+
+<!-- ============ Router (tabs) ============ -->
+<script>
+(function(){
+const vDevices = document.getElementById('viewDevices');
+const vCodes   = document.getElementById('viewCodes');
+const vAds     = document.getElementById('viewAds');
+
+const tDevices = document.getElementById('tabDevices');
+const tCodes   = document.getElementById('tabCodes');
+const tAds     = document.getElementById('tabAds');
+
+function activate(btn){
+[tDevices,tCodes,tAds].forEach(b=>{
+b.classList.toggle('bg-blue-600', b===btn);
+b.classList.toggle('text-white', b===btn);
+b.classList.toggle('bg-gray-100', b!==btn);
+});
+}
+function show(which){
+vDevices.classList.toggle('hidden', which!=='devices');
+vCodes.classList.toggle('hidden', which!=='codes');
+vAds.classList.toggle('hidden', which!=='ads');
+}
+tDevices.addEventListener('click', ()=>{ activate(tDevices); show('devices'); });
+tCodes  .addEventListener('click', ()=>{ activate(tCodes);   show('codes');   });
+tAds    .addEventListener('click', ()=>{ activate(tAds);     show('ads');     });
+})();
+</script>
+
+<!-- ============ Devices tab (inlined) ============ -->
+<script>
+(function(){
+'use strict';
+const $  = (sel, root=document)=> root.querySelector(sel);
+const log= (...a)=> console.log('[devices-tab]', ...a);
+const warn=(...a)=> console.warn('[devices-tab]', ...a);
+const mask= (id)=> (!id ? '—' : (id.length<=4 ? id : id.slice(0,4)+'…'));
+const safeRemove = (n)=>{ if (n && n.isConnected && n.parentNode) n.parentNode.removeChild(n); };
+
+const view = document.getElementById('viewDevices');
+if (!view) return;
+
+async function ensureDB(){
+if (!window.firebase || !firebase.apps?.length) throw new Error('Firebase chưa init');
+if (!firebase.auth().currentUser){
+await firebase.auth().signInAnonymously();
+await new Promise(res=>{
+const un=firebase.auth().onAuthStateChanged(u=>{ if(u){ un(); res(); }});
+});
+}
+return firebase.database();
+}
+
+// links.json (optional – chỉ để build lưới bàn giống app)
+let LINKS_MAP = null;
+async function loadLinks(){
+try{
+const res = await fetch('./links.json?cb='+Date.now(), { cache:'no-store' });
+const data = await res.json();
+LINKS_MAP = data.links || data;
+}catch(e){ LINKS_MAP=null; warn('Không tải được links.json'); }
+}
+function openTablePicker(onPick){
+const keys = LINKS_MAP ? Object.keys(LINKS_MAP).sort((a,b)=>Number(a)-Number(b))
+: Array.from({length:15},(_,i)=> String(i+1));
+const wrap = document.createElement('div');
+wrap.className = 'fixed inset-0 z-[9600] bg-black/50 flex items-center justify-center p-4';
+wrap.innerHTML = `
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-lg font-semibold">Chọn bàn</h3>
+            <button id="tp-close" class="px-2 py-1 text-sm rounded border hover:bg-gray-50">Đóng</button>
           </div>
-        </div>
+          <div id="tp-grid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-[70vh] overflow-auto"></div>
+        </div>`;
+document.body.appendChild(wrap);
+const grid = wrap.querySelector('#tp-grid');
+keys.forEach(k=>{
+const b=document.createElement('button');
+b.className='px-3 py-3 rounded-lg border text-sm font-semibold hover:bg-blue-50';
+b.textContent='Bàn '+k;
+b.addEventListener('click', ()=>{ try{ onPick(k); } finally { safeRemove(wrap); }});
+grid.appendChild(b);
+});
+wrap.querySelector('#tp-close').addEventListener('click', ()=> safeRemove(wrap));
+}
 
-        <!-- Codes table -->
-        <div class="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div class="text-lg font-semibold mb-3">Danh sách mã</div>
-          <div class="overflow-auto">
-            <table class="w-full text-sm">
-              <thead class="text-left text-gray-500">
-                <tr>
-                  <th class="px-2 py-1">Mã</th>
-                  <th class="px-2 py-1">Bật</th>
-                  <th class="px-2 py-1">Đang gắn</th>
-                  <th class="px-2 py-1">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody id="codesBody"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </section>
+// per-table screen state cache
+const tableScreen = {}; // { "1": "on"/"off" }
+let devicesCache = {};
 
-    <!-- View: Ads -->
-    <section id="viewAds" class="p-0 hidden">
-      <iframe id="ads-iframe" src="https://pic-flame.vercel.app/" referrerpolicy="no-referrer" style="width:100%;height:calc(100vh - 64px);border:0;background:#fff;"></iframe>
-    </section>
-  </main>
+function tableIsOn(table){
+const v = tableScreen[String(table)];
+return (String(v||'on').toLowerCase() === 'on');
+}
 
-  <!-- Modal root (popup Đổi bàn / Action sheet) -->
-  <div id="modal-root"></div>
+function cardClass(isOn){
+return isOn
+? 'rounded-xl border border-emerald-200 bg-emerald-50 p-3 shadow-sm cursor-pointer transition'
+: 'rounded-xl border border-gray-300 bg-gray-100 p-3 shadow-sm cursor-pointer transition';
+}
 
-  <script>
-    // ===== App version =====
-    const APP_VERSION = "1.3.3";
+function openActionPopup(db, id, data){
+const code  = data?.code  || '';
+const name  = data?.name  || '';
+const stage = data?.stage || 'select';
+const table = data?.table || '';
 
-    // ===== Firebase config =====
-    const firebaseConfig = {
-      apiKey: "AIzaSyB4u2G41xdGkgBC0KltleRpcg5Lwru2RIU",
-      authDomain: "tngon-b37d6.firebaseapp.com",
-      databaseURL: "https://tngon-b37d6-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "tngon-b37d6",
-      storageBucket: "tngon-b37d6.firebasestorage.app",
-      messagingSenderId: "580319242104",
-      appId: "1:580319242104:web:6922e4327bdc8286c30a8d",
-      measurementId: "G-LHEH8ZC6SL"
-    };
-
-    // ===== Basic init + PWA =====
-    const connBadge = document.getElementById('connBadge');
-    const pwaBadge  = document.getElementById('pwaBadge');
-    const btnInstall= document.getElementById('btnInstall');
-    const homeBtn   = document.getElementById('homeBtn');
-    homeBtn.addEventListener('click', ()=> location.href = location.pathname);
-
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw-admin.js').catch(()=>{});
-    }
-    let deferredPrompt = null;
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault(); deferredPrompt = e; btnInstall.classList.remove('hidden');
-    });
-    btnInstall.addEventListener('click', async ()=> {
-      if (!deferredPrompt) return;
-      deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
-      btnInstall.classList.add('hidden');
-      deferredPrompt = null;
-    });
-    window.addEventListener('appinstalled', ()=>{ pwaBadge.classList.remove('hidden'); btnInstall.classList.add('hidden'); });
-
-    // Firebase init + connection badge
-    (function initFirebase(){
-      try {
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
-        db.ref('.info/connected').on('value', s=>{
-          const ok = !!s.val();
-          connBadge.textContent = ok ? 'Đã kết nối Firebase' : 'Mất kết nối Firebase';
-          connBadge.className = ok ? 'text-xs text-emerald-600' : 'text-xs text-red-600';
-        });
-      } catch(e) {
-        connBadge.textContent = 'Firebase init lỗi';
-        connBadge.className = 'text-xs text-red-600';
-        console.error(e);
-      }
-    })();
-  </script>
-
-  <!-- ============ Router (tabs) ============ -->
-  <script>
-    (function(){
-      const vDevices = document.getElementById('viewDevices');
-      const vCodes   = document.getElementById('viewCodes');
-      const vAds     = document.getElementById('viewAds');
-
-      const tDevices = document.getElementById('tabDevices');
-      const tCodes   = document.getElementById('tabCodes');
-      const tAds     = document.getElementById('tabAds');
-
-      function activate(btn){
-        [tDevices,tCodes,tAds].forEach(b=>{
-          b.classList.toggle('bg-blue-600', b===btn);
-          b.classList.toggle('text-white', b===btn);
-          b.classList.toggle('bg-gray-100', b!==btn);
-        });
-      }
-      function show(which){
-        vDevices.classList.toggle('hidden', which!=='devices');
-        vCodes.classList.toggle('hidden', which!=='codes');
-        vAds.classList.toggle('hidden', which!=='ads');
-      }
-      tDevices.addEventListener('click', ()=>{ activate(tDevices); show('devices'); });
-      tCodes  .addEventListener('click', ()=>{ activate(tCodes);   show('codes');   });
-      tAds    .addEventListener('click', ()=>{ activate(tAds);     show('ads');     });
-    })();
-  </script>
-
-  <!-- ============ Devices tab (inlined) ============ -->
-  <script>
-    (function(){
-      'use strict';
-      const $  = (sel, root=document)=> root.querySelector(sel);
-      const log= (...a)=> console.log('[devices-tab]', ...a);
-      const warn=(...a)=> console.warn('[devices-tab]', ...a);
-      const mask= (id)=> (!id ? '—' : (id.length<=4 ? id : id.slice(0,4)+'…'));
-      const safeRemove = (n)=>{ if (n && n.isConnected && n.parentNode) n.parentNode.removeChild(n); };
-
-      const view = document.getElementById('viewDevices');
-      if (!view) return;
-
-      async function ensureDB(){
-        if (!window.firebase || !firebase.apps?.length) throw new Error('Firebase chưa init');
-        if (!firebase.auth().currentUser){
-          await firebase.auth().signInAnonymously();
-          await new Promise(res=>{
-            const un=firebase.auth().onAuthStateChanged(u=>{ if(u){ un(); res(); }});
-          });
-        }
-        return firebase.database();
-      }
-
-      // links.json (optional – chỉ để build lưới bàn giống app)
-      let LINKS_MAP = null;
-      async function loadLinks(){
-        try{
-          const res = await fetch('./links.json?cb='+Date.now(), { cache:'no-store' });
-          const data = await res.json();
-          LINKS_MAP = data.links || data;
-        }catch(e){ LINKS_MAP=null; warn('Không tải được links.json'); }
-      }
-      function openTablePicker(onPick){
-        const keys = LINKS_MAP ? Object.keys(LINKS_MAP).sort((a,b)=>Number(a)-Number(b))
-                               : Array.from({length:15},(_,i)=> String(i+1));
-        const wrap = document.createElement('div');
-        wrap.className = 'fixed inset-0 z-[9600] bg-black/50 flex items-center justify-center p-4';
-        wrap.innerHTML = `
-         <div class="bg-white rounded-xl shadow-lg w-full max-w-xl p-4">
+const wrap = document.createElement('div');
+wrap.className = 'fixed inset-0 z-[9700] bg-black/50 flex items-center justify-center p-4';
+wrap.innerHTML = `
+         <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5">
            <div class="flex items-center justify-between mb-3">
-             <h3 class="text-lg font-semibold">Chọn bàn</h3>
-             <button id="tp-close" class="px-2 py-1 text-sm rounded border hover:bg-gray-50">Đóng</button>
+             <div class="font-semibold">Thiết bị ${mask(id)}</div>
+             <button id="devact-close" class="px-2 py-1 text-sm rounded border hover:bg-gray-50">Đóng</button>
            </div>
-           <div id="tp-grid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-[70vh] overflow-auto"></div>
+
+           <div class="text-sm text-gray-600 mb-3">
+             <div>ID đầy đủ: <span class="font-mono break-all">${id}</span></div>
+             <div>Tên hiện tại: <strong>${name || '(chưa đặt)'}</strong>
+               <button id="act-rename" class="ml-1 px-2 py-0.5 text-xs rounded border hover:bg-gray-50">Đổi tên</button>
+             </div>
+             <div>Mã đang gắn: <span class="font-mono">${code || '—'}</span></div>
+             <div>Bàn: <strong>${stage==='pos' ? ('+'+(table||'?')) : (stage==='start'? (table||'—') : '—')}</strong></div>
+           </div>
+
+           <div class="grid grid-cols-2 gap-2">
+             <button id="act-reload"  class="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Làm mới</button>
+             <button id="act-settbl" class="px-3 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700">Đổi bàn</button>
+             <button id="act-unbind" class="px-3 py-2 rounded bg-amber-600 text-white hover:bg-amber-700" ${code?'':'disabled'}>Gỡ mã</button>
+             <button id="act-delete" class="px-3 py-2 rounded ${code?'bg-gray-100 opacity-50 cursor-not-allowed':'bg-red-600 text-white hover:bg-red-700'}" ${code?'disabled':''}>Xoá device</button>
+           </div>
          </div>`;
-        document.body.appendChild(wrap);
-        const grid = wrap.querySelector('#tp-grid');
-        keys.forEach(k=>{
-          const b=document.createElement('button');
-          b.className='px-3 py-3 rounded-lg border text-sm font-semibold hover:bg-blue-50';
-          b.textContent='Bàn '+k;
-          b.addEventListener('click', ()=>{ try{ onPick(k); } finally { safeRemove(wrap); }});
-          grid.appendChild(b);
-        });
-        wrap.querySelector('#tp-close').addEventListener('click', ()=> safeRemove(wrap));
-      }
+document.body.appendChild(wrap);
+$('#devact-close', wrap).addEventListener('click', ()=> safeRemove(wrap));
 
-      // per-table screen state cache
-      const tableScreen = {}; // { "1": "on"/"off" }
-      let devicesCache = {};
+$('#act-rename', wrap).addEventListener('click', async ()=>{
+const v = prompt('Nhập tên máy (để trống để xoá):', name || '');
+if (v === null) return;
+try{
+const newName = String(v).trim();
+if (newName) await db.ref(`devices/${id}/name`).set(newName);
+else await db.ref(`devices/${id}/name`).remove();
+safeRemove(wrap);
+}catch(e){ alert('Đặt tên lỗi: '+(e?.message||e)); }
+});
 
-      function tableIsOn(table){
-        const v = tableScreen[String(table)];
-        return (String(v||'on').toLowerCase() === 'on');
-      }
+$('#act-reload', wrap).addEventListener('click', async ()=>{
+try{
+await db.ref(`devices/${id}/commands/reloadAt`).set(firebase.database.ServerValue.TIMESTAMP);
+safeRemove(wrap);
+}catch(e){ alert('Gửi reload lỗi: '+(e?.message||e)); }
+});
 
-      function cardClass(isOn){
-        return isOn
-          ? 'rounded-xl border border-emerald-200 bg-emerald-50 p-3 shadow-sm cursor-pointer transition'
-          : 'rounded-xl border border-gray-300 bg-gray-100 p-3 shadow-sm cursor-pointer transition';
-      }
+$('#act-settbl', wrap).addEventListener('click', ()=>{
+openTablePicker(async (label)=>{
+try{
+await db.ref(`devices/${id}/commands/setTable`).set({ value: label, at: firebase.database.ServerValue.TIMESTAMP });
+await db.ref(`devices/${id}`).update({ table: label, stage:'start' });
+}catch(e){ alert('Đổi bàn lỗi: '+(e?.message||e)); }
+safeRemove(wrap);
+});
+});
 
-      function openActionPopup(db, id, data){
-        const code  = data?.code  || '';
-        const name  = data?.name  || '';
-        const stage = data?.stage || 'select';
-        const table = data?.table || '';
+$('#act-unbind', wrap)?.addEventListener('click', async ()=>{
+if (!code) return;
+const verify = prompt(`Nhập lại MÃ đang gắn để gỡ (mã hiện tại: ${code}):`);
+if (verify === null) return;
+if (String(verify).trim().toUpperCase() !== String(code).toUpperCase()){
+alert('Mã xác nhận không khớp.'); return;
+}
+try{
+await db.ref('codes/'+code).transaction(cur=>{
+if (!cur) return cur;
+if (cur.boundDeviceId === id) return { ...cur, boundDeviceId:null, boundAt:null };
+return cur;
+});
+await db.ref(`devices/${id}/commands/unbindAt`).set(firebase.database.ServerValue.TIMESTAMP);
+await db.ref(`devices/${id}`).update({ code:null, table:null, stage:'select' });
+safeRemove(wrap);
+}catch(e){ alert('Gỡ liên kết lỗi: '+(e?.message||e)); }
+});
 
-        const wrap = document.createElement('div');
-        wrap.className = 'fixed inset-0 z-[9700] bg-black/50 flex items-center justify-center p-4';
-        wrap.innerHTML = `
-          <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5">
-            <div class="flex items-center justify-between mb-3">
-              <div class="font-semibold">Thiết bị ${mask(id)}</div>
-              <button id="devact-close" class="px-2 py-1 text-sm rounded border hover:bg-gray-50">Đóng</button>
-            </div>
+$('#act-delete', wrap).addEventListener('click', async ()=>{
+if (code) return;
+if (!confirm('Xoá thiết bị khỏi danh sách?')) return;
+try{ await db.ref(`devices/${id}`).remove(); safeRemove(wrap); }
+catch(e){ alert('Xoá device lỗi: '+(e?.message||e)); }
+});
+}
 
-            <div class="text-sm text-gray-600 mb-3">
-              <div>ID đầy đủ: <span class="font-mono break-all">${id}</span></div>
-              <div>Tên hiện tại: <strong>${name || '(chưa đặt)'}</strong>
-                <button id="act-rename" class="ml-1 px-2 py-0.5 text-xs rounded border hover:bg-gray-50">Đổi tên</button>
-              </div>
-              <div>Mã đang gắn: <span class="font-mono">${code || '—'}</span></div>
-              <div>Bàn: <strong>${stage==='pos' ? ('+'+(table||'?')) : (stage==='start'? (table||'—') : '—')}</strong></div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-2">
-              <button id="act-reload"  class="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Làm mới</button>
-              <button id="act-settbl" class="px-3 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700">Đổi bàn</button>
-              <button id="act-unbind" class="px-3 py-2 rounded bg-amber-600 text-white hover:bg-amber-700" ${code?'':'disabled'}>Gỡ mã</button>
-              <button id="act-delete" class="px-3 py-2 rounded ${code?'bg-gray-100 opacity-50 cursor-not-allowed':'bg-red-600 text-white hover:bg-red-700'}" ${code?'disabled':''}>Xoá device</button>
-            </div>
-          </div>`;
-        document.body.appendChild(wrap);
-        $('#devact-close', wrap).addEventListener('click', ()=> safeRemove(wrap));
-
-        $('#act-rename', wrap).addEventListener('click', async ()=>{
-          const v = prompt('Nhập tên máy (để trống để xoá):', name || '');
-          if (v === null) return;
-          try{
-            const newName = String(v).trim();
-            if (newName) await db.ref(`devices/${id}/name`).set(newName);
-            else await db.ref(`devices/${id}/name`).remove();
-            safeRemove(wrap);
-          }catch(e){ alert('Đặt tên lỗi: '+(e?.message||e)); }
-        });
-
-        $('#act-reload', wrap).addEventListener('click', async ()=>{
-          try{
-            await db.ref(`devices/${id}/commands/reloadAt`).set(firebase.database.ServerValue.TIMESTAMP);
-            safeRemove(wrap);
-          }catch(e){ alert('Gửi reload lỗi: '+(e?.message||e)); }
-        });
-
-        $('#act-settbl', wrap).addEventListener('click', ()=>{
-          openTablePicker(async (label)=>{
-            try{
-              await db.ref(`devices/${id}/commands/setTable`).set({ value: label, at: firebase.database.ServerValue.TIMESTAMP });
-              await db.ref(`devices/${id}`).update({ table: label, stage:'start' });
-            }catch(e){ alert('Đổi bàn lỗi: '+(e?.message||e)); }
-            safeRemove(wrap);
-          });
-        });
-
-        $('#act-unbind', wrap)?.addEventListener('click', async ()=>{
-          if (!code) return;
-          const verify = prompt(`Nhập lại MÃ đang gắn để gỡ (mã hiện tại: ${code}):`);
-          if (verify === null) return;
-          if (String(verify).trim().toUpperCase() !== String(code).toUpperCase()){
-            alert('Mã xác nhận không khớp.'); return;
-          }
-          try{
-            await db.ref('codes/'+code).transaction(cur=>{
-              if (!cur) return cur;
-              if (cur.boundDeviceId === id) return { ...cur, boundDeviceId:null, boundAt:null };
-              return cur;
-            });
-            await db.ref(`devices/${id}/commands/unbindAt`).set(firebase.database.ServerValue.TIMESTAMP);
-            await db.ref(`devices/${id}`).update({ code:null, table:null, stage:'select' });
-            safeRemove(wrap);
-          }catch(e){ alert('Gỡ liên kết lỗi: '+(e?.message||e)); }
-        });
-
-        $('#act-delete', wrap).addEventListener('click', async ()=>{
-          if (code) return;
-          if (!confirm('Xoá thiết bị khỏi danh sách?')) return;
-          try{ await db.ref(`devices/${id}`).remove(); safeRemove(wrap); }
-          catch(e){ alert('Xoá device lỗi: '+(e?.message||e)); }
-        });
-      }
-
-  <script>
   function renderGrid(grid, db, devices){
     grid.innerHTML='';
     const entries = Object.entries(devices||{}).sort((a,b)=>{
@@ -471,223 +470,223 @@ T01"></textarea>
       grid.appendChild(card);
     }
   }
-</script>
+          `
         
-          // mở popup khi click card
-          card.addEventListener('click', ()=> openActionPopup(db, id, d));
-          // nhưng gạt công tắc thì không mở popup
-          const swWrap = card.querySelector('[data-role="switch-wrap"]');
-          swWrap.addEventListener('click', (ev)=> ev.stopPropagation());
-          const sw = card.querySelector(`#sw-${CSS.escape(id)}`);
-          sw?.addEventListener('change', async ()=>{
-            if (!hasTable){ sw.checked = true; return; }
-            try{
-              await db.ref(`control/tables/${table}/screen`).set(sw.checked ? 'on' : 'off');
-              card.className = cardClass(sw.checked);
-            }catch(e){
-              alert('Ghi trạng thái bàn lỗi: '+(e?.message||e));
-              sw.checked = !sw.checked;
-            }
-          });
+// mở popup khi click card
+card.addEventListener('click', ()=> openActionPopup(db, id, d));
+// nhưng gạt công tắc thì không mở popup
+const swWrap = card.querySelector('[data-role="switch-wrap"]');
+swWrap.addEventListener('click', (ev)=> ev.stopPropagation());
+const sw = card.querySelector(`#sw-${CSS.escape(id)}`);
+sw?.addEventListener('change', async ()=>{
+if (!hasTable){ sw.checked = true; return; }
+try{
+await db.ref(`control/tables/${table}/screen`).set(sw.checked ? 'on' : 'off');
+card.className = cardClass(sw.checked);
+}catch(e){
+alert('Ghi trạng thái bàn lỗi: '+(e?.message||e));
+sw.checked = !sw.checked;
+}
+});
 
-          grid.appendChild(card);
-        }
-      }
+grid.appendChild(card);
+}
+}
 
-      document.addEventListener('DOMContentLoaded', async ()=>{
-        try{
-          const db = await ensureDB();
-          await loadLinks();
+document.addEventListener('DOMContentLoaded', async ()=>{
+try{
+const db = await ensureDB();
+await loadLinks();
 
-          const grid = document.getElementById('devCards');
+const grid = document.getElementById('devCards');
 
-          // Toolbar
-          const refScreen = db.ref('control/screen');
-          const paintToggleAll = (isOn)=>{
-            const btn = document.getElementById('btnToggleAll');
-            if (!btn) return;
-            if (isOn){
-              btn.textContent='Tắt toàn bộ';
-              btn.className='px-3 py-2 rounded bg-gray-800 text-white hover:bg-black';
-            } else {
-              btn.textContent='Bật toàn bộ';
-              btn.className='px-3 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700';
-            }
-          };
-          refScreen.on('value', s=>{
-            const isOn = (s.exists()? String(s.val()).toLowerCase() : 'on')==='on';
-            paintToggleAll(isOn);
-          });
+// Toolbar
+const refScreen = db.ref('control/screen');
+const paintToggleAll = (isOn)=>{
+const btn = document.getElementById('btnToggleAll');
+if (!btn) return;
+if (isOn){
+btn.textContent='Tắt toàn bộ';
+btn.className='px-3 py-2 rounded bg-gray-800 text-white hover:bg-black';
+} else {
+btn.textContent='Bật toàn bộ';
+btn.className='px-3 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700';
+}
+};
+refScreen.on('value', s=>{
+const isOn = (s.exists()? String(s.val()).toLowerCase() : 'on')==='on';
+paintToggleAll(isOn);
+});
 
-          document.getElementById('btnReloadAll')?.addEventListener('click', async ()=>{
-            try{ await db.ref('broadcast/reloadAt').set(firebase.database.ServerValue.TIMESTAMP); }
-            catch(e){ alert('Reload toàn bộ lỗi: '+(e?.message||e)); }
-          });
-          document.getElementById('btnToggleAll')?.addEventListener('click', async ()=>{
-            const snap = await refScreen.get();
-            const on = (snap.exists()? String(snap.val()).toLowerCase() : 'on')==='on';
-            try{
-              if (on){
-                await refScreen.set('off');
-                const updates={};
-                for(let i=1;i<=15;i++){ updates[`control/tables/${i}/screen`]='off'; tableScreen[String(i)]='off'; }
-                await db.ref().update(updates);
-              } else {
-                await refScreen.set('on');
-                const updates={};
-                for(let i=1;i<=15;i++){ updates[`control/tables/${i}/screen`]='on'; tableScreen[String(i)]='on'; }
-                await db.ref().update(updates);
-              }
-              if (grid && devicesCache) renderGrid(grid, db, devicesCache);
-            }catch(e){ alert('Ghi trạng thái toàn bộ lỗi: '+(e?.message||e)); }
-          });
+document.getElementById('btnReloadAll')?.addEventListener('click', async ()=>{
+try{ await db.ref('broadcast/reloadAt').set(firebase.database.ServerValue.TIMESTAMP); }
+catch(e){ alert('Reload toàn bộ lỗi: '+(e?.message||e)); }
+});
+document.getElementById('btnToggleAll')?.addEventListener('click', async ()=>{
+const snap = await refScreen.get();
+const on = (snap.exists()? String(snap.val()).toLowerCase() : 'on')==='on';
+try{
+if (on){
+await refScreen.set('off');
+const updates={};
+for(let i=1;i<=15;i++){ updates[`control/tables/${i}/screen`]='off'; tableScreen[String(i)]='off'; }
+await db.ref().update(updates);
+} else {
+await refScreen.set('on');
+const updates={};
+for(let i=1;i<=15;i++){ updates[`control/tables/${i}/screen`]='on'; tableScreen[String(i)]='on'; }
+await db.ref().update(updates);
+}
+if (grid && devicesCache) renderGrid(grid, db, devicesCache);
+}catch(e){ alert('Ghi trạng thái toàn bộ lỗi: '+(e?.message||e)); }
+});
 
-          // Subscribe devices
-          db.ref('devices').on('value', s=>{
-            devicesCache = s.val() || {};
-            renderGrid(grid, db, devicesCache);
-          }, e=> alert('Lỗi subscribe devices: '+(e?.message||e)));
+// Subscribe devices
+db.ref('devices').on('value', s=>{
+devicesCache = s.val() || {};
+renderGrid(grid, db, devicesCache);
+}, e=> alert('Lỗi subscribe devices: '+(e?.message||e)));
 
-          // Subscribe per-table screen state
-          db.ref('control/tables').on('value', s=>{
-            const v = s.val()||{};
-            Object.keys(v).forEach(k=> tableScreen[String(k)] = (v[k]?.screen || v[k]));
-            if (grid && devicesCache) renderGrid(grid, db, devicesCache);
-          }, e=> console.warn('Lỗi subscribe control/tables:', e?.message||e));
+// Subscribe per-table screen state
+db.ref('control/tables').on('value', s=>{
+const v = s.val()||{};
+Object.keys(v).forEach(k=> tableScreen[String(k)] = (v[k]?.screen || v[k]));
+if (grid && devicesCache) renderGrid(grid, db, devicesCache);
+}, e=> console.warn('Lỗi subscribe control/tables:', e?.message||e));
 
-          log('Devices tab ready.');
-        }catch(e){
-          console.error(e);
-          alert('Lỗi khởi chạy tab Thiết bị: '+(e?.message||e));
-        }
-      });
-    })();
-  </script>
+log('Devices tab ready.');
+}catch(e){
+console.error(e);
+alert('Lỗi khởi chạy tab Thiết bị: '+(e?.message||e));
+}
+});
+})();
+</script>
 
-  <!-- ============ Codes tab (inlined) ============ -->
-  <script>
-    (function(){
-      'use strict';
-      const $ = (id)=> document.getElementById(id);
-      const tbody = $('codesBody');
-      const input = $('codesInput');
-      const errBox= $('devError') || document.getElementById('codesError');
+<!-- ============ Codes tab (inlined) ============ -->
+<script>
+(function(){
+'use strict';
+const $ = (id)=> document.getElementById(id);
+const tbody = $('codesBody');
+const input = $('codesInput');
+const errBox= $('devError') || document.getElementById('codesError');
 
-      let db=null;
-      function showErr(m){ if(!errBox) return; errBox.textContent=m||''; errBox.classList.toggle('hidden', !m); }
+let db=null;
+function showErr(m){ if(!errBox) return; errBox.textContent=m||''; errBox.classList.toggle('hidden', !m); }
 
-      async function ensureFirebase(){
-        if (!window.firebase || !firebase.apps?.length) throw new Error('Firebase chưa khởi tạo');
-        db = firebase.database();
-        if (!firebase.auth().currentUser){
-          await firebase.auth().signInAnonymously();
-          await new Promise(res=>{
-            const un = firebase.auth().onAuthStateChanged(u=>{ if(u){ un(); res(); }});
-          });
-        }
-      }
+async function ensureFirebase(){
+if (!window.firebase || !firebase.apps?.length) throw new Error('Firebase chưa khởi tạo');
+db = firebase.database();
+if (!firebase.auth().currentUser){
+await firebase.auth().signInAnonymously();
+await new Promise(res=>{
+const un = firebase.auth().onAuthStateChanged(u=>{ if(u){ un(); res(); }});
+});
+}
+}
 
-      function renderQueue(codes){
-        const wrap = document.getElementById('codesQueueWrap');
-        const list = document.getElementById('codesQueue');
-        const count= document.getElementById('codesQueueCount');
-        if (!wrap || !list) return;
+function renderQueue(codes){
+const wrap = document.getElementById('codesQueueWrap');
+const list = document.getElementById('codesQueue');
+const count= document.getElementById('codesQueueCount');
+if (!wrap || !list) return;
 
-        const avail = Object.entries(codes||{})
-          .filter(([_,v])=> v && v.enabled!==false && !v.boundDeviceId)
-          .map(([k])=>k).sort((a,b)=> a.localeCompare(b));
+const avail = Object.entries(codes||{})
+.filter(([_,v])=> v && v.enabled!==false && !v.boundDeviceId)
+.map(([k])=>k).sort((a,b)=> a.localeCompare(b));
 
-        list.innerHTML = '';
-        avail.forEach(code=>{
-          const span = document.createElement('span');
-          span.className = 'px-2 py-1 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300';
-          span.textContent = code;
-          list.appendChild(span);
-        });
-        wrap.classList.toggle('hidden', avail.length===0);
-        if (count) count.textContent = `(${avail.length})`;
-      }
+list.innerHTML = '';
+avail.forEach(code=>{
+const span = document.createElement('span');
+span.className = 'px-2 py-1 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300';
+span.textContent = code;
+list.appendChild(span);
+});
+wrap.classList.toggle('hidden', avail.length===0);
+if (count) count.textContent = `(${avail.length})`;
+}
 
-      function renderCodes(codes){
-        if (!tbody) return;
-        tbody.innerHTML = '';
-        renderQueue(codes);
-        Object.entries(codes||{}).sort(([a],[b])=> a.localeCompare(b)).forEach(([code,v])=>{
-          const enabled = v?.enabled!==false;
-          const boundId = v?.boundDeviceId || null;
-          const tr = document.createElement('tr');
-          tr.className='border-b last:border-0';
-          tr.innerHTML = `
-            <td class="px-2 py-1 font-mono">${code}</td>
-            <td class="px-2 py-1">
-              <span class="inline-flex items-center gap-1 text-xs ${enabled?'text-emerald-700':'text-red-600'}">
-                <span class="w-2 h-2 rounded-full ${enabled?'bg-emerald-500':'bg-red-500'}"></span>${enabled?'ON':'OFF'}
-              </span>
-            </td>
-            <td class="px-2 py-1 text-xs break-all">${boundId||'—'}</td>
-            <td class="px-2 py-1">
-              <div class="flex flex-wrap gap-2">
-                <button class="px-2 py-1 text-xs rounded bg-gray-800 text-white hover:bg-black" data-act="toggle">${enabled?'Tắt mã':'Bật mã'}</button>
-                <button class="px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700" data-act="delete">Xóa mã</button>
-              </div>
-            </td>`;
-          tr.querySelector('[data-act="toggle"]').addEventListener('click', async ()=>{
-            try{
-              const next = !enabled;
-              await db.ref('codes/'+code+'/enabled').set(next);
-              if (boundId && next===false){
-                await db.ref(`devices/${boundId}/commands/unbindAt`).set(firebase.database.ServerValue.TIMESTAMP);
-              }
-            }catch(e){ showErr('Đổi trạng thái mã lỗi: '+(e?.message||e)); }
-          });
-          tr.querySelector('[data-act="delete"]').addEventListener('click', async ()=>{
-            if (!confirm(`Xóa mã ${code}?`)) return;
-            try{
-              if (boundId){
-                await db.ref(`devices/${boundId}/commands/unbindAt`).set(firebase.database.ServerValue.TIMESTAMP);
-              }
-              await db.ref('codes/'+code).remove();
-            }catch(e){ showErr('Xóa mã lỗi: '+(e?.message||e)); }
-          });
+function renderCodes(codes){
+if (!tbody) return;
+tbody.innerHTML = '';
+renderQueue(codes);
+Object.entries(codes||{}).sort(([a],[b])=> a.localeCompare(b)).forEach(([code,v])=>{
+const enabled = v?.enabled!==false;
+const boundId = v?.boundDeviceId || null;
+const tr = document.createElement('tr');
+tr.className='border-b last:border-0';
+tr.innerHTML = `
+           <td class="px-2 py-1 font-mono">${code}</td>
+           <td class="px-2 py-1">
+             <span class="inline-flex items-center gap-1 text-xs ${enabled?'text-emerald-700':'text-red-600'}">
+               <span class="w-2 h-2 rounded-full ${enabled?'bg-emerald-500':'bg-red-500'}"></span>${enabled?'ON':'OFF'}
+             </span>
+           </td>
+           <td class="px-2 py-1 text-xs break-all">${boundId||'—'}</td>
+           <td class="px-2 py-1">
+             <div class="flex flex-wrap gap-2">
+               <button class="px-2 py-1 text-xs rounded bg-gray-800 text-white hover:bg-black" data-act="toggle">${enabled?'Tắt mã':'Bật mã'}</button>
+               <button class="px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700" data-act="delete">Xóa mã</button>
+             </div>
+           </td>`;
+tr.querySelector('[data-act="toggle"]').addEventListener('click', async ()=>{
+try{
+const next = !enabled;
+await db.ref('codes/'+code+'/enabled').set(next);
+if (boundId && next===false){
+await db.ref(`devices/${boundId}/commands/unbindAt`).set(firebase.database.ServerValue.TIMESTAMP);
+}
+}catch(e){ showErr('Đổi trạng thái mã lỗi: '+(e?.message||e)); }
+});
+tr.querySelector('[data-act="delete"]').addEventListener('click', async ()=>{
+if (!confirm(`Xóa mã ${code}?`)) return;
+try{
+if (boundId){
+await db.ref(`devices/${boundId}/commands/unbindAt`).set(firebase.database.ServerValue.TIMESTAMP);
+}
+await db.ref('codes/'+code).remove();
+}catch(e){ showErr('Xóa mã lỗi: '+(e?.message||e)); }
+});
 
-          tbody.appendChild(tr);
-        });
-      }
+tbody.appendChild(tr);
+});
+}
 
-      async function addCodes(){
-        const raw = (input?.value||'').trim();
-        if (!raw) return alert('Dán danh sách mã (mỗi dòng 1 mã)');
-        const lines = raw.split(/\r?\n/).map(s=>s.trim().toUpperCase()).filter(Boolean);
-        if (!lines.length) return alert('Không có mã hợp lệ');
-        const updates = {};
-        const now = firebase.database.ServerValue.TIMESTAMP;
-        for (const code of lines){
-          updates['codes/'+code] = { enabled:true, boundDeviceId:null, boundAt:null, createdAt:now };
-        }
-        try{
-          await db.ref().update(updates);
-          input.value='';
-          alert('Đã thêm '+lines.length+' mã');
-        }catch(e){ showErr('Thêm mã lỗi: '+(e?.message||e)); }
-      }
+async function addCodes(){
+const raw = (input?.value||'').trim();
+if (!raw) return alert('Dán danh sách mã (mỗi dòng 1 mã)');
+const lines = raw.split(/\r?\n/).map(s=>s.trim().toUpperCase()).filter(Boolean);
+if (!lines.length) return alert('Không có mã hợp lệ');
+const updates = {};
+const now = firebase.database.ServerValue.TIMESTAMP;
+for (const code of lines){
+updates['codes/'+code] = { enabled:true, boundDeviceId:null, boundAt:null, createdAt:now };
+}
+try{
+await db.ref().update(updates);
+input.value='';
+alert('Đã thêm '+lines.length+' mã');
+}catch(e){ showErr('Thêm mã lỗi: '+(e?.message||e)); }
+}
 
-      document.addEventListener('DOMContentLoaded', async ()=>{
-        try{
-          await ensureFirebase();
-          firebase.database().ref('codes').on('value', s=> renderCodes(s.val()||{}), e=> showErr('Lỗi tải mã: '+(e?.message||e)));
-          document.getElementById('btnAddCodes')?.addEventListener('click', addCodes);
-          document.getElementById('btnCopyQueue')?.addEventListener('click', ()=>{
-            const list = document.getElementById('codesQueue'); if (!list) return;
-            const items = Array.from(list.childNodes).map(x=>x.textContent.trim()).filter(Boolean);
-            if (!items.length) return alert('Không có mã khả dụng');
-            navigator.clipboard.writeText(items.join('\n')).then(()=> alert('Đã copy.'));
-          });
-        }catch(e){
-          console.error(e);
-          showErr('Lỗi khởi chạy: '+(e?.message||e));
-        }
-      });
-    })();
-  </script>
+document.addEventListener('DOMContentLoaded', async ()=>{
+try{
+await ensureFirebase();
+firebase.database().ref('codes').on('value', s=> renderCodes(s.val()||{}), e=> showErr('Lỗi tải mã: '+(e?.message||e)));
+document.getElementById('btnAddCodes')?.addEventListener('click', addCodes);
+document.getElementById('btnCopyQueue')?.addEventListener('click', ()=>{
+const list = document.getElementById('codesQueue'); if (!list) return;
+const items = Array.from(list.childNodes).map(x=>x.textContent.trim()).filter(Boolean);
+if (!items.length) return alert('Không có mã khả dụng');
+navigator.clipboard.writeText(items.join('\n')).then(()=> alert('Đã copy.'));
+});
+}catch(e){
+console.error(e);
+showErr('Lỗi khởi chạy: '+(e?.message||e));
+}
+});
+})();
+</script>
 </body>
 </html>
