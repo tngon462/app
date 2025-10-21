@@ -347,7 +347,7 @@
     try{
       const db = await ensureDB();
       await loadLinks();
-      ensureToolbar(db);
+     // ensureToolbar(db);
 
       const { tbody, grid } = pickContainers();
 
