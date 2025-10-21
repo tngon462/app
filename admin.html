@@ -391,53 +391,87 @@ T01"></textarea>
         });
       }
 
-      function renderGrid(grid, db, devices){
-        grid.innerHTML='';
-        const entries = Object.entries(devices||{}).sort((a,b)=>{
-          const ta = parseInt(a[1]?.table || '99999',10);
-          const tb = parseInt(b[1]?.table || '99999',10);
-          if (isFinite(ta) && isFinite(tb) && ta!==tb) return ta-tb;
-          return a[0].localeCompare(b[0]);
-        });
-        if (!entries.length){
-          const p=document.createElement('div');
-          p.className='text-center text-sm text-gray-500 py-3';
-          p.textContent='Chưa có thiết bị nào.';
-          grid.appendChild(p);
-          return;
+  <script>
+  function renderGrid(grid, db, devices){
+    grid.innerHTML='';
+    const entries = Object.entries(devices||{}).sort((a,b)=>{
+      const ta = parseInt(a[1]?.table || '99999',10);
+      const tb = parseInt(b[1]?.table || '99999',10);
+      if (isFinite(ta) && isFinite(tb) && ta!==tb) return ta - tb;
+      return a[0].localeCompare(b[0]);
+    });
+
+    if (!entries.length){
+      const p=document.createElement('div');
+      p.className='text-center text-sm text-gray-500 py-3';
+      p.textContent='Chưa có thiết bị nào.';
+      grid.appendChild(p);
+      return;
+    }
+
+    for (const [id,d] of entries){
+      const code   = d?.code  || '';
+      const name   = d?.name  || '';
+      const stage  = d?.stage || 'select';
+      const table  = String(d?.table || '');
+      const hasTable = !!table && !isNaN(parseInt(table,10));
+
+      const isOn = hasTable ? tableIsOn(table) : true;
+
+      const card = document.createElement('div');
+      // nhỏ hơn: p-2, viền mảnh, gap nhỏ
+      card.className = cardClass(isOn) + ' aspect-[2/3] p-2 flex';
+
+      card.innerHTML = `
+        <div class="relative flex-1 flex flex-col">
+          <!-- Hàng tiêu đề: Tên máy -->
+          <div class="flex items-center justify-between mb-1">
+            <div class="min-w-0 text-[11px] font-semibold text-gray-700 truncate" title="${name||'(chưa đặt)'}">
+              ${name || '(chưa đặt)'}
+            </div>
+            <!-- Công tắc góc phải -->
+            <div class="select-none" data-role="switch-wrap">
+              <div class="toggle ${hasTable ? '' : 'opacity-50'}">
+                <input type="checkbox" id="sw-${id}" ${isOn ? 'checked' : ''} ${hasTable ? '' : 'disabled'}>
+                <label for="sw-${id}" aria-label="Bật/Tắt theo bàn"></label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Nội dung chính (giữa): chỉ hiện số bàn to/đậm -->
+          <div class="flex-1 flex items-center justify-center">
+            <div class="text-center leading-none">
+              <div class="font-extrabold text-2xl md:text-3xl">
+                ${table ? String(table).replace('+','') : '—'}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Click card -> mở popup
+      card.addEventListener('click', ()=> openActionPopup(db, id, d));
+
+      // Gạt công tắc thì không mở popup
+      const swWrap = card.querySelector('[data-role="switch-wrap"]');
+      swWrap.addEventListener('click', (ev)=> ev.stopPropagation());
+
+      const sw = card.querySelector(`#sw-${CSS.escape(id)}`);
+      sw?.addEventListener('change', async ()=>{
+        if (!hasTable){ sw.checked = true; return; }
+        try{
+          await db.ref(`control/tables/${table}/screen`).set(sw.checked ? 'on' : 'off');
+          card.className = cardClass(sw.checked) + ' aspect-[2/3] p-2 flex';
+        }catch(e){
+          alert('Ghi trạng thái bàn lỗi: '+(e?.message||e));
+          sw.checked = !sw.checked;
         }
-        for (const [id,d] of entries){
-          const code  = d?.code  || '';
-          const name  = d?.name  || '';
-          const stage = d?.stage || 'select';
-          const table = String(d?.table || '');
-          const hasTable = !!table && !isNaN(parseInt(table,10));
-          let tableDisp='—'; if(stage==='start') tableDisp=table||'—'; else if(stage==='pos') tableDisp=table?('+'+table):'+?';
+      });
 
-          const isOn = hasTable ? tableIsOn(table) : true;
-
-          const card = document.createElement('div');
-card.className = cardClass(isOn) + ' aspect-[2/3] p-3 flex'; // 2:3, padding đều, giữ màu theo on/off
-
-card.innerHTML = `
-  <div class="relative flex-1 flex items-center justify-center">
-    <!-- Công tắc gạt ở góc phải trên -->
-    <div class="absolute top-3 right-3 select-none" data-role="switch-wrap">
-      <div class="toggle ${hasTable ? '' : 'opacity-50'}">
-        <input type="checkbox" id="sw-${id}" ${isOn ? 'checked' : ''} ${hasTable ? '' : 'disabled'}>
-        <label for="sw-${id}" aria-label="Bật/Tắt theo bàn"></label>
-      </div>
-    </div>
-
-    <!-- Nội dung chính: chỉ còn số bàn, to/đậm -->
-    <div class="text-center">
-      <div class="font-extrabold leading-none 
-                  text-[44px] md:text-5xl">
-        ${table ? String(table).replace('+','') : '—'}
-      </div>
-    </div>
-  </div>
-`;
+      grid.appendChild(card);
+    }
+  }
+</script>
         
           // mở popup khi click card
           card.addEventListener('click', ()=> openActionPopup(db, id, d));
