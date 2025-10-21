@@ -416,23 +416,28 @@ T01"></textarea>
 
           const isOn = hasTable ? tableIsOn(table) : true;
 
-          const card=document.createElement('div');
-          card.className = cardClass(isOn);
-          card.innerHTML=`
-            <div class="flex items-start justify-between gap-2">
-              <div>
-                <div class="text-sm font-semibold">Thiết bị ${mask(id)} ${name?`<span class="text-gray-500 font-normal">(${name})</span>`:''}</div>
-                <div class="text-xs text-gray-700 mt-1">Bàn: ${tableDisp}</div>
-                <div class="text-xs text-gray-700">Mã: ${code || '—'}</div>
-              </div>
-              <div class="flex items-center gap-2 select-none" data-role="switch-wrap">
-                <span class="text-[11px] ${isOn?'text-emerald-700':'text-gray-500'}">${isOn?'Đang bật':'Đang tắt'}</span>
-                <div class="toggle ${hasTable?'':'opacity-50'}">
-                  <input type="checkbox" id="sw-${id}" ${isOn?'checked':''} ${hasTable?'':'disabled'}>
-                  <label for="sw-${id}" aria-label="Bật/Tắt theo bàn"></label>
-                </div>
-              </div>
-            </div>
+          const card = document.createElement('div');
+card.className = cardClass(isOn) + ' aspect-[2/3] p-3 flex'; // 2:3, padding đều, giữ màu theo on/off
+
+card.innerHTML = `
+  <div class="relative flex-1 flex items-center justify-center">
+    <!-- Công tắc gạt ở góc phải trên -->
+    <div class="absolute top-3 right-3 select-none" data-role="switch-wrap">
+      <div class="toggle ${hasTable ? '' : 'opacity-50'}">
+        <input type="checkbox" id="sw-${id}" ${isOn ? 'checked' : ''} ${hasTable ? '' : 'disabled'}>
+        <label for="sw-${id}" aria-label="Bật/Tắt theo bàn"></label>
+      </div>
+    </div>
+
+    <!-- Nội dung chính: chỉ còn số bàn, to/đậm -->
+    <div class="text-center">
+      <div class="font-extrabold leading-none 
+                  text-[44px] md:text-5xl">
+        ${table ? String(table).replace('+','') : '—'}
+      </div>
+    </div>
+  </div>
+`;
           `;
           // mở popup khi click card
           card.addEventListener('click', ()=> openActionPopup(db, id, d));
