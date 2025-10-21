@@ -1,146 +1,296 @@
+<!-- assets/js/admin-devices-tab.js -->
 (function(){
   'use strict';
 
-  // ---------- Guard DOM ----------
-  const view = document.getElementById('viewDevices');
-  if (!view) {
-    console.warn('[devices-tab] Không tìm thấy #viewDevices, bỏ qua file này.');
-    return;
-  }
+  // ====== helpers ======
+  const $ = (id)=> document.getElementById(id);
+  const byNum = (a,b)=> (Number(a)||1e9) - (Number(b)||1e9);
+  const mask = (s)=> s ? (s.length<=4 ? s : s.slice(0,4)+'…') : '—';
+  const modalRoot = ()=> $('#modal-root') || (()=>{ const d=document.createElement('div'); d.id='modal-root'; document.body.appendChild(d); return d; })();
 
-  // ---------- Tiny helpers ----------
-  const $ = (sel, root=document) => root.querySelector(sel);
-  const css = (el, obj)=>{ if(!el) return; for (const k in obj) el.style[k] = obj[k]; };
-
-  // ---------- Ensure Firebase ready (không re-init) ----------
+  // ====== firebase guard ======
+  let db=null;
   async function ensureAuth(){
-    if (!window.firebase || !firebase.apps?.length) {
-      throw new Error('Firebase chưa khởi tạo trước admin-devices-tab.js');
-    }
-    if (!firebase.auth().currentUser) {
+    if (!window.firebase || !firebase.apps?.length) throw new Error('Firebase chưa khởi tạo');
+    db = firebase.database();
+    if (!firebase.auth().currentUser){
       await firebase.auth().signInAnonymously();
-      await new Promise(res=>{
-        const un = firebase.auth().onAuthStateChanged(u=>{ if (u) { un(); res(); }});
-      });
+      await new Promise(res=>{ const un=firebase.auth().onAuthStateChanged(u=>{ if(u){un();res();} }); });
     }
-    return firebase.database();
   }
 
-  // ---------- Build toolbar (safe-in) ----------
-  function ensureToolbar(){
-    // nếu đã có, dùng luôn
-    let bar = $('#devices-toolbar', view);
-    if (bar) return bar;
-
-    // nếu có hàng nút cũ, đặt toolbar ngay TRONG view để tránh lỗi insertBefore
-    bar = document.createElement('div');
-    bar.id = 'devices-toolbar';
-    bar.className = 'flex flex-wrap items-center gap-2 mb-4';
-
-    // nút Reload toàn bộ
-    const btnReloadAll = document.createElement('button');
-    btnReloadAll.id = 'btnReloadAll_top';
-    btnReloadAll.className = 'px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700';
-    btnReloadAll.textContent = 'Reload toàn bộ';
-
-    // nút Toggle toàn bộ (1 nút đổi màu)
-    const btnToggleAll = document.createElement('button');
-    btnToggleAll.id = 'btnToggleAll';
-    btnToggleAll.className = 'px-3 py-2 rounded bg-gray-800 text-white hover:bg-black';
-    btnToggleAll.textContent = 'Tắt toàn bộ'; // text sẽ được sync lại theo trạng thái thực
-
-    const hint = document.createElement('span');
-    hint.className = 'text-xs text-gray-500';
-    hint.textContent = '• Dùng khi muốn thao tác nhanh toàn bộ iPad';
-
-    bar.appendChild(btnReloadAll);
-    bar.appendChild(btnToggleAll);
-    bar.appendChild(hint);
-
-    // Đặt toolbar ở ngay đầu section viewDevices, không chèn vào trước phần tử “ngoài parent”
-    view.insertAdjacentElement('afterbegin', bar);
-    return bar;
+  // ====== table picker ======
+  let LINKS_MAP=null;
+  async function loadLinks(){
+    try{
+      const r = await fetch('./links.json?cb='+Date.now(), {cache:'no-store'});
+      const j = await r.json();
+      LINKS_MAP = j.links || j;
+    }catch{ LINKS_MAP=null; }
+  }
+  function openTablePicker(onPick){
+    const keys = LINKS_MAP ? Object.keys(LINKS_MAP).sort(byNum) : Array.from({length:15},(_,i)=>String(i+1));
+    const root = modalRoot();
+    root.innerHTML = `
+      <div class="fixed inset-0 z-[9000]">
+        <div class="absolute inset-0 bg-black/50"></div>
+        <div class="absolute inset-0 p-4 flex items-center justify-center">
+          <div class="bg-white rounded-xl shadow-xl w-full max-w-xl p-4">
+            <div class="flex items-center justify-between mb-3">
+              <div class="text-lg font-semibold">Chọn bàn</div>
+              <button id="tp-close" class="px-2 py-1 rounded border hover:bg-gray-50">Đóng</button>
+            </div>
+            <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-[70vh] overflow-auto">
+              ${keys.map(k=>`<button data-k="${k}" class="px-3 py-3 rounded-lg border font-semibold hover:bg-blue-50">Bàn ${k}</button>`).join('')}
+            </div>
+          </div>
+        </div>
+      </div>`;
+    root.querySelector('#tp-close').onclick = ()=> root.innerHTML='';
+    root.querySelectorAll('[data-k]').forEach(b=>{
+      b.onclick = ()=>{ try{ onPick(b.dataset.k); }finally{ root.innerHTML=''; } };
+    });
   }
 
-  // ---------- Wire buttons ----------
-  async function wire(db){
+  // ====== global power toggle (on/off all) ======
+  function mountGlobalPowerToggle(){
+    const wrap = document.querySelector('#devicesHeaderActions');
+    if (!wrap) return;
+    // Ẩn 2 nút cũ (nếu còn)
+    $('#btnPowerOnAll')?.classList.add('hidden');
+    $('#btnPowerOffAll')?.classList.add('hidden');
+
+    // Tạo 1 nút toggle
+    let btn = document.createElement('button');
+    btn.id = 'btnPowerToggle';
+    btn.className = 'px-3 md:px-4 py-2 rounded-lg text-white';
+    btn.textContent = 'Đang tải…';
+    btn.style.minWidth = '120px';
+    wrap.insertBefore(btn, $('#btnReloadAll'));
+
     const refScreen = db.ref('control/screen');
 
-    const bar = ensureToolbar();
-    const btnReloadAll = $('#btnReloadAll_top', bar);
-    const btnToggleAll = $('#btnToggleAll', bar);
-
-    // Đồng bộ trạng thái nút Toggle theo DB
-    function paintToggle(isOn){
-      if (isOn) {
-        // Đang bật -> nút cho phép "Tắt"
-        btnToggleAll.textContent = 'Tắt toàn bộ';
-        btnToggleAll.className = 'px-3 py-2 rounded bg-gray-800 text-white hover:bg-black';
-      } else {
-        // Đang tắt -> nút cho phép "Bật"
-        btnToggleAll.textContent = 'Bật toàn bộ';
-        btnToggleAll.className = 'px-3 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700';
-      }
-    }
-
-    refScreen.on('value', (snap)=>{
-      const v = snap.exists() ? String(snap.val()).toLowerCase() : 'on';
-      paintToggle(v === 'on');
+    // Subscribe để đổi màu/nhãn
+    refScreen.on('value', s=>{
+      const v = (s.val()||'on').toString().toLowerCase();
+      const isOn = v==='on';
+      btn.textContent = isOn ? 'Đang BẬT' : 'Đang TẮT';
+      btn.classList.toggle('bg-emerald-600', isOn);
+      btn.classList.toggle('hover:bg-emerald-700', isOn);
+      btn.classList.toggle('bg-gray-800', !isOn);
+      btn.classList.toggle('hover:bg-black', !isOn);
     });
 
-    // Reload toàn bộ
-    btnReloadAll.addEventListener('click', async ()=>{
-      try {
-        await db.ref('broadcast/reloadAt').set(firebase.database.ServerValue.TIMESTAMP);
-      } catch (e) {
-        alert('Gửi reload toàn bộ lỗi: ' + (e?.message || e));
-      }
-    });
+    // Click -> đảo trạng thái toàn quán
+    btn.addEventListener('click', async ()=>{
+      try{
+        const snap = await refScreen.get();
+        const cur = (snap.val()||'on').toString().toLowerCase();
+        const next = (cur==='on')?'off':'on';
+        await refScreen.set(next);
 
-    // Toggle toàn bộ (1 nút)
-    btnToggleAll.addEventListener('click', async ()=>{
-      // đọc trạng thái hiện tại để quyết định viết ngược lại
-      const snap = await refScreen.get();
-      const currentlyOn = (snap.exists() ? String(snap.val()).toLowerCase() : 'on') === 'on';
-      try {
-        if (currentlyOn) {
-          // TẮT toàn bộ
-          await refScreen.set('off');
-          // (không cần đụng per-table khi tắt)
-        } else {
-          // BẬT toàn bộ + clear tắt lẻ
-          await refScreen.set('on');
-          const updates = {};
-          for (let i=1; i<=15; i++) updates[`control/tables/${i}/screen`] = 'on';
+        // nếu bật toàn bộ -> đồng bộ cả các bàn về ON cho gọn
+        if (next==='on'){
+          const updates={};
+          for (let i=1;i<=15;i++) updates[`control/tables/${i}/screen`] = 'on';
           await db.ref().update(updates);
         }
-      } catch (e) {
-        alert('Ghi trạng thái toàn bộ lỗi: ' + (e?.message || e));
+      }catch(e){
+        alert('Đổi trạng thái toàn bộ lỗi: '+(e?.message||e));
       }
+    });
+
+    // Reload toàn bộ (nút sẵn có)
+    $('#btnReloadAll')?.addEventListener('click', async ()=>{
+      try{
+        await db.ref('broadcast/reloadAt').set(firebase.database.ServerValue.TIMESTAMP);
+      }catch(e){ alert('Reload toàn bộ lỗi: '+(e?.message||e)); }
     });
   }
 
-  // ---------- Fix modal z-index (để popup chọn bàn không bị ẩn) ----------
-  (function injectZIndexPatch(){
-    const style = document.createElement('style');
-    style.textContent = `
-      /* Modal table-picker / popup nào dùng lớp tp-modal thì đẩy rất cao */
-      .tp-modal, #tp-modal, .tngon-modal {
-        z-index: 9000 !important;
-      }
-    `;
-    document.head.appendChild(style);
-  })();
+  // ====== popup actions per device ======
+  function openDeviceActions(dev){
+    const { id, code, table, name } = dev;
+    const root = modalRoot();
 
-  // ---------- Boot ----------
+    // lấy trạng thái blackout theo bàn hiện tại
+    const tableKey = String(table||'');
+    root.innerHTML = `
+      <div class="fixed inset-0 z-[9500]">
+        <div class="absolute inset-0 bg-black/50"></div>
+        <div class="absolute inset-0 p-4 flex items-end sm:items-center sm:justify-center">
+          <div class="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-md p-4">
+            <div class="flex items-center justify-between mb-3">
+              <div class="font-semibold">Thiết bị ${mask(id)} ${name?`· ${name}`:''}</div>
+              <button id="da-close" class="px-2 py-1 rounded border hover:bg-gray-50">Đóng</button>
+            </div>
+
+            <div class="space-y-2">
+              <button id="act-rename"  class="w-full px-3 py-2 rounded-lg border hover:bg-gray-50 text-left">Đổi tên thiết bị</button>
+              <button id="act-reload"  class="w-full px-3 py-2 rounded-lg border hover:bg-gray-50 text-left">Làm mới</button>
+              <button id="act-table"   class="w-full px-3 py-2 rounded-lg border hover:bg-gray-50 text-left">Đổi số bàn</button>
+              <button id="act-toggle"  class="w-full px-3 py-2 rounded-lg border hover:bg-gray-50 text-left">Bật/Tắt màn hình bàn hiện tại</button>
+              <button id="act-unbind"  class="w-full px-3 py-2 rounded-lg border hover:bg-amber-100 text-left"${code?'':' disabled'}>Gỡ liên kết (yêu cầu nhập lại mã)</button>
+              <button id="act-delete"  class="w-full px-3 py-2 rounded-lg border hover:bg-red-50 text-left"${code?' disabled':''}>Xoá device (khi không gắn mã)</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    root.querySelector('#da-close').onclick = ()=> root.innerHTML='';
+
+    // Đổi tên
+    root.querySelector('#act-rename').onclick = async ()=>{
+      const v = prompt('Nhập tên máy (để trống để xoá):', name||'');
+      if (v===null) return;
+      try{
+        const s = String(v).trim();
+        if (s) await db.ref(`devices/${id}/name`).set(s);
+        else await db.ref(`devices/${id}/name`).remove();
+        root.innerHTML='';
+      }catch(e){ alert('Đặt tên lỗi: '+(e?.message||e)); }
+    };
+
+    // Reload
+    root.querySelector('#act-reload').onclick = async ()=>{
+      try{
+        await db.ref(`devices/${id}/commands/reloadAt`).set(firebase.database.ServerValue.TIMESTAMP);
+        root.innerHTML='';
+      }catch(e){ alert('Gửi reload lỗi: '+(e?.message||e)); }
+    };
+
+    // Đổi bàn (grid nổi TRÊN popup)
+    root.querySelector('#act-table').onclick = ()=> openTablePicker(async (tableLabel)=>{
+      try{
+        await db.ref(`devices/${id}/commands/setTable`).set({ value: tableLabel, at: firebase.database.ServerValue.TIMESTAMP });
+        await db.ref(`devices/${id}`).update({ table: tableLabel, stage:'start' });
+        root.innerHTML='';
+      }catch(e){ alert('Đổi số bàn lỗi: '+(e?.message||e)); }
+    });
+
+    // Toggle blackout theo bàn hiện tại
+    root.querySelector('#act-toggle').onclick = async ()=>{
+      if (!tableKey){ alert('Thiết bị chưa có bàn.'); return; }
+      try{
+        const ref = db.ref(`control/tables/${tableKey}/screen`);
+        const cur = ((await ref.get()).val() || 'on').toString().toLowerCase();
+        const next = (cur==='on')?'off':'on';
+        await ref.set(next);
+        root.innerHTML='';
+      }catch(e){ alert('Đổi trạng thái màn hình bàn lỗi: '+(e?.message||e)); }
+    };
+
+    // Unbind (xác nhận mã)
+    root.querySelector('#act-unbind').onclick = async ()=>{
+      if (!code) return;
+      const confirmCode = prompt(`Nhập lại MÃ đang gắn để gỡ liên kết (mã hiện tại: ${code}):`);
+      if (confirmCode===null) return;
+      if (String(confirmCode).trim().toUpperCase()!==String(code).toUpperCase()){
+        alert('Mã xác nhận không khớp.'); return;
+      }
+      try{
+        await db.ref('codes/'+code).transaction(cur=>{
+          if (!cur) return cur;
+          if (cur.boundDeviceId===id) return { ...cur, boundDeviceId:null, boundAt:null };
+          return cur;
+        });
+        await db.ref(`devices/${id}/commands/unbindAt`).set(firebase.database.ServerValue.TIMESTAMP);
+        await db.ref(`devices/${id}`).update({ code:null, table:null, stage:'select' });
+        root.innerHTML='';
+      }catch(e){ alert('Gỡ liên kết lỗi: '+(e?.message||e)); }
+    };
+
+    // Xoá device
+    root.querySelector('#act-delete').onclick = async ()=>{
+      if (code) return;
+      if (!confirm('Xoá thiết bị khỏi danh sách?')) return;
+      try{ await db.ref(`devices/${id}`).remove(); root.innerHTML=''; }
+      catch(e){ alert('Xoá device lỗi: '+(e?.message||e)); }
+    };
+  }
+
+  // ====== render device widgets ======
+  const elCards = $('#devCards');
+  function renderDevices(devices, tableScreens){
+    if (!elCards) return;
+    const arr = Object.entries(devices||{}).map(([id,v])=>({
+      id, code: v?.code||'', name: v?.name||'',
+      table: v?.table||'', stage: v?.stage||'select',
+      lastSeen: v?.lastSeen||0
+    }));
+    // sort theo số bàn, rồi theo lastSeen mới nhất
+    arr.sort((a,b)=>{
+      const ta = Number(a.table)||1e9, tb=Number(b.table)||1e9;
+      if (ta!==tb) return ta-tb;
+      return (b.lastSeen||0)-(a.lastSeen||0);
+    });
+
+    elCards.innerHTML='';
+    arr.forEach(d=>{
+      const t = d.table;
+      const scr = (tableScreens && t && tableScreens[t]) || 'on';
+      const isOff = String(scr).toLowerCase()==='off';
+
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'text-left w-full rounded-xl border shadow-sm p-3 transition hover:shadow bg-white';
+      card.innerHTML = `
+        <div class="flex items-center justify-between">
+          <div class="min-w-0">
+            <div class="font-semibold text-gray-800">
+              <span class="cursor-pointer underline-offset-2 hover:underline" data-role="devId">${mask(d.id)}</span>
+              ${d.name?`<span class="text-gray-500">· ${d.name}</span>`:''}
+            </div>
+            <div class="text-xs text-gray-600 mt-0.5">Mã: <span class="font-mono">${d.code||'—'}</span></div>
+            <div class="text-xs text-gray-600">Bàn: ${d.stage==='pos' && d.table ? ('+'+d.table) : (d.table||'—')}</div>
+          </div>
+          <div class="shrink-0">
+            <span class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs ${isOff?'bg-gray-200 text-gray-700':'bg-emerald-100 text-emerald-700'}">
+              <span class="w-2 h-2 rounded-full ${isOff?'bg-gray-500':'bg-emerald-500'}"></span>
+              ${isOff?'ĐANG TẮT':'ĐANG BẬT'}
+            </span>
+          </div>
+        </div>
+      `;
+      // bấm ID -> đổi tên nhanh
+      card.querySelector('[data-role="devId"]').addEventListener('click', (ev)=>{
+        ev.stopPropagation();
+        const v = prompt('Nhập tên máy (để trống để xoá):', d.name||'');
+        if (v===null) return;
+        const s = String(v).trim();
+        if (s) db.ref(`devices/${d.id}/name`).set(s);
+        else db.ref(`devices/${d.id}/name`).remove();
+      });
+      // bấm toàn bộ card -> mở popup actions
+      card.addEventListener('click', ()=> openDeviceActions(d));
+      elCards.appendChild(card);
+    });
+  }
+
+  // ====== boot wiring ======
   document.addEventListener('DOMContentLoaded', async ()=>{
-    try {
-      const db = await ensureAuth();
-      await wire(db);
-      console.log('[devices-tab] Ready.');
-    } catch (e) {
-      console.error(e);
-      alert("Lỗi khởi chạy tab Thiết bị: " + (e?.message || e));
+    try{
+      await ensureAuth();
+      await loadLinks();
+      mountGlobalPowerToggle();
+
+      // subscribe dữ liệu devices + trạng thái bàn
+      const tableRef = db.ref('control/tables');
+      let tableScreens = {};
+      tableRef.on('value', s=>{
+        const v = s.val()||{};
+        const map = {};
+        Object.keys(v).forEach(k=> map[k] = (v[k]?.screen || 'on'));
+        tableScreens = map;
+      });
+
+      db.ref('devices').on('value', s=>{
+        renderDevices(s.val()||{}, tableScreens);
+      });
+
+    }catch(e){
+      console.error('[devices-tab] init error:', e);
+      alert('Lỗi khởi chạy tab Thiết bị: '+(e?.message||e));
     }
   });
+
 })();
