@@ -64,57 +64,76 @@ grid.appendChild(b);
 wrap.querySelector('#tp-close').addEventListener('click', ()=> safeRemove(wrap));
 }
 
-  // -------- Toolbar (Reload toàn bộ + Bật/Tắt toàn bộ) --------
-  // ---------- Toolbar: Reload toàn bộ + Bật/Tắt toàn bộ ----------
+ // ---------- Toolbar: Reload toàn bộ + Bật/Tắt toàn bộ ----------
 function ensureToolbar(db){
-let bar = $('#devices-toolbar', view);
-if (bar) return;
+  let bar = $('#devices-toolbar', view);
+  if (bar) return;
 
-bar = document.createElement('div');
-bar.id='devices-toolbar';
-bar.className='flex flex-wrap items-center gap-2 mb-4';
-bar.innerHTML = `
-     <button id="btnReloadAll" class="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Reload toàn bộ</button>
-     <button id="btnToggleAll" class="px-3 py-2 rounded bg-gray-800 text-white hover:bg-black">Tắt toàn bộ</button>
-     <span class="text-xs text-gray-500">• Tác động toàn bộ iPad</span>
-   `;
-view.insertAdjacentElement('afterbegin', bar);
+  bar = document.createElement('div');
+  bar.id='devices-toolbar';
+  bar.className='flex flex-wrap items-center gap-2 mb-4';
+  bar.innerHTML = `
+      <button id="btnReloadAll" class="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Reload toàn bộ</button>
+      <button id="btnToggleAll" class="px-3 py-2 rounded bg-gray-800 text-white hover:bg-black">Tắt toàn bộ</button>
+      <span class="text-xs text-gray-500">• Tác động toàn bộ iPad</span>
+  `;
+  view.insertAdjacentElement('afterbegin', bar);
 
-const refScreen = db.ref('control/screen');
-const paint = (isOn)=>{
-const btn = $('#btnToggleAll', bar);
-if (isOn){
-btn.textContent='Tắt toàn bộ';
-btn.className='px-3 py-2 rounded bg-gray-800 text-white hover:bg-black';
-} else {
-btn.textContent='Bật toàn bộ';
-btn.className='px-3 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700';
+  const refScreen = db.ref('control/screen');
+  const paint = (isOn)=>{
+    const btn = $('#btnToggleAll', bar);
+    if (isOn){
+      btn.textContent='Tắt toàn bộ';
+      btn.className='px-3 py-2 rounded bg-gray-800 text-white hover:bg-black';
+    } else {
+      btn.textContent='Bật toàn bộ';
+      btn.className='px-3 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700';
+    }
+  };
+  refScreen.on('value', s=>{
+    const isOn = (s.exists()? String(s.val()).toLowerCase() : 'on')==='on';
+    paint(isOn);
+  });
+
+  // Nút reload toàn bộ
+  $('#btnReloadAll', bar).addEventListener('click', async ()=>{
+    try{ await db.ref('broadcast/reloadAt').set(firebase.database.ServerValue.TIMESTAMP); }
+    catch(e){ alert('Reload toàn bộ lỗi: '+(e?.message||e)); }
+  });
+
+  // Nút bật/tắt toàn bộ
+  $('#btnToggleAll', bar).addEventListener('click', async ()=>{
+    const snap = await refScreen.get();
+    const on = (snap.exists()? String(snap.val()).toLowerCase() : 'on')==='on';
+    try{
+      if (on){
+        // Tắt toàn bộ
+        await refScreen.set('off');
+        const updates={};
+        for(let i=1;i<=15;i++){
+          updates[`control/tables/${i}/screen`]='off';
+          tableScreen[String(i)]='off';
+        }
+        await db.ref().update(updates);
+      } else {
+        // Bật toàn bộ
+        await refScreen.set('on');
+        const updates={};
+        for(let i=1;i<=15;i++){
+          updates[`control/tables/${i}/screen`]='on';
+          tableScreen[String(i)]='on';
+        }
+        await db.ref().update(updates);
+      }
+      // Cập nhật lại giao diện ngay
+      if (window.devicesCache && $('#devicesGrid')) {
+        renderGrid($('#devicesGrid'), db, window.devicesCache);
+      }
+    }catch(e){
+      alert('Ghi trạng thái toàn bộ lỗi: '+(e?.message||e));
+    }
+  });
 }
-};
-refScreen.on('value', s=>{
-const isOn = (s.exists()? String(s.val()).toLowerCase() : 'on')==='on';
-paint(isOn);
-});
-
-$('#btnReloadAll', bar).addEventListener('click', async ()=>{
-try{ await db.ref('broadcast/reloadAt').set(firebase.database.ServerValue.TIMESTAMP); }
-catch(e){ alert('Reload toàn bộ lỗi: '+(e?.message||e)); }
-});
-$('#btnToggleAll', bar).addEventListener('click', async ()=>{
-const snap = await refScreen.get();
-const on = (snap.exists()? String(snap.val()).toLowerCase() : 'on')==='on';
-try{
-if (on){
-await refScreen.set('off');
-} else {
-await refScreen.set('on');
-const updates={}; for(let i=1;i<=15;i++) updates[`control/tables/${i}/screen`]='on';
-await db.ref().update(updates);
-}
-}catch(e){ alert('Ghi trạng thái toàn bộ lỗi: '+(e?.message||e)); }
-});
-}
-
   // -------- Containers --------
   // ---------- Containers ----------
 function pickContainers(){
