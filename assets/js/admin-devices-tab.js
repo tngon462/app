@@ -2,7 +2,7 @@
 (function(){
   'use strict';
 
-  // 11111===== Helpers =====
+  // ===== Helpers =====
   const $ = (id)=> document.getElementById(id);
   const CE = (tag, cls, html)=> {
     const el = document.createElement(tag);
