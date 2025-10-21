@@ -60,7 +60,7 @@
     wrap.querySelector('#tp-close').addEventListener('click', ()=> safeRemove(wrap));
   }
 
-  // -------- Toolbar --------
+  // -------- Toolbar (Reload toàn bộ + Bật/Tắt toàn bộ) --------
   function ensureToolbar(db){
     let bar = $('#devices-toolbar', view);
     if (bar) return;
@@ -187,7 +187,6 @@
           await db.ref(`devices/${id}/commands/setTable`).set({ value: label, at: firebase.database.ServerValue.TIMESTAMP });
           await db.ref(`devices/${id}`).update({ table: label, stage:'start' });
         }catch(e){ alert('Đổi bàn lỗi: '+(e?.message||e)); }
-        // đóng popup an toàn
         safeRemove(wrap);
       });
     });
@@ -235,6 +234,15 @@
     });
   }
 
+  // ======= Per-table screen state (blackout) =======
+  const tableScreen = {}; // { "1": "on"/"off", ... }
+  let devicesCache = {};  // snapshot devices để re-render khi tableScreen đổi
+
+  function tableIsOn(table){
+    const v = tableScreen[String(table)];
+    return (String(v||'on').toLowerCase() === 'on');
+  }
+
   // -------- render bảng --------
   function renderTable(tbody, db, devices){
     if (!tbody) return;
@@ -264,7 +272,7 @@
     }
   }
 
-  // -------- render lưới widget --------
+  // -------- render lưới widget (có công tắc blackout theo bàn) --------
   function renderGrid(grid, db, devices){
     if (!grid) return;
     grid.innerHTML='';
@@ -277,18 +285,51 @@
       return;
     }
     for (const [id,d] of list){
-      const code=d?.code||''; const name=d?.name||''; const stage=d?.stage||'select'; const table=d?.table||'';
+      const code=d?.code||''; const name=d?.name||''; const stage=d?.stage||'select'; const table=(d?.table||'')+'';
+      const hasTable = !!table && !isNaN(parseInt(table,10));
       let tableDisp='—'; if(stage==='start') tableDisp=table||'—'; else if(stage==='pos') tableDisp=table?('+'+table):'+?';
-      const card=document.createElement('button');
-      card.type='button';
-      card.className='text-left rounded-xl border border-emerald-200 bg-emerald-50 p-3 shadow-sm hover:shadow cursor-pointer';
+
+      const isOn = hasTable ? tableIsOn(table) : true;
+
+      const card=document.createElement('div');
+      card.className='rounded-xl border border-emerald-200 bg-emerald-50 p-3 shadow-sm';
       card.innerHTML=`
-        <div class="text-sm font-semibold">Thiết bị ${mask(id)} ${name?`<span class="text-gray-500 font-normal">(${name})</span>`:''}</div>
-        <div class="text-xs text-gray-700 mt-1">Trạng thái bàn: ${tableDisp}</div>
-        <div class="text-xs text-gray-700">Mã: ${code || '—'}</div>
-        <div class="mt-1 text-[11px] text-gray-400">Nhấn để mở thao tác…</div>
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <div class="text-sm font-semibold">Thiết bị ${mask(id)} ${name?`<span class="text-gray-500 font-normal">(${name})</span>`:''}</div>
+            <div class="text-xs text-gray-700 mt-1">Bàn: ${tableDisp}</div>
+            <div class="text-xs text-gray-700">Mã: ${code || '—'}</div>
+          </div>
+          <div class="flex flex-col items-end gap-2">
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] ${isOn?'text-emerald-700':'text-gray-500'}">${isOn?'Đang bật':'Đang tắt'}</span>
+              <div class="toggle ${hasTable?'':'opacity-50'}">
+                <input type="checkbox" id="sw-${id}" ${isOn?'checked':''} ${hasTable?'':'disabled'}>
+                <label for="sw-${id}" aria-label="Bật/Tắt theo bàn"></label>
+              </div>
+            </div>
+            <button class="px-2 py-1 text-xs rounded border hover:bg-gray-50" data-act="open">Mở thao tác</button>
+          </div>
+        </div>
       `;
-      card.addEventListener('click', ()=> openActionPopup(db, id, d));
+      // Toggle per-table
+      const sw = card.querySelector(`#sw-${CSS.escape(id)}`);
+      if (sw){
+        sw.addEventListener('change', async ()=>{
+          if (!hasTable){ sw.checked = true; return; }
+          try{
+            await db.ref(`control/tables/${table}/screen`).set(sw.checked ? 'on' : 'off');
+          }catch(e){
+            alert('Ghi trạng thái bàn lỗi: '+(e?.message||e));
+            // revert UI
+            sw.checked = !sw.checked;
+          }
+        });
+      }
+
+      // Open action popup
+      card.querySelector('[data-act="open"]').addEventListener('click', ()=> openActionPopup(db, id, d));
+
       grid.appendChild(card);
     }
   }
@@ -301,11 +342,21 @@
       ensureToolbar(db);
 
       const { tbody, grid } = pickContainers();
+
+      // cache & render devices
       db.ref('devices').on('value', s=>{
-        const v = s.val() || {};
-        if (tbody) renderTable(tbody, db, v);
-        if (grid)  renderGrid(grid, db, v);
+        devicesCache = s.val() || {};
+        if (tbody) renderTable(tbody, db, devicesCache);
+        if (grid)  renderGrid(grid, db, devicesCache);
       }, e=> alert('Lỗi subscribe devices: '+(e?.message||e)));
+
+      // subscribe per-table screen state
+      db.ref('control/tables').on('value', s=>{
+        const v = s.val()||{};
+        Object.keys(v).forEach(k=> tableScreen[String(k)] = (v[k]?.screen || v[k])); // chấp nhận cả 'on'/'off' hoặc {screen:'on'}
+        // re-render grid để cập nhật công tắc
+        if (grid) renderGrid(grid, db, devicesCache);
+      }, e=> console.warn('Lỗi subscribe control/tables:', e?.message||e));
 
       log('Ready.');
     }catch(e){
