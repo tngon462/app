@@ -27,49 +27,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
 
-  <style>
-  /* === Tuỳ chỉnh giao diện widget thiết bị === */
-
-  /* Toàn khối widget */
-  #devicesGrid > div {
-    font-size: 15px;             /* cỡ chữ tổng thể */
-    color: #222;                 /* màu chữ mặc định */
-    border-radius: 14px;         /* bo góc mềm hơn */
-    padding: 16px;               /* khoảng cách trong */
-  }
-
-  /* Khi bật (màu xanh) */
-  #devicesGrid > div.on {
-    background: #ecfdf5;         /* xanh nhạt */
-    border-color: #10b981;
-    color: #065f46;
-  }
-
-  /* Khi tắt (màu xám) */
-  #devicesGrid > div.off {
-    background: #f3f4f6;         /* xám nhạt */
-    border-color: #9ca3af;
-    color: #4b5563;
-  }
-
-  /* Tên thiết bị */
-  #devicesGrid .dev-name {
-    font-weight: 700;
-    font-size: 20px;
-  }
-
-  /* Mã thiết bị và bàn */
-  #devicesGrid .dev-info {
-    font-size: 30px;
-    color: #555;
-  }
-
-  /* Nút / công tắc trong widget */
-  #devicesGrid .toggle label::after {
-    box-shadow: 0 0 4px rgba(0,0,0,.2);
-  }
-</style>
-  
 <style>
   /* ====== Toggle switch chuẩn dạng gạt ====== */
   .toggle input {
