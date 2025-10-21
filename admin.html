@@ -75,6 +75,24 @@
     cursor: not-allowed;
   }
 </style>
+  
+  <style>
+  /* Khôi phục nút trong TAB Thiết bị (ở dưới “Thiết bị iPad”) */
+  #viewDevices #btnReloadAll,
+  #viewDevices #btnToggleAll,
+  #viewDevices #btnPowerOnAll,
+  #viewDevices #btnPowerOffAll {
+    display: inline-block !important;
+  }
+</style>
+
+  <style>
+  /* Ẩn 3 nút trên cùng (nằm cạnh menu tabs) */
+  #devicesHeaderActions {
+    display: none !important;
+  }
+</style>
+  
   <style>
     html, body { height:100%; background:#f6f7f9; }
     .app-badge { font-size:12px; padding:2px 6px; border-radius:6px; border:1px solid #e5e7eb; color:#6b7280; }
