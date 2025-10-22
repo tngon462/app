@@ -127,39 +127,29 @@
   <!-- Nút bí mật (trái) -->
   <button id="back-btn-start" class="secret-btn" aria-label="hidden-back-start">◀</button>
                                           
- <!-- Firebase SDKs (ONLY ONCE) -->
+<!-- Firebase SDKs (chỉ 1 lần) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
-<!-- Config/init Firebase (chỉ GIỮ 1 file: firebase.js HOẶC firebase-fix.js) -->
+<!-- Cấu hình + init Firebase: CHỈ GIỮ 1 trong 2 file (firebase.js hoặc firebase-fix.js) -->
 <script src="./assets/js/firebase.js?v=5"></script>
-<!-- Nếu bạn dùng firebase-fix.js thì: -->
-<!-- <script src="./assets/js/firebase-fix.js?v=1"></script> -->
+<!-- Nếu dùng bản fix: <script src="./assets/js/firebase-fix.js?v=1"></script> -->
 
-<!-- Device bind (tạo/ghi deviceId, table, state) -->
+<!-- Bind + probe (tạo deviceId, cập nhật devices/<id>) -->
 <script src="./assets/js/device-bind.js?v=2"></script>
-
-<!-- Heartbeat / cập nhật devices/<id> định kỳ (tuỳ chọn nhưng nên giữ) -->
 <script src="./assets/js/bind-probe.js?v=2"></script>
 
-<!-- Core UI: cung cấp gotoSelect/gotoStart/gotoPos + load links.json -->
+<!-- Core điều hướng UI (có gotoSelect/gotoStart/gotoPos) -->
 <script src="./assets/js/redirect-core.js?v=6.2d"></script>
 
-<!-- Blackout + NoSleep + SW + Secret button -->
+<!-- Blackout / NoSleep / SW / Secret button -->
 <script src="./assets/js/blackout.js?v=2"></script>
 <script src="./assets/js/nosleep.js?v=2"></script>
 <script src="./assets/js/sw-register.js?v=3"></script>
 <script src="./assets/js/secret-btn.js?v=3"></script>
 
-<!-- Chặn pinch-zoom/double-tap -->
-<script>
-  document.addEventListener('touchstart', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive:false });
-  document.addEventListener('gesturestart', e => e.preventDefault(), { passive:false });
-  document.addEventListener('dblclick', e => e.preventDefault(), { passive:false });
-</script>
-
-<!-- QRback listener (NHÚNG SAU KHI Firebase đã init) -->
+<!-- Cuối cùng: QRback listener (sau khi Firebase đã init) -->
 <script src="./assets/js/qrback-listener.js?v=1"></script>
 </body>
 </html>
