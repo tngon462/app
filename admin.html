@@ -429,7 +429,7 @@
       card.innerHTML = `
         <div class="relative flex-1 flex flex-col">
           <div class="flex items-center justify-between mb-1">
-            <div class="min-w-0 text-[10px] md:text-[11px] font-semibold text-gray-700 truncate" title="${name||'(chưa đặt)'}">
+            <div class="min-w-0 text-[10px] md:text-[20px] font-semibold text-gray-700 truncate" title="${name||'(chưa đặt)'}">
               ${name || '(chưa đặt)'}
             </div>
             <div class="select-none" data-role="switch-wrap">
@@ -442,7 +442,7 @@
 
           <div class="flex-1 flex items-center justify-center">
             <div class="text-center leading-none">
-              <div class="font-extrabold text-xl md:text-2xl lg:text-3xl">
+              <div class="font-extrabold text-3xl md:text-4xl lg:text-5xl">
                 ${table ? String(table).replace('+','') : '—'}
               </div>
             </div>
