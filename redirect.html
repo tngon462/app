@@ -152,5 +152,50 @@
 
 <!-- Cuối cùng: QRback listener (sau khi Firebase đã init) -->
 <script src="./assets/js/qrback-listener.js?v=1"></script>
+
+  <script>
+// /assets/js/debug-mark.js (có thể tách file)
+(function(){
+  const tagStyle = 'color:#3b82f6;font-weight:bold';
+  const TAG = '[tngon]';
+
+  // Prefix toàn bộ log của T-NGON
+  ['log','warn','error'].forEach(fn=>{
+    const orig = console[fn];
+    console[fn] = function(...args){
+      try { orig.call(console, `%c${TAG}`, tagStyle, ...args); }
+      catch { orig.apply(console, args); }
+    };
+  });
+
+  // Bắt lỗi "có thể bắt" của trang cha
+  window.addEventListener('error', (e)=>{
+    console.log('[catchable-error]', {
+      message: e.message,
+      filename: e.filename,
+      lineno: e.lineno,
+      colno: e.colno,
+      sameOrigin: e.filename ? e.filename.startsWith(location.origin) : null
+    });
+  });
+
+  // Bắt Promise bị reject mà không catch
+  window.addEventListener('unhandledrejection', (e)=>{
+    console.log('[catchable-promise]', e.reason);
+  });
+
+  // Theo dõi iframe load/error (chỉ biết sự kiện, không đọc nội dung bên trong)
+  const iframe = document.getElementById('pos-frame');
+  if (iframe){
+    iframe.addEventListener('load', ()=> {
+      console.log('iframe loaded', { src: iframe.src });
+    });
+    iframe.addEventListener('error', ()=> {
+      console.error('iframe load/network error');
+    });
+  }
+})();
+</script>
+  
 </body>
 </html>
