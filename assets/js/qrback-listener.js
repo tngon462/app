@@ -1,129 +1,127 @@
-//qrback-listener.js
 <script>
+/* T-NGON v2 · QRBack listener
+   - Lắng nghe: signals/<tableNo>
+   - Khi status='expired' và ts thay đổi → quay về ORDER_URL hoặc reload
+   - Đồng thời nghe broadcast/reloadAt để đồng bộ lệnh Reload toàn bộ từ Admin
+*/
+
 (function(){
   'use strict';
-  const log  = (...a)=> console.log('[qrback]', ...a);
-  const warn = (...a)=> console.warn('[qrback]', ...a);
 
-  // ===== Guard: phải có firebase và đã init
-  function getDB(){
-    if (!window.firebase || !firebase.apps?.length){
-      warn('Firebase chưa init -> bỏ qua QRBACK listener');
-      return null;
+  // ============ CONFIG ============
+  // Trang đích khi “quay lại order” (điều chỉnh theo app của bạn)
+  // Nếu trang hiện tại chính là order rồi, script sẽ chỉ reload.
+  const ORDER_URL = '/';        // ví dụ '/', '/order', '/index.html'...
+  const DEBUG_LOG = true;       // bật log cho dễ kiểm tra
+
+  // Thử lấy số bàn từ nhiều nguồn khác nhau để tương thích V2
+  function resolveTableNo(){
+    // 1) query ?table=12
+    const qs = new URLSearchParams(location.search);
+    if (qs.get('table')) return String(qs.get('table')).trim();
+
+    // 2) localStorage (tuỳ bạn đã lưu khoá nào – thử vài khoá phổ biến)
+    const keys = ['tngon.table','table','TABLE','tn_table'];
+    for (const k of keys){
+      const v = localStorage.getItem(k);
+      if (v) return String(v).trim();
+    }
+
+    // 3) data-attr trên body: <body data-table="12">
+    const dt = document.body?.dataset?.table;
+    if (dt) return String(dt).trim();
+
+    // 4) Đoán từ URL kiểu .../table/12 hoặc .../ban/12
+    const m = location.pathname.match(/(?:table|ban)\/(\d+)/i);
+    if (m) return m[1];
+
+    // Không tìm thấy
+    return null;
+  }
+
+  // Điều hướng về order hoặc reload trang hiện tại
+  function goToOrder(){
+    try{
+      // Nếu đã ở đúng URL order → reload cứng để clear state
+      const here = location.pathname.replace(/\/+$/,'');
+      const dest = ORDER_URL.replace(/\/+$/,'');
+      if (here === dest){
+        if (DEBUG_LOG) console.log('[qrback] reload order page');
+        location.reload(true);
+      } else {
+        if (DEBUG_LOG) console.log('[qrback] navigate to order:', ORDER_URL);
+        location.href = ORDER_URL;
+      }
+    }catch(e){
+      console.warn('[qrback] navigate error:', e);
+      location.reload(true);
+    }
+  }
+
+  async function ensureFirebaseReady(){
+    if (!window.firebase || !firebase.apps?.length) throw new Error('Firebase chưa init');
+    if (!firebase.auth().currentUser){
+      await firebase.auth().signInAnonymously();
+      await new Promise(res=>{
+        const un = firebase.auth().onAuthStateChanged(u=>{ if(u){ un(); res(); }});
+      });
     }
     return firebase.database();
   }
 
-  // ===== Xác định deviceId & table hiện tại (nếu có)
-  function guessDeviceId(){
-    return localStorage.getItem('deviceId')
-        || localStorage.getItem('DEVICE_ID')
-        || localStorage.getItem('tn_device_id')
-        || null;
-  }
-  function guessTable(){
-    const fromLS = localStorage.getItem('table')
-               || localStorage.getItem('TABLE')
-               || localStorage.getItem('tn_table');
-    const fromQS = new URLSearchParams(location.search).get('table')
-               || new URLSearchParams(location.search).get('t');
-    return (fromQS || fromLS || '').toString().replace('+','').trim() || null;
-  }
+  document.addEventListener('DOMContentLoaded', async ()=>{
+    try{
+      const db = await ensureFirebaseReady();
 
-  // ===== Hành động QR back
-  let lastTs = 0; // chống bắn lặp
-  function isFresh(ts){ return typeof ts==='number' && (Date.now() - ts < 15000) && ts > lastTs; }
-
-  function doQrBack(){
-    try {
-      // 1) App SPA có router
-      if (window.app?.router?.push) { app.router.push('/order'); return; }
-      if (window.router?.push)      { router.push('/order');    return; }
-
-      // 2) Hàm tiện ích nếu có
-      if (window.showOrderScreen)   { window.showOrderScreen(); return; }
-      if (window.gotoOrder)         { window.gotoOrder();       return; }
-      if (window.goOrder)           { window.goOrder();         return; }
-
-      // 3) Phát event để app tự bắt
-      const evt = new CustomEvent('qrback', { detail: { at: Date.now() }});
-      window.dispatchEvent(evt);
-
-      // 4) Fallback: đổi hash hoặc chuyển trang
-      if (location.hash !== '#order') {
-        location.hash = '#order';
-      } else {
-        // nếu vẫn ở đúng màn nhưng app không nghe hashchange -> reload nhẹ
-        location.reload();
-      }
-    } catch(e){
-      warn('Lỗi thực thi QRBACK:', e);
-    }
-  }
-
-  // ===== Subscribe nhiều nhánh để “tương thích ngược”
-  function attachListeners(){
-    const db = getDB(); if (!db) return;
-    const deviceId = guessDeviceId();
-    const table    = guessTable();
-    log('Attach QRBACK listeners. deviceId=', deviceId, 'table=', table);
-
-    // Helper: generic onValue cho nhánh có timestamp
-    const listenTS = (refPath)=>{
-      const ref = db.ref(refPath);
-      ref.on('value', s=>{
+      // 1) Nghe lệnh reload toàn bộ từ Admin (broadcast)
+      let lastReloadAt = null;
+      db.ref('broadcast/reloadAt').on('value', s=>{
         const v = s.val();
         if (!v) return;
-        let ts = null;
-        if (typeof v === 'number') ts = v;
-        else if (typeof v === 'object' && v.at) ts = Number(v.at);
-
-        if (isFresh(ts)){
-          lastTs = ts;
-          log('QRBACK nhận tại', refPath, ts);
-          doQrBack();
-        }
-      }, e=> warn('Lỗi subscribe', refPath, e?.message||e));
-    };
-
-    // Các nhánh broadcast chung
-    listenTS('control/qrbackAt');
-    listenTS('control/qrback');
-
-    // Theo device
-    if (deviceId){
-      listenTS(`devices/${deviceId}/commands/qrbackAt`);
-    }
-
-    // Theo bàn
-    if (table){
-      listenTS(`control/tables/${table}/qrbackAt`);
-      listenTS(`signals/${table}/qrbackAt`);
-    }
-
-    // Ngoài ra: nếu Python set true/false thay vì timestamp (rất cũ)
-    // ta vẫn hỗ trợ đơn giản -> bật là xử lý 1 lần rồi reset về false
-    const legacyFlags = [];
-    legacyFlags.push(db.ref('control/qrbackFlag'));
-    if (deviceId) legacyFlags.push(db.ref(`devices/${deviceId}/commands/qrbackFlag`));
-    if (table)    legacyFlags.push(db.ref(`control/tables/${table}/qrbackFlag`));
-    legacyFlags.forEach(ref=>{
-      ref.on('value', async s=>{
-        const v = s.val();
-        if (v === true){
-          log('QRBACK legacy flag tại', ref.toString());
-          doQrBack();
-          try { await ref.set(false); } catch{}
+        if (v !== lastReloadAt){
+          lastReloadAt = v;
+          if (DEBUG_LOG) console.log('[qrback] broadcast/reloadAt changed → reload');
+          location.reload(true);
         }
       });
-    });
-  }
 
-  // Khởi chạy khi DOM sẵn sàng (Firebase init thường đã xảy ra trước đó)
-  if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', attachListeners);
-  } else {
-    attachListeners();
-  }
+      // 2) Nghe tín hiệu “qr back” theo bàn
+      const tableNo = resolveTableNo();
+      if (!tableNo){
+        console.warn('[qrback] Không xác định được số bàn → bỏ qua signals/* listener');
+        return;
+      }
+      const ref = db.ref('signals/'+String(tableNo));
+      let lastTs = null, initialized = false;
+
+      if (DEBUG_LOG) console.log('[qrback] listen signals/'+tableNo);
+
+      ref.on('value', snap=>{
+        const val = snap.val();
+        if (!val) return;
+
+        const status = (val.status || '').toString().toLowerCase();
+        const ts     = Number(val.ts || 0);
+
+        // Bỏ qua lần đầu để không tự kích hoạt nếu đã có giá trị cũ
+        if (!initialized){
+          lastTs = ts || null;
+          initialized = true;
+          if (DEBUG_LOG) console.log('[qrback] prime value:', val);
+          return;
+        }
+
+        if (status === 'expired' && ts && ts !== lastTs){
+          lastTs = ts;
+          if (DEBUG_LOG) console.log('[qrback] expired received → back to order');
+          // Thực thi quay lại order
+          goToOrder();
+        }
+      });
+
+    }catch(e){
+      console.error('[qrback] init error:', e);
+    }
+  });
 })();
 </script>
