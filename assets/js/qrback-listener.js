@@ -1,4 +1,3 @@
-
 // qrback-listener.js  — NHÚNG SAU KHI firebase.initializeApp(...) ĐÃ CHẠY
 (function(){
   'use strict';
@@ -81,4 +80,3 @@
 
   log('QRback listener ready.');
 })();
-
