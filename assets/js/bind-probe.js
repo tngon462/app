@@ -41,7 +41,7 @@
     };
     await db.ref('devices/'+deviceId).update(payload);
     console.log('[probe] wrote devices/'+deviceId, payload);
-    badge('Probe OK', true);
+    //badge('Probe OK', true);
   }
 
   (async function boot(){
