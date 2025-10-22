@@ -1,79 +1,127 @@
-// assets/js/firebase-fix.js
-// Làm cho anonymous auth diễn ra ĐÚNG 1 lần, đợi xong rồi mới báo "firebase-ready" cho app.
-// Kết quả: hết vòng lặp auth, tốc độ vào lần đầu nhanh hẳn.
+<script>
+/* T-NGON v2 · QRBack listener
+   - Lắng nghe: signals/<tableNo>
+   - Khi status='expired' và ts thay đổi → quay về ORDER_URL hoặc reload
+   - Đồng thời nghe broadcast/reloadAt để đồng bộ lệnh Reload toàn bộ từ Admin
+*/
 
-(function () {
-  const READY_FLAG = '__firebaseFixInstalled';
-  if (window[READY_FLAG]) return;
-  window[READY_FLAG] = true;
+(function(){
+  'use strict';
 
-  function waitForFirebaseApp() {
-    return new Promise((resolve, reject) => {
-      if (window.firebase && firebase.apps && firebase.apps.length) return resolve();
-      let tries = 0;
-      const t = setInterval(() => {
-        tries++;
-        if (window.firebase && firebase.apps && firebase.apps.length) {
-          clearInterval(t);
-          resolve();
-        } else if (tries > 200) { // ~10s
-          clearInterval(t);
-          reject(new Error('[firebase-fix] Firebase app chưa init'));
-        }
-      }, 50);
-    });
+  // ============ CONFIG ============
+  // Trang đích khi “quay lại order” (điều chỉnh theo app của bạn)
+  // Nếu trang hiện tại chính là order rồi, script sẽ chỉ reload.
+  const ORDER_URL = '/';        // ví dụ '/', '/order', '/index.html'...
+  const DEBUG_LOG = true;       // bật log cho dễ kiểm tra
+
+  // Thử lấy số bàn từ nhiều nguồn khác nhau để tương thích V2
+  function resolveTableNo(){
+    // 1) query ?table=12
+    const qs = new URLSearchParams(location.search);
+    if (qs.get('table')) return String(qs.get('table')).trim();
+
+    // 2) localStorage (tuỳ bạn đã lưu khoá nào – thử vài khoá phổ biến)
+    const keys = ['tngon.table','table','TABLE','tn_table'];
+    for (const k of keys){
+      const v = localStorage.getItem(k);
+      if (v) return String(v).trim();
+    }
+
+    // 3) data-attr trên body: <body data-table="12">
+    const dt = document.body?.dataset?.table;
+    if (dt) return String(dt).trim();
+
+    // 4) Đoán từ URL kiểu .../table/12 hoặc .../ban/12
+    const m = location.pathname.match(/(?:table|ban)\/(\d+)/i);
+    if (m) return m[1];
+
+    // Không tìm thấy
+    return null;
   }
 
-  // Promise toàn cục: app có thể "await window.firebaseReady" trước khi làm gì với DB
-  window.firebaseReady = new Promise(async (resolve, reject) => {
-    try {
-      await waitForFirebaseApp();
-
-      // Nếu đã có user thì xong luôn
-      const auth = firebase.auth();
-      if (auth.currentUser) {
-        resolve(auth.currentUser);
-        document.dispatchEvent(new CustomEvent('firebase-ready', { detail: { user: auth.currentUser } }));
-        return;
+  // Điều hướng về order hoặc reload trang hiện tại
+  function goToOrder(){
+    try{
+      // Nếu đã ở đúng URL order → reload cứng để clear state
+      const here = location.pathname.replace(/\/+$/,'');
+      const dest = ORDER_URL.replace(/\/+$/,'');
+      if (here === dest){
+        if (DEBUG_LOG) console.log('[qrback] reload order page');
+        location.reload(true);
+      } else {
+        if (DEBUG_LOG) console.log('[qrback] navigate to order:', ORDER_URL);
+        location.href = ORDER_URL;
       }
+    }catch(e){
+      console.warn('[qrback] navigate error:', e);
+      location.reload(true);
+    }
+  }
 
-      let resolved = false;
-      const unsub = auth.onAuthStateChanged((user) => {
-        if (user && !resolved) {
-          resolved = true;
-          unsub();
-          resolve(user);
-          document.dispatchEvent(new CustomEvent('firebase-ready', { detail: { user } }));
+  async function ensureFirebaseReady(){
+    if (!window.firebase || !firebase.apps?.length) throw new Error('Firebase chưa init');
+    if (!firebase.auth().currentUser){
+      await firebase.auth().signInAnonymously();
+      await new Promise(res=>{
+        const un = firebase.auth().onAuthStateChanged(u=>{ if(u){ un(); res(); }});
+      });
+    }
+    return firebase.database();
+  }
+
+  document.addEventListener('DOMContentLoaded', async ()=>{
+    try{
+      const db = await ensureFirebaseReady();
+
+      // 1) Nghe lệnh reload toàn bộ từ Admin (broadcast)
+      let lastReloadAt = null;
+      db.ref('broadcast/reloadAt').on('value', s=>{
+        const v = s.val();
+        if (!v) return;
+        if (v !== lastReloadAt){
+          lastReloadAt = v;
+          if (DEBUG_LOG) console.log('[qrback] broadcast/reloadAt changed → reload');
+          location.reload(true);
         }
       });
 
-      // Chỉ gọi signIn 1 lần duy nhất
-      if (!window.__anonAuthStarting) {
-        window.__anonAuthStarting = true;
-        auth.signInAnonymously().catch((err) => {
-          console.warn('[firebase-fix] signInAnonymously error:', err);
-          // vẫn đợi onAuthStateChanged nếu sau đó ok
-        });
+      // 2) Nghe tín hiệu “qr back” theo bàn
+      const tableNo = resolveTableNo();
+      if (!tableNo){
+        console.warn('[qrback] Không xác định được số bàn → bỏ qua signals/* listener');
+        return;
       }
+      const ref = db.ref('signals/'+String(tableNo));
+      let lastTs = null, initialized = false;
 
-      // Phòng khi callback không bắn (mất mạng tạm thời...)
-      setTimeout(() => {
-        if (!resolved && auth.currentUser) {
-          resolved = true;
-          unsub();
-          resolve(auth.currentUser);
-          document.dispatchEvent(new CustomEvent('firebase-ready', { detail: { user: auth.currentUser } }));
+      if (DEBUG_LOG) console.log('[qrback] listen signals/'+tableNo);
+
+      ref.on('value', snap=>{
+        const val = snap.val();
+        if (!val) return;
+
+        const status = (val.status || '').toString().toLowerCase();
+        const ts     = Number(val.ts || 0);
+
+        // Bỏ qua lần đầu để không tự kích hoạt nếu đã có giá trị cũ
+        if (!initialized){
+          lastTs = ts || null;
+          initialized = true;
+          if (DEBUG_LOG) console.log('[qrback] prime value:', val);
+          return;
         }
-      }, 8000);
-    } catch (e) {
-      console.error(e);
-      reject(e);
+
+        if (status === 'expired' && ts && ts !== lastTs){
+          lastTs = ts;
+          if (DEBUG_LOG) console.log('[qrback] expired received → back to order');
+          // Thực thi quay lại order
+          goToOrder();
+        }
+      });
+
+    }catch(e){
+      console.error('[qrback] init error:', e);
     }
   });
-
-  // Helper cho legacy code: onFirebaseReady(cb)
-  window.onFirebaseReady = function (cb) {
-    if (typeof cb !== 'function') return;
-    window.firebaseReady.then((u) => cb(u)).catch(() => cb(null));
-  };
 })();
+</script>
