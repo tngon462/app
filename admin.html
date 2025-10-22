@@ -105,7 +105,7 @@
             <div class="text-lg font-semibold">Danh sách MÃ</div>
             <button id="btnAddCodes" class="px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700">Thêm mã</button>
           </div>
-          <textarea id="codesInput" class="w-full mt-3 h-40 border rounded-lg p-3 font-mono" placeholder="    "></textarea>
+          <textarea id="codesInput" class="w-full mt-3 h-40 border rounded-lg p-3 font-mono" placeholder="Mỗi dòng 1 mã..."></textarea>
 
           <div id="codesQueueWrap" class="mt-4 hidden p-3 rounded-lg border border-emerald-200 bg-emerald-50">
             <div class="flex items-center justify-between mb-2">
@@ -202,7 +202,8 @@
     })();
   </script>
 
-<script src="./assets/js/admin-schedule.js"></script>
+  <!-- (tuỳ chọn) Hẹn giờ bật/tắt màn hình + chọn múi giờ -->
+  <script src="./assets/js/admin-schedule.js"></script>
   
   <!-- ============ Router (tabs) ============ -->
   <script>
@@ -266,6 +267,22 @@
       LINKS_MAP = data.links || data;
     }catch(e){ LINKS_MAP=null; warn('Không tải được links.json'); }
   }
+
+  // per-table screen state cache
+  const tableScreen = {}; // { "1": "on"/"off" }
+  let devicesCache = {};
+
+  function tableIsOn(table){
+    const v = tableScreen[String(table)];
+    return (String(v||'on').toLowerCase() === 'on');
+  }
+
+  function cardClass(isOn){
+    return isOn
+      ? 'rounded-xl border border-emerald-200 bg-emerald-50 p-3 shadow-sm cursor-pointer transition'
+      : 'rounded-xl border border-gray-300 bg-gray-100 p-3 shadow-sm cursor-pointer transition';
+  }
+
   function openTablePicker(onPick){
     const keys = LINKS_MAP ? Object.keys(LINKS_MAP).sort((a,b)=>Number(a)-Number(b))
                            : Array.from({length:15},(_,i)=> String(i+1));
@@ -289,21 +306,6 @@
       grid.appendChild(b);
     });
     wrap.querySelector('#tp-close').addEventListener('click', ()=> safeRemove(wrap));
-  }
-
-  // per-table screen state cache
-  const tableScreen = {}; // { "1": "on"/"off" }
-  let devicesCache = {};
-
-  function tableIsOn(table){
-    const v = tableScreen[String(table)];
-    return (String(v||'on').toLowerCase() === 'on');
-  }
-
-  function cardClass(isOn){
-    return isOn
-      ? 'rounded-xl border border-emerald-200 bg-emerald-50 p-3 shadow-sm cursor-pointer transition'
-      : 'rounded-xl border border-gray-300 bg-gray-100 p-3 shadow-sm cursor-pointer transition';
   }
 
   function openActionPopup(db, id, data){
@@ -400,83 +402,65 @@
     });
   }
 
-function renderGrid(grid, db, devices) {
-  grid.innerHTML = '';
+  function renderGrid(grid, db, devices) {
+    grid.innerHTML = '';
 
-  const entries = Object.entries(devices || {}).sort((a, b) => {
-    const ta = parseInt(a[1]?.table || '99999', 10);
-    const tb = parseInt(b[1]?.table || '99999', 10);
-    if (isFinite(ta) && isFinite(tb) && ta !== tb) return ta - tb;
-    return a[0].localeCompare(b[0]);
-  });
+    const entries = Object.entries(devices || {}).sort((a, b) => {
+      const ta = parseInt(a[1]?.table || '99999', 10);
+      const tb = parseInt(b[1]?.table || '99999', 10);
+      if (isFinite(ta) && isFinite(tb) && ta !== tb) return ta - tb;
+      return a[0].localeCompare(b[0]);
+    });
 
-  if (!entries.length) {
-    const p = document.createElement('div');
-    p.className = 'text-center text-sm text-gray-500 py-3';
-    p.textContent = 'Chưa có thiết bị nào.';
-    grid.appendChild(p);
-    return;
-  }
-
-  for (const [id, d] of entries) {
-    const name = d?.name || '';
-    const table = String(d?.table || '');
-    const stage = d?.stage || '';
-    const hasTable = !!table && !isNaN(parseInt(table, 10));
-    const isOn = hasTable ? tableIsOn(table) : true;
-
-    // 👉 Hiển thị số bàn: nếu đang POS thì thêm "+"
-    const tableLabel = table ? String(table).replace('+', '') : '';
-    const displayTable = tableLabel ? (stage === 'pos' ? `+${tableLabel}` : tableLabel) : '—';
-
-    const card = document.createElement('div');
-    card.className = cardClass(isOn) + ' aspect-[4/3] p-2 md:p-3 flex';
-
-    card.innerHTML = `
-      <div class="relative flex-1 flex flex-col">
-        <div class="flex items-center justify-between mb-1">
-          <div class="min-w-0 text-[10px] md:text-[20px] font-semibold text-gray-700 truncate" title="${name || '(chưa đặt)'}">
-            ${name || '(chưa đặt)'}
-          </div>
-          <div class="select-none" data-role="switch-wrap">
-            <div class="toggle toggle--sm ${hasTable ? '' : 'opacity-50'}">
-              <input type="checkbox" id="sw-${id}" ${isOn ? 'checked' : ''} ${hasTable ? '' : 'disabled'}>
-              <label for="sw-${id}" aria-label="Bật/Tắt theo bàn"></label>
-            </div>
-          </div>
-        </div>
-
-        <div class="flex-1 flex items-center justify-center">
-          <div class="text-center leading-none">
-            <div class="font-extrabold text-3xl md:text-4xl lg:text-5xl">
-              ${displayTable}
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-
-    // Gắn event bật/tắt như cũ
-    const sw = card.querySelector(`#sw-${id}`);
-    if (sw) {
-      sw.addEventListener('change', (e) => {
-        if (!hasTable) return e.preventDefault();
-        const val = e.target.checked;
-        const path = `control/tables/${table}/on`;
-        db.ref(path).set(val);
-      });
+    if (!entries.length) {
+      const p = document.createElement('div');
+      p.className = 'text-center text-sm text-gray-500 py-3';
+      p.textContent = 'Chưa có thiết bị nào.';
+      grid.appendChild(p);
+      return;
     }
 
-    grid.appendChild(card);
-  }
-}
+    for (const [id, d] of entries) {
+      const name  = d?.name  || '';
+      const table = String(d?.table || '');
+      const stage = d?.stage || '';
+      const hasTable = !!table && !isNaN(parseInt(table, 10));
+      const isOn = hasTable ? tableIsOn(table) : true;
 
-      // Click card -> mở popup
-      card.addEventListener('click', ()=> openActionPopup(db, id, d));
+      // 👉 Hiển thị số bàn: nếu đang POS thì thêm "+"
+      const tableLabel   = table ? String(table).replace('+', '') : '';
+      const displayTable = tableLabel ? (stage === 'pos' ? `+${tableLabel}` : tableLabel) : '—';
 
-      // Gạt công tắc thì không mở popup
+      const card = document.createElement('div');
+      card.className = cardClass(isOn) + ' aspect-[4/3] p-2 md:p-3 flex';
+
+      card.innerHTML = `
+        <div class="relative flex-1 flex flex-col">
+          <div class="flex items-center justify-between mb-1">
+            <div class="min-w-0 text-[10px] md:text-[20px] font-semibold text-gray-700 truncate" title="${name || '(chưa đặt)'}">
+              ${name || '(chưa đặt)'}
+            </div>
+            <div class="select-none" data-role="switch-wrap">
+              <div class="toggle toggle--sm ${hasTable ? '' : 'opacity-50'}">
+                <input type="checkbox" id="sw-${id}" ${isOn ? 'checked' : ''} ${hasTable ? '' : 'disabled'}>
+                <label for="sw-${id}" aria-label="Bật/Tắt theo bàn"></label>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex-1 flex items-center justify-center">
+            <div class="text-center leading-none">
+              <div class="font-extrabold text-3xl md:text-4xl lg:text-5xl">
+                ${displayTable}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Gạt công tắc: ghi trạng thái screen theo bàn
       const swWrap = card.querySelector('[data-role="switch-wrap"]');
-      swWrap.addEventListener('click', (ev)=> ev.stopPropagation());
+      swWrap?.addEventListener('click', (ev)=> ev.stopPropagation());
 
       const sw = card.querySelector(`#sw-${CSS.escape(id)}`);
       sw?.addEventListener('change', async ()=>{
@@ -489,6 +473,9 @@ function renderGrid(grid, db, devices) {
           sw.checked = !sw.checked;
         }
       });
+
+      // Click card -> mở popup
+      card.addEventListener('click', ()=> openActionPopup(db, id, d));
 
       grid.appendChild(card);
     }
@@ -670,8 +657,6 @@ function renderGrid(grid, db, devices) {
           alert('Đã thêm '+lines.length+' mã');
         }catch(e){ showErr('Thêm mã lỗi: '+(e?.message||e)); }
       }
-
-      document.getEventListener?.('DOMContentLoaded', ()=>{}) // guard cũ (no-op)
 
       document.addEventListener('DOMContentLoaded', async ()=>{
         try{
