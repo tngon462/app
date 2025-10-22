@@ -400,55 +400,76 @@
     });
   }
 
-  function renderGrid(grid, db, devices){
-    grid.innerHTML='';
-    const entries = Object.entries(devices||{}).sort((a,b)=>{
-      const ta = parseInt(a[1]?.table || '99999',10);
-      const tb = parseInt(b[1]?.table || '99999',10);
-      if (isFinite(ta) && isFinite(tb) && ta!==tb) return ta - tb;
-      return a[0].localeCompare(b[0]);
-    });
+function renderGrid(grid, db, devices) {
+  grid.innerHTML = '';
 
-    if (!entries.length){
-      const p=document.createElement('div');
-      p.className='text-center text-sm text-gray-500 py-3';
-      p.textContent='Chưa có thiết bị nào.';
-      grid.appendChild(p);
-      return;
-    }
+  const entries = Object.entries(devices || {}).sort((a, b) => {
+    const ta = parseInt(a[1]?.table || '99999', 10);
+    const tb = parseInt(b[1]?.table || '99999', 10);
+    if (isFinite(ta) && isFinite(tb) && ta !== tb) return ta - tb;
+    return a[0].localeCompare(b[0]);
+  });
 
-    for (const [id,d] of entries){
-      const name   = d?.name  || '';
-      const table  = String(d?.table || '');
-      const hasTable = !!table && !isNaN(parseInt(table,10));
-      const isOn = hasTable ? tableIsOn(table) : true;
+  if (!entries.length) {
+    const p = document.createElement('div');
+    p.className = 'text-center text-sm text-gray-500 py-3';
+    p.textContent = 'Chưa có thiết bị nào.';
+    grid.appendChild(p);
+    return;
+  }
 
-      const card = document.createElement('div');
-      card.className = cardClass(isOn) + ' aspect-[4/3] p-2 md:p-3 flex';
+  for (const [id, d] of entries) {
+    const name = d?.name || '';
+    const table = String(d?.table || '');
+    const stage = d?.stage || '';
+    const hasTable = !!table && !isNaN(parseInt(table, 10));
+    const isOn = hasTable ? tableIsOn(table) : true;
 
-      card.innerHTML = `
-        <div class="relative flex-1 flex flex-col">
-          <div class="flex items-center justify-between mb-1">
-            <div class="min-w-0 text-[10px] md:text-[20px] font-semibold text-gray-700 truncate" title="${name||'(chưa đặt)'}">
-              ${name || '(chưa đặt)'}
-            </div>
-            <div class="select-none" data-role="switch-wrap">
-              <div class="toggle toggle--sm ${hasTable ? '' : 'opacity-50'}">
-                <input type="checkbox" id="sw-${id}" ${isOn ? 'checked' : ''} ${hasTable ? '' : 'disabled'}>
-                <label for="sw-${id}" aria-label="Bật/Tắt theo bàn"></label>
-              </div>
-            </div>
+    // 👉 Hiển thị số bàn: nếu đang POS thì thêm "+"
+    const tableLabel = table ? String(table).replace('+', '') : '';
+    const displayTable = tableLabel ? (stage === 'pos' ? `+${tableLabel}` : tableLabel) : '—';
+
+    const card = document.createElement('div');
+    card.className = cardClass(isOn) + ' aspect-[4/3] p-2 md:p-3 flex';
+
+    card.innerHTML = `
+      <div class="relative flex-1 flex flex-col">
+        <div class="flex items-center justify-between mb-1">
+          <div class="min-w-0 text-[10px] md:text-[20px] font-semibold text-gray-700 truncate" title="${name || '(chưa đặt)'}">
+            ${name || '(chưa đặt)'}
           </div>
-
-          <div class="flex-1 flex items-center justify-center">
-            <div class="text-center leading-none">
-              <div class="font-extrabold text-3xl md:text-4xl lg:text-5xl">
-                ${table ? String(table).replace('+','') : '—'}
-              </div>
+          <div class="select-none" data-role="switch-wrap">
+            <div class="toggle toggle--sm ${hasTable ? '' : 'opacity-50'}">
+              <input type="checkbox" id="sw-${id}" ${isOn ? 'checked' : ''} ${hasTable ? '' : 'disabled'}>
+              <label for="sw-${id}" aria-label="Bật/Tắt theo bàn"></label>
             </div>
           </div>
         </div>
-      `;
+
+        <div class="flex-1 flex items-center justify-center">
+          <div class="text-center leading-none">
+            <div class="font-extrabold text-3xl md:text-4xl lg:text-5xl">
+              ${displayTable}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Gắn event bật/tắt như cũ
+    const sw = card.querySelector(`#sw-${id}`);
+    if (sw) {
+      sw.addEventListener('change', (e) => {
+        if (!hasTable) return e.preventDefault();
+        const val = e.target.checked;
+        const path = `control/tables/${table}/on`;
+        db.ref(path).set(val);
+      });
+    }
+
+    grid.appendChild(card);
+  }
+}
 
       // Click card -> mở popup
       card.addEventListener('click', ()=> openActionPopup(db, id, d));
