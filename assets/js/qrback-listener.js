@@ -1,133 +1,66 @@
-// /assets/js/qrback-listener.js
+// /assets/js/pos-monitor.js
 (function () {
   'use strict';
-  const log  = (...a)=> console.log('[qrback]', ...a);
-  const warn = (...a)=> console.warn('[qrback]', ...a);
+  const log  = (...a)=> console.log('[pos-monitor]', ...a);
 
-  // ===== helpers =====
-  const getLS = (k, d=null)=>{ try{ const v=localStorage.getItem(k); return v ?? d; }catch(_){ return d; } };
-  const setLS = (k, v)=>{ try{ localStorage.setItem(k, v); }catch(_){} };
-
-  if (!window.firebase || !firebase.apps?.length){
-    return warn('Firebase chưa init -> bỏ qua QRback listener.');
-  }
-  const db = firebase.database();
-
-  const deviceId = getLS('deviceId') || '';
-  log('QRback listener ready.', { deviceId });
-
-  // ===== state =====
-  let currentTable = null;          // bàn đang gắn listener
-  let lastGoodTable = getLS('tableId') || null;  // bàn hợp lệ cuối cùng
-  let offFns = [];                  // hàm tháo listener hiện tại
-  let attachTimer = null;           // debounce
-
-  function offAll(){
-    offFns.forEach(fn => { try{ fn(); }catch(_){} });
-    offFns = [];
-  }
-
-  function triggerGotoStart(reason){
-    log('signals trigger', reason);
+  function goStart(reason) {
     try { localStorage.setItem('appState', 'start'); } catch {}
-    if (typeof window.gotoStart === 'function'){
-      log('→ gotoStart()');
+    if (typeof window.gotoStart === 'function') {
+      console.log('[pos-monitor] → gotoStart()', reason);
       window.gotoStart();
     } else {
-      log('→ reload fallback');
+      console.log('[pos-monitor] → reload fallback', reason);
       location.reload();
     }
   }
 
-  function _attachForTable(table){
-    // Gắn thật (không debounce). Chỉ gọi từ attachForTableDebounced.
-    if (!table){
-      warn('Bỏ qua attach vì table rỗng (giữ nguyên listener cũ).');
-      return;
-    }
-    if (table === currentTable){
-      return; // không đổi
-    }
-    offAll();
-    currentTable = table;
-    lastGoodTable = table;
-    setLS('tableId', table);
-    log('device table =', table);
-
-    // 1) signals/<table>
-    const refSig = db.ref('signals/'+table);
-    const onSig = refSig.on('value', s=>{
-      const v = s.val();
-      if (!v) return;
-      if (String(v.status||'').toLowerCase()==='expired'){
-        triggerGotoStart(v);
-      }
-    }, e=> warn('signals error:', e?.message||e));
-    offFns.push(()=> refSig.off('value', onSig));
-
-    // 2) control/tables/<table>/qrbackAt
-    const refCtrl = db.ref(`control/tables/${table}/qrbackAt`);
-    const onCtrl = refCtrl.on('value', s=>{
-      if (s.exists()){
-        triggerGotoStart({status:'expired', ts:s.val()});
-      }
-    }, e=> warn('control/tables error:', e?.message||e));
-    offFns.push(()=> refCtrl.off('value', onCtrl));
-
-    // 3) broadcast/qrbackAt
-    const refBc = db.ref('broadcast/qrbackAt');
-    const onBc = refBc.on('value', s=>{
-      if (s.exists()){
-        triggerGotoStart({status:'expired', ts:s.val(), global:true});
-      }
-    }, e=> warn('broadcast error:', e?.message||e));
-    offFns.push(()=> refBc.off('value', onBc));
-
-    log('listen signals/'+table);
-    log('listen control/tables/'+table+'/qrbackAt');
-    log('listen broadcast/qrbackAt');
-  }
-
-  function attachForTableDebounced(table){
-    // Debounce 400ms để tránh rung khi DB/LS nhấp nháy.
-    if (!table){
-      // không detach khi nhận null; cứ giữ nguyên currentTable
-      return;
-    }
-    if (attachTimer) clearTimeout(attachTimer);
-    attachTimer = setTimeout(()=> _attachForTable(table), 400);
-  }
-
-  // ===== nguồn bàn =====
-  // A) localStorage ngay khi boot
-  if (lastGoodTable){
-    _attachForTable(lastGoodTable);
-  }
-
-  // B) thay đổi localStorage (khác tab)
-  window.addEventListener('storage', (e)=>{
-    if (e.key === 'tableId'){
-      const t = e.newValue || null;
-      if (t) attachForTableDebounced(String(t));
-      // nếu t=null: bỏ qua (sticky)
+  // Bắt mọi lỗi JS bị ném ra ngoài (POS app đang ném lỗi này lên top window)
+  window.addEventListener('error', (e) => {
+    const msg = String(e?.error?.message || e?.message || '');
+    if (msg.includes('scan_again_to_make_your_order')) {
+      goStart('pos_error_scan_again');
     }
   });
 
-  // C) DB: devices/<id>/table – KHÔNG xóa LS khi DB null
-  if (deviceId){
-    const ref = db.ref('devices/'+deviceId+'/table');
-    const cb = ref.on('value', s=>{
-      const t = s.exists() && s.val() != null ? String(s.val()) : null;
-      if (t){
-        if (t !== getLS('tableId')) setLS('tableId', t);
-        attachForTableDebounced(t);
-      } else {
-        // DB báo null -> coi như nhiễu, giữ lastGoodTable, không tháo listener
-        warn('DB table=null (ignore, keep current=', currentTable, ')');
-      }
-    }, e=> warn('watchDeviceTable error:', e?.message||e));
-    offFns.push(()=> ref.off('value', cb));
-  }
+  // Bắt Promise bị reject chưa bắt
+  window.addEventListener('unhandledrejection', (e) => {
+    const reason = e?.reason;
+    const msg = typeof reason === 'string' ? reason : (reason?.message || '');
+    if (String(msg).includes('scan_again_to_make_your_order')) {
+      goStart('pos_promise_scan_again');
+    }
+  });
 
-  log('QRback listener active.');
+  // Fallback an toàn: nếu đang ở trạng thái POS quá lâu mà không đổi trang,
+  // và có lỗi console tương tự mà vì lý do gì đó không bắt được,
+  // tự quay về sau N giây kể từ khi vào POS.
+  // (Bạn có thể chỉnh số giây nếu muốn)
+  const POS_TIMEOUT_MS = 60_000; // 60s
+  let posSince = null;
+
+  // Theo dõi thay đổi state appState trong localStorage
+  function handleStateChange(next) {
+    if (next === 'pos') posSince = Date.now();
+    else posSince = null;
+  }
+  handleStateChange(localStorage.getItem('appState') || 'select');
+
+  // Ae: bắt thay đổi LS từ chính tab
+  const _setItem = localStorage.setItem.bind(localStorage);
+  localStorage.setItem = function(k, v) {
+    _setItem(k, v);
+    if (k === 'appState') handleStateChange(String(v));
+  };
+  // Ae: bắt thay đổi LS từ tab khác
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'appState') handleStateChange(String(e.newValue || 'select'));
+  });
+
+  setInterval(() => {
+    if (posSince && Date.now() - posSince > POS_TIMEOUT_MS) {
+      goStart('pos_timeout');
+    }
+  }, 5000);
+
+  log('POS monitor active.');
 })();
