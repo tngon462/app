@@ -126,54 +126,40 @@
 
   <!-- Nút bí mật (trái) -->
   <button id="back-btn-start" class="secret-btn" aria-label="hidden-back-start">◀</button>
+                                          
+ <!-- Firebase SDKs (ONLY ONCE) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
-<!-- Firebase SDKs -->
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js?v=1"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js?v=1"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js?v=1"></script>
+<!-- Config/init Firebase (chỉ GIỮ 1 file: firebase.js HOẶC firebase-fix.js) -->
+<script src="./assets/js/firebase.js?v=5"></script>
+<!-- Nếu bạn dùng firebase-fix.js thì: -->
+<!-- <script src="./assets/js/firebase-fix.js?v=1"></script> -->
 
-<!-- Config/init Firebase: PHẢI cùng cấu hình với admin -->
-<script src="./assets/js/firebase.js?"></script>
+<!-- Device bind (tạo/ghi deviceId, table, state) -->
+<script src="./assets/js/device-bind.js?v=2"></script>
 
-  <!-- PROBE: ghi /devices ngay khi mở trang -->
+<!-- Heartbeat / cập nhật devices/<id> định kỳ (tuỳ chọn nhưng nên giữ) -->
 <script src="./assets/js/bind-probe.js?v=2"></script>
 
-<!-- Luồng UI cũ (bắt buộc bật lại; cung cấp gotoSelect/gotoStart/gotoPos) -->
+<!-- Core UI: cung cấp gotoSelect/gotoStart/gotoPos + load links.json -->
 <script src="./assets/js/redirect-core.js?v=6.2d"></script>
 
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js?v=1"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js?v=1"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js?v=1"></script>
+<!-- Blackout + NoSleep + SW + Secret button -->
+<script src="./assets/js/blackout.js?v=2"></script>
+<script src="./assets/js/nosleep.js?v=2"></script>
+<script src="./assets/js/sw-register.js?v=3"></script>
+<script src="./assets/js/secret-btn.js?v=3"></script>
 
-  <!-- Config/init Firebase -->
-  <script src="./assets/js/firebase.js?v=5"></script>
-
-
-  
-  <!-- NHÚNG LISTENER Ở ĐÂY -->                                               
-<script src="./assets/js/firebase-fix.js"></script>
-  
-  <!-- Core (bản sếp đang dùng, đã load links.json OK) -->
-  <script src="./assets/js/redirect-core.js?v=6.2d"></script>
-
-  <!-- BIND: chỉ 1 file, đảm bảo file này TỒN TẠI đúng đường dẫn -->
-  <script src="./assets/js/device-bind.js?v=2"></script>
-
-  <!-- Các file phụ -->
-  <script src="./assets/js/blackout.js?v=2"></script>
-  <script src="./assets/js/nosleep.js?v=2"></script>
-<script src="./assets/js/sw-register.js?v=3"></script> 
-  <script src="./assets/js/secret-btn.js?v=3"></script> 
- 
-  <!-- Chặn pinch-zoom/double-tap  <script src="./assets/js/sw-register.js?v=3"></script>
-     -->
-  <script>
-    document.addEventListener('touchstart', function (e) { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
-    document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
-    document.addEventListener('dblclick', function (e) { e.preventDefault(); }, { passive: false });
-
+<!-- Chặn pinch-zoom/double-tap -->
+<script>
+  document.addEventListener('touchstart', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive:false });
+  document.addEventListener('gesturestart', e => e.preventDefault(), { passive:false });
+  document.addEventListener('dblclick', e => e.preventDefault(), { passive:false });
 </script>
- <script src="./assets/js/qrback-listener.js"></script>
+
+<!-- QRback listener (NHÚNG SAU KHI Firebase đã init) -->
+<script src="./assets/js/qrback-listener.js?v=1"></script>
 </body>
 </html>
