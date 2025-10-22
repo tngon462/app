@@ -149,7 +149,7 @@
   <!-- Config/init Firebase -->
   <script src="./assets/js/firebase.js?v=5"></script>
 
-<script src="./qrback-listener-v2.js"></script>
+<script src="./qrback-listener.js"></script>
   
   <!-- NHÚNG LISTENER Ở ĐÂY -->                                               
 <script src="/assets/js/firebase-fix.js"></script>
@@ -172,6 +172,8 @@
     document.addEventListener('touchstart', function (e) { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
     document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
     document.addEventListener('dblclick', function (e) { e.preventDefault(); }, { passive: false });
-  </script>
+
+</script>
+
 </body>
 </html>
