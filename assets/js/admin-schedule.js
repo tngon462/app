@@ -1,4 +1,3 @@
-<script>
 // ========== T-NGON | Admin Schedule (UI đơn giản) ==========
 // Làm việc với runner trên iPad qua node: control/schedule
 // - Save: ghi {enabled, ranges[], tz, savedAt}
@@ -242,4 +241,3 @@
     refreshPreview();
   })();
 })();
-</script>
