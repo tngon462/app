@@ -1,187 +1,232 @@
-//11 assets/js/schedule-runner.js
+/* T-NGON schedule runner (v4)
+   - Singleton (không chạy trùng)
+   - Tự tìm tableId qua devices/<deviceId>/table nếu localStorage chưa có
+   - Gỡ/gắn listener khi đổi bàn
+   - Chống rung khi apply on/off
+   - Nguồn áp dụng (độ ưu tiên cao -> thấp):
+       1) control/schedule/state           (global on/off – nút "ÁP DỤNG NGAY")
+       2) control/schedule/config + local evaluator (tự tính theo múi giờ)
+   - Không đụng tới công tắc tay theo bàn (control/tables/<table>/screen)
+*/
+
 (function(){
-  'use strict';
-  const log  = (...a)=>console.log('[schedule]', ...a);
-  const warn = (...a)=>console.warn('[schedule]', ...a);
+  if (window.__TNGON_SCHEDULE_INIT__) {
+    console.log('[tngon] [schedule] already initialized');
+    return;
+  }
+  window.__TNGON_SCHEDULE_INIT__ = true;
 
-  // ===== Helpers =====
-  const LS = {
-    get(k, d=null){ try{ return JSON.parse(localStorage.getItem(k)) ?? d; }catch{ return d; } },
-    set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} },
-    getStr(k, d=''){ try{ return localStorage.getItem(k) ?? d; }catch{ return d; } }
-  };
+  const log  = (...a)=> console.log('[tngon] [schedule]', ...a);
+  const warn = (...a)=> console.warn('[tngon] [schedule]', ...a);
 
-  // Manual override schema (ưu tiên số 1)
-  // localStorage.manualScreen = { value: "on"|"off", until: unix_ms }
-  function getManualOverride(){
-    const obj = LS.get('manualScreen', null);
-    if (!obj) return null;
-    const now = Date.now();
-    if (typeof obj.until === 'number' && obj.until < now){
-      // đã hết hạn -> gỡ
-      try{ localStorage.removeItem('manualScreen'); }catch{}
-      return null;
+  // ==== Helpers =============================================================
+  function getLS(k, d=null){ try{ const v=localStorage.getItem(k); return v==null?d:v; }catch(_){ return d; } }
+  function setLS(k, v){ try{ localStorage.setItem(k, v); }catch(_){ } }
+
+  // Debounce apply
+  let lastApplied = null;
+  let applyTimer = null;
+  function applyScreen(next /* 'on' | 'off' */, reason='') {
+    if (next === lastApplied) return;
+    clearTimeout(applyTimer);
+    applyTimer = setTimeout(()=>{
+      if (next === lastApplied) return;
+      lastApplied = next;
+      try {
+        if (next === 'off') {
+          window.blackoutOn?.();
+        } else {
+          window.blackoutOff?.();
+        }
+        log(`applied by ${reason} =>`, next);
+      } catch(e) {
+        warn('applyScreen error:', e?.message||e);
+      }
+    }, 600);
+  }
+
+  // Lấy Date theo timezone (Intl only; không phụ thuộc thư viện ngoài)
+  function nowInTZ(tz){
+    // Tạo "fake now" theo tz bằng cách parse chuỗi định dạng
+    const d = new Date();
+    try{
+      // lấy các thành phần giờ/phút/weekday trong tz
+      const fmt = new Intl.DateTimeFormat('en-GB', {
+        timeZone: tz, hour12:false,
+        year:'numeric', month:'2-digit', day:'2-digit',
+        hour:'2-digit', minute:'2-digit', weekday:'short'
+      });
+      const parts = fmt.formatToParts(d).reduce((o,p)=> (o[p.type]=p.value, o), {});
+      const hh = parseInt(parts.hour,10);
+      const mm = parseInt(parts.minute,10);
+      const wd = ['sun','mon','tue','wed','thu','fri','sat']; // map weekday
+      // Intl weekday dạng 'Mon','Tue'..: chuyển về index
+      const w = {'sun':0,'mon':1,'tue':2,'wed':3,'thu':4,'fri':5,'sat':6}[
+        String(parts.weekday||'').slice(0,3).toLowerCase()
+      ];
+      return { hh, mm, w: (w ?? d.getUTCDay()) };
+    }catch(_){
+      // fallback: dùng local timezone
+      return { hh:d.getHours(), mm:d.getMinutes(), w:d.getDay() };
     }
-    return obj; // {value, until}
   }
 
-  // Cho phép iPad tự đặt override trong X phút (VD: khi nhân viên "bật tay")
-  // Gọi: window.setManualScreen('on', 120)  // 120 phút
-  window.setManualScreen = function(value='on', minutes=120){
-    const until = Date.now() + Math.max(1, minutes)*60*1000;
-    LS.set('manualScreen', { value: value === 'off' ? 'off' : 'on', until });
-    log('manual override set:', value, 'until', new Date(until).toLocaleString());
-  };
-
-  // Blackout API (overlay màn đen) – dùng file blackout.js đã có
-  function setBlackout(on){
-    try {
-      const el = document.getElementById('screen-overlay');
-      if (!el) return;
-      el.style.display = on ? 'block' : 'none';
-    } catch {}
+  function parseHM(s){
+    // "HH:MM" -> {hh,mm}
+    if (!s || typeof s!=='string') return null;
+    const m = s.match(/^(\d{1,2}):(\d{2})$/); if (!m) return null;
+    let hh = Math.max(0, Math.min(23, parseInt(m[1],10)));
+    let mm = Math.max(0, Math.min(59, parseInt(m[2],10)));
+    return { hh, mm };
   }
 
-  // Lấy giờ-phút hiện tại theo timezone IANA (không cần lib ngoài)
-  function nowHMInTZ(tz){
-    // Trả về {h, m, dow} theo tz
-    const fmt = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour12:false,
-      weekday: 'short', hour: '2-digit', minute:'2-digit'
-    });
-    // "Wed, 09, 30" -> lấy từ parts
-    const parts = fmt.formatToParts(new Date());
-    const get = (t)=> (parts.find(p=>p.type===t)||{}).value;
-    const w = (parts.find(p=>p.type==='weekday')||{}).value || 'Sun';
-    const h = Number(get('hour')||'0');
-    const m = Number(get('minute')||'0');
-
-    // Map: Sun=0 ... Sat=6
-    const map = {Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6};
-    const dow = map[w] ?? 0;
-    return { h, m, dow };
+  function inRange(nowHH, nowMM, offHM, onHM){
+    // Khoảng tắt (off) -> bật (on). Có thể qua đêm.
+    // Trả về true nếu "đang ở khoảng TẮT".
+    if (!offHM || !onHM) return false;
+    const now = nowHH*60 + nowMM;
+    const off = offHM.hh*60 + offHM.mm;
+    const on  = onHM.hh*60  + onHM.mm;
+    if (off === on) return false; // khoảng rỗng
+    if (off < on){
+      // cùng ngày: [off, on)
+      return now >= off && now < on;
+    } else {
+      // qua đêm: [off, 1440) U [0, on)
+      return (now >= off) || (now < on);
+    }
   }
 
-  function toMinutes(hhmm){
-    if (!hhmm || typeof hhmm!=='string') return null;
-    const m = hhmm.match(/^(\d{1,2}):(\d{2})$/);
-    if (!m) return null;
-    const h = Math.min(23, Math.max(0, parseInt(m[1],10)));
-    const mm= Math.min(59, Math.max(0, parseInt(m[2],10)));
-    return h*60 + mm;
+  // ==== Firebase glue =======================================================
+  let db = null;
+  let deviceId = null;
+  let tableId = null;
+
+  let unsubs = [];
+  function on(ref, evt, cb){ ref.on(evt, cb); unsubs.push(()=> ref.off(evt, cb)); }
+  function resetListeners(){ unsubs.forEach(fn=> { try{ fn(); }catch{} }); unsubs = []; }
+
+  function ensureFirebase(){
+    if (!window.firebase || !firebase.apps?.length) return false;
+    db = firebase.database();
+    return true;
   }
 
-  // Chỉ bắn action khi vượt “rìa” (edge), tránh cưỡng chế liên tục
-  let lastApplied = null; // 'on' | 'off' | null
+  // ==== Schedule sources ====================================================
+  // 1) Global state: control/schedule/state = 'on' | 'off' (ưu tiên cao nhất)
+  let globalState = null;
 
-  function applyDesired(desired){
-    if (desired !== 'on' && desired !== 'off') return;
-    if (lastApplied === desired) return; // không làm lại
+  // 2) Config: control/schedule/config
+  // {
+  //   enabled: true,
+  //   timezone: "Asia/Tokyo",
+  //   days: {
+  //     "0": [{off:"23:00", on:"07:00"}],   // CN
+  //     "1": [...], ... "6": [...]
+  //   }
+  // }
+  let schedConfig = null;
 
-    // Áp blackout LOCAL, không ghi DB
-    setBlackout(desired === 'off');
-    lastApplied = desired;
-    log('applied by schedule =>', desired);
+  function evalSchedule(){
+    if (!schedConfig || schedConfig.enabled === false) return null;
+    const tz = schedConfig.timezone || 'Asia/Tokyo';
+    const { hh, mm, w } = nowInTZ(tz);
+    const items = (schedConfig.days && schedConfig.days[String(w)]) || [];
+    if (!Array.isArray(items) || !items.length) return null;
+
+    // Nếu có nhiều cặp, chỉ cần 1 cặp khớp "đang tắt" là off
+    for (const it of items){
+      const offHM = parseHM(it?.off);
+      const onHM  = parseHM(it?.on);
+      if (inRange(hh, mm, offHM, onHM)) return 'off';
+    }
+    return 'on';
   }
 
-  // ===== Core logic =====
-  async function boot(){
-    // Cần tableId – iPad chưa chọn bàn thì không chạy
-    const table = LS.getStr('tableId', '').trim();
-    if (!table) { warn('no tableId -> skip schedule'); return; }
+  // Nguồn quyết định:
+  function computeEffective(){
+    // Ưu tiên global state (nút ÁP DỤNG NGAY)
+    if (globalState === 'on' || globalState === 'off') return { val: globalState, reason:'apply-now' };
+    // Nếu không có state tức thời, dùng cấu hình lịch
+    const v = evalSchedule();
+    if (v === 'on' || v === 'off') return { val: v, reason:'schedule' };
+    return null;
+  }
 
-    if (!window.firebase || !firebase.apps?.length){
-      warn('Firebase not ready -> schedule skip');
+  // ==== Attach per table ====================================================
+  let tickTimer = null;
+
+  function attachForTable(tid){
+    resetListeners();
+    clearInterval(tickTimer);
+
+    if (!ensureFirebase()){
+      warn('Firebase not ready; runner idle');
       return;
     }
-    // Anonymous auth (nếu chưa)
-    if (!firebase.auth().currentUser) {
-      await firebase.auth().signInAnonymously().catch(()=>{});
-      await new Promise(r=>{
-        const un = firebase.auth().onAuthStateChanged(u=>{ if(u){ un(); r(); }});
-      });
-    }
-    const db = firebase.database();
+    tableId = tid ? String(tid) : null;
+    if (tableId) setLS('tableId', tableId);
 
-    // Subscribe các nguồn điều khiển:
-    // 1) Lịch chung: control/schedule
-    // 2) Per-table override: control/tables/<table>/override {screen:'on'|'off', until}
-    // 3) Per-table screen “tay”: control/tables/<table>/screen ('on'|'off') – ưu tiên hơn lịch
-    let schedule = null;
-    let tableOverride = null;
-    let tableScreen = null;
+    log('runner ready for table', tableId || '(none)');
 
-    function recompute(){
-      // Ưu tiên 1: manual override local (iPad)
-      const localOverride = getManualOverride();
-      if (localOverride && (localOverride.value==='on' || localOverride.value==='off')){
-        applyDesired(localOverride.value);
-        return;
-      }
-
-      // Ưu tiên 2: override từ Admin cho bàn (Firebase)
-      if (tableOverride && typeof tableOverride==='object'){
-        const until = Number(tableOverride.until||0);
-        if (!until || until > Date.now()){
-          const v = String(tableOverride.screen||'').toLowerCase();
-          if (v==='on' || v==='off'){ applyDesired(v); return; }
-        }
-      }
-
-      // Ưu tiên 3: per-table screen tay ('on'|'off') – nếu có, coi như trạng thái mong muốn hiện tại
-      if (tableScreen){
-        const v = String(tableScreen).toLowerCase();
-        if (v==='on' || v==='off'){ applyDesired(v); return; }
-      }
-
-      // Cuối cùng: theo lịch chung
-      if (!schedule || schedule.enabled === false){ /* không bật lịch */ return; }
-      const tz   = schedule.tz || schedule.timezone || 'Asia/Tokyo';
-      const week = schedule.week || schedule.days || {};
-      const today = nowHMInTZ(tz);
-      const pairs = week[String(today.dow)] || [];
-
-      if (!Array.isArray(pairs) || !pairs.length) return;
-
-      const nowMin = today.h*60 + today.m;
-      // Nếu có nhiều cặp, ta tìm trong đó xem hiện tại nằm trong khoảng nào
-      let desired = null; // 'on'|'off'
-      for (const p of pairs){
-        const onMin  = toMinutes(p.on);
-        const offMin = toMinutes(p.off);
-        if (onMin==null || offMin==null) continue;
-
-        // Hỗ trợ cả case off < on (qua đêm)
-        if (onMin <= offMin){
-          if (nowMin >= onMin && nowMin < offMin) desired = 'on';
-        } else {
-          // qua ngày: [on..24h) ∪ [0..off)
-          if (nowMin >= onMin || nowMin < offMin) desired = 'on';
-        }
-      }
-      if (!desired) desired = 'off';
-
-      applyDesired(desired);
-    }
-
-    // Lắng nghe các path
-    db.ref('control/schedule').on('value', s=>{ schedule = s.val()||null; recompute(); });
-    db.ref(`control/tables/${table}/override`).on('value', s=>{ tableOverride = s.val()||null; recompute(); });
-    db.ref(`control/tables/${table}/screen`).on('value', s=>{
-      const v = s.val();
-      // cho phép null/undefined nghĩa là "không cưỡng chế tay"
-      tableScreen = (v===undefined || v===null) ? null : v;
-      recompute();
+    // 1) Listen global apply-now
+    const refState = db.ref('control/schedule/state');
+    on(refState, 'value', s=>{
+      const v = (s.val() || '').toString().toLowerCase();
+      globalState = (v === 'on' || v === 'off') ? v : null;
+      const eff = computeEffective();
+      if (eff) applyScreen(eff.val, eff.reason);
     });
 
-    // Tick mỗi 30s để bắt kịp rìa thời gian (không cưỡng chế liên tục)
-    setInterval(()=> recompute(), 30000);
+    // 2) Load config once + subscribe
+    const refCfg = db.ref('control/schedule/config');
+    on(refCfg, 'value', s=>{
+      schedConfig = s.val() || null;
+      const eff = computeEffective();
+      if (eff) applyScreen(eff.val, eff.reason);
+    });
 
-    log('runner ready for table', table);
+    // 3) Tick 30s để re-evaluate theo đồng hồ (kể cả khi admin đóng)
+    tickTimer = setInterval(()=>{
+      const eff = computeEffective();
+      if (eff) applyScreen(eff.val, eff.reason);
+    }, 30 * 1000);
   }
 
-  if (document.readyState==='loading') {
-    document.addEventListener('DOMContentLoaded', boot);
-  } else {
-    boot();
-  }
+  // ==== Bootstrap ===========================================================
+  (async function boot(){
+    // Khởi tạo deviceId
+    deviceId = getLS('deviceId');
+    if (!deviceId){
+      // auto-generate như bên app
+      const uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{
+        const r=Math.random()*16|0, v=c==='x'?r:(r&0x3|0x8); return v.toString(16);
+      });
+      deviceId = uuid;
+      setLS('deviceId', deviceId);
+    }
+
+    let tid = getLS('tableId', null);
+
+    // Nếu chưa có tableId: fallback đọc từ Firebase devices/<deviceId>/table
+    if (!tid && ensureFirebase()){
+      const ref = db.ref('devices/'+deviceId+'/table');
+      on(ref, 'value', s=>{
+        const t = s.val();
+        if (t){
+          tid = String(t);
+          setLS('tableId', tid);
+          attachForTable(tid);
+        }
+      });
+    }
+
+    // Nếu đã có tableId trong localStorage thì gắn luôn
+    if (tid){
+      attachForTable(tid);
+    } else {
+      // chưa biết bàn vẫn cho chạy tick theo config/global (runner global)
+      attachForTable(null);
+    }
+  })();
 })();
