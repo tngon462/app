@@ -1,5 +1,5 @@
 // assets/js/device-bind.js
-// T-NGON iPad device-bind (chuẩn, full version, fix verify mã sai)
+// T-NGON iPad device-bind (chuẩn, full) – FIX: verify mã chặt + chỉ claim boundDeviceId bằng transaction
 
 (function(){
   'use strict';
@@ -62,7 +62,6 @@
   function setTableLocal(id, url){
     if (id) LS.setItem('tableId', String(id)); else LS.removeItem('tableId');
     if (url) LS.setItem('tableUrl', url); else LS.removeItem('tableUrl');
-    // Cho các script phụ biết bàn hiện tại (nếu có dùng)
     if (id) window.tableId = String(id); else delete window.tableId;
   }
 
@@ -100,13 +99,9 @@
         busy(true);
         try{
           await ensureAuth();
-          // Transaction claim
-          await claimCode(code);
-          // Gỡ Gate
-          wrap.remove();
-          // Về Start (không xoá bàn cũ nếu có)
-          gotoStart();
-          // Đập nhịp admin thấy ngay
+          await claimCode(code);      // ⬅️ chỉ khi claim THÀNH CÔNG mới cho qua
+          wrap.remove();              // đóng Gate
+          gotoStart();                // về Start (không xóa bàn cũ)
           heartbeat().catch(()=>{});
         }catch(e){
           console.warn('[bind] submit error:', e);
@@ -124,29 +119,31 @@
     }
   }
 
-  // ===== Claim code: fix bug nhập mã linh tinh vẫn qua Gate =====
+  // ===== Claim code (mới): đọc-kiểm-tra → transaction chỉ trên boundDeviceId =====
   async function claimCode(code){
-    const ref = db.ref('codes/'+code);
-    const res = await ref.transaction(cur=>{
-      // ⛔ Nếu mã không tồn tại, tắt, hoặc đang dùng máy khác -> abort
-      if (cur == null) return undefined;
-      if (cur.enabled === false) return undefined;
-      if (cur.boundDeviceId && cur.boundDeviceId !== deviceId) return undefined;
+    const codeRef = db.ref('codes/'+code);
 
-      // ✅ Mã hợp lệ → ghi nhận
-      return {
-        ...cur,
-        boundDeviceId: deviceId,
-        boundAt: firebase.database.ServerValue.TIMESTAMP
-      };
+    // 1) Đọc & kiểm tra
+    const snap = await codeRef.get();
+    if (!snap.exists()) throw new Error('Mã không tồn tại.');
+    const cur = snap.val();
+    if (cur.enabled === false) throw new Error('Mã đã bị tắt.');
+
+    // 2) Transaction CAS trên boundDeviceId
+    const bindRef = codeRef.child('boundDeviceId');
+    const t = await bindRef.transaction(current=>{
+      if (current == null || current === deviceId) return deviceId; // claim hoặc re-claim cùng máy
+      return; // abort nếu đang thuộc máy khác
     });
 
-    // Double check: phải có commit và node tồn tại
-    if (!res.committed || !res.snapshot.exists()) {
-      throw new Error('Mã không tồn tại hoặc không khả dụng.');
+    if (!t.committed){
+      throw new Error('Mã đang được sử dụng ở thiết bị khác.');
     }
 
-    // Lưu device info
+    // 3) Ghi time (không cần transaction)
+    await codeRef.update({ boundAt: firebase.database.ServerValue.TIMESTAMP });
+
+    // 4) Lưu device info
     await db.ref('devices/'+deviceId).update({
       code: code,
       lastSeen: firebase.database.ServerValue.TIMESTAMP
@@ -172,12 +169,12 @@
   setInterval(()=> heartbeat(), 20000);
   document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) heartbeat(); });
 
-  // ===== Presence sớm để Admin thấy node devices ngay cả trước khi bind =====
+  // ===== Presence sớm để Admin thấy device ngay cả trước khi bind =====
   async function startPassivePresence(){
     try{
       await ensureAuth();
       await db.ref('devices/'+deviceId).update({
-        // KHÔNG set code ở đây khi chưa bind
+        // KHÔNG set code khi chưa bind
         table: tableId(),
         stage: appState(),
         inPOS: appState()==='pos',
@@ -231,7 +228,7 @@
       if (uTs && uTs > seenUnbindAt){
         console.log('[bind] command: unbindAt', uTs);
         markSeen('unbind', uTs);
-        const code = localStorage.getItem('deviceCode');
+
         localStorage.removeItem('deviceCode');
         setTableLocal(null, null);
         localStorage.removeItem('appState');
@@ -254,7 +251,6 @@
 
   // ===== BOOT =====
   document.addEventListener('DOMContentLoaded', async ()=>{
-    // ?forceGate=1 -> xoá code lưu
     const u = new URL(location.href);
     if (u.searchParams.get('forceGate')==='1'){
       LS.removeItem('deviceCode'); LS.removeItem('tableId'); LS.removeItem('tableUrl'); LS.removeItem('appState');
