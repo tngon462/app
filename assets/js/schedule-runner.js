@@ -1,26 +1,43 @@
-// oke men assets/js/schedule-runner.js
-// T-NGON | Edge-triggered blackout runner (fire once at boundaries)
-// - Dùng local time của iPad
-// - Ưu tiên thủ công (không can thiệp khi không có biên mới)
-// - Chỉ bắn 1 lần tại mỗi phút biên (minuteKey)
+// assets/js/schedule-runner.js
+// T-NGON | Blackout schedule runner (edge-triggered)
+// - Local time của iPad
+// - Ưu tiên thủ công: chỉ bắn 1 lần tại biên, không “giành quyền” giữa biên
+// - Có ensureAuth() để chắc chắn subscribe Firebase
+// - Log chi tiết để debug tick
 
 (function(){
   'use strict';
-  const NS  = '[tngon] [schedule]';
-  const log = (...a)=> console.log(NS, ...a);
-  const warn= (...a)=> console.warn(NS, ...a);
-  const LS  = window.localStorage;
 
-  // ==== Guards ====
+  const NS   = '[tngon] [schedule]';
+  const log  = (...a)=> console.log(NS, ...a);
+  const warn = (...a)=> console.warn(NS, ...a);
+  const LS   = window.localStorage;
+
+  // ===== Guards =====
   if (!window.firebase || !firebase.apps?.length){
-    console.error(NS, 'Firebase chưa init.');
+    console.error(NS, 'Firebase chưa init. Hãy load firebase-app/auth/database TRƯỚC runner.');
     return;
   }
   const db = firebase.database();
 
-  // ==== Helpers (local time) ====
+  // ===== Auth ẩn danh (bắt buộc trước khi .on) =====
+  async function ensureAuth(){
+    try{
+      if (firebase.auth().currentUser) return firebase.auth().currentUser;
+      await firebase.auth().signInAnonymously();
+      await new Promise(res=>{
+        const un = firebase.auth().onAuthStateChanged(u=>{ if(u){ un(); res(); }});
+      });
+      return firebase.auth().currentUser;
+    }catch(e){
+      console.error(NS, 'ensureAuth error:', e?.message||e);
+      throw e;
+    }
+  }
+
+  // ===== Helpers (local time) =====
   const pad2 = n => (n<10?'0':'')+n;
-  const now  = () => new Date(); // local time của thiết bị
+  const now  = () => new Date();
   const minuteKey = (d=now()) =>
     d.getFullYear() + pad2(d.getMonth()+1) + pad2(d.getDate()) + pad2(d.getHours()) + pad2(d.getMinutes());
 
@@ -34,7 +51,6 @@
   const dowToday = ()=> now().getDay();
   const minNow   = ()=> now().getHours()*60 + now().getMinutes();
 
-  // ==== Tính trạng thái theo lịch ('on' | 'off') ====
   function stateBySchedule(cfg){
     if (!cfg || !cfg.enabled) return 'on';
     const rules = Array.isArray(cfg.ranges) ? cfg.ranges : [];
@@ -44,13 +60,12 @@
     for (const r of rules){
       const days = (r.days||[]).map(Number);
       if (!days.includes(dow)) continue;
-
       const offM = hmToMin(r.off);
       const onM  = hmToMin(r.on);
       if (offM==null || onM==null) continue;
 
       if (offM < onM){
-        // tắt trong cùng ngày: [off, on)
+        // tắt cùng ngày: [off, on)
         if (mNow >= offM && mNow < onM) return 'off';
       } else {
         // tắt qua đêm: [off, 24h) ∪ [0, on)
@@ -60,7 +75,6 @@
     return 'on';
   }
 
-  // ==== Gọi blackout ====
   function applyBlackout(state){
     try{
       if (state === 'off') {
@@ -76,13 +90,10 @@
     }
   }
 
-  // ==== State caches (LS) ====
-  // lastTickState: trạng thái lần tick trước ('on' | 'off')
-  // lastEdgeKey  : minuteKey của lần đã bắn gần nhất (để không bắn lại trong cùng phút)
-  // lastApplyNow : timestamp đã xử lý 'Áp dụng ngay'
+  // ===== Persisted caches =====
   let cfg = null;
-  let lastTickState = LS.getItem('sch:lastTickState') || null;
-  let lastEdgeKey   = LS.getItem('sch:lastEdgeKey')   || '';
+  let lastTickState = LS.getItem('sch:lastTickState') || null; // 'on'|'off'|null
+  let lastEdgeKey   = LS.getItem('sch:lastEdgeKey')   || '';   // minuteKey
   let lastApplyNow  = Number(LS.getItem('sch:lastApplyNow') || 0);
 
   function setLastTick(state){
@@ -98,13 +109,24 @@
     try{ LS.setItem('sch:lastApplyNow', String(lastApplyNow)); }catch(_){}
   }
 
-  // ==== Tick (mỗi 15s) ====
+  // ===== Tick (15s) =====
   function tick(){
     try{
-      if (!cfg || !cfg.enabled) return;
+      const d = now();
+      const k = minuteKey(d);
+      const tstr = `${d.toTimeString().slice(0,8)} #${k}`;
 
-      const nowK = minuteKey();
-      const cur  = stateBySchedule(cfg); // 'on' | 'off'
+      if (!cfg){
+        log('tick', tstr, 'no config -> idle');
+        return;
+      }
+      if (!cfg.enabled){
+        log('tick', tstr, 'enabled=false -> idle');
+        return;
+      }
+
+      const cur = stateBySchedule(cfg); // 'on' | 'off'
+      log('tick', tstr, 'cur=', cur, 'lastTick=', lastTickState, 'edgeKey=', lastEdgeKey);
 
       // 1) Áp dụng ngay → bắn đúng 1 lần
       const applyNowAt = Number(cfg.applyNowAt||0);
@@ -112,47 +134,65 @@
         log('applyNowAt detected → fire once:', cur);
         applyBlackout(cur);
         setLastTick(cur);
-        setEdgeKey(nowK);
+        setEdgeKey(k);
         markAppliedNow(applyNowAt);
         return;
       }
 
-      // 2) Edge detect: thay đổi so với tick trước → bắn 1 lần (và không lặp trong cùng phút)
-      if (lastTickState == null) {
-        // lần đầu: chỉ ghi nhận, không bắn (tôn trọng trạng thái hiện tại)
+      // 2) Edge detect
+      if (lastTickState == null){
+        // lần đầu: ghi nhận, không bắn
         setLastTick(cur);
         return;
       }
 
-      if (cur !== lastTickState) {
-        // có biên on↔off
-        if (lastEdgeKey !== nowK) {
-          log('boundary:', lastTickState, '→', cur, 'at', nowK);
+      if (cur !== lastTickState){
+        if (lastEdgeKey !== k){
+          log('boundary:', lastTickState, '→', cur, 'at', k);
           applyBlackout(cur);
-          setEdgeKey(nowK);
+          setEdgeKey(k);
         } else {
-          // đã bắn trong phút này rồi → bỏ qua
+          // đã bắn trong phút này rồi
         }
       }
 
-      // 3) cập nhật tick state
       setLastTick(cur);
 
-    } catch(e){
+    }catch(e){
       warn('tick error:', e?.message||e);
     }
   }
 
-  // ==== Subscribe cấu hình ====
-  db.ref('control/schedule').on('value', s=>{
-    cfg = s.val() || null;
-    log('config updated', cfg);
-  });
+  // ===== Public debug helper =====
+  window.__schDebug = async function(){
+    const snap = await firebase.database().ref('control/schedule').get();
+    console.log(NS, '__schDebug cfg =', snap.val());
+    const d = now();
+    console.log(NS, '__schDebug now =', d.toString(), 'dow=', d.getDay(), 'hm=', pad2(d.getHours())+':'+pad2(d.getMinutes()));
+    const cur = stateBySchedule(snap.val());
+    console.log(NS, '__schDebug stateBySchedule =', cur);
+    console.log(NS, '__schDebug caches:', { lastTickState, lastEdgeKey, lastApplyNow });
+  };
 
-  // ==== Start ticking (15s) ====
-  tick();                    // chạy sớm 1 lần
-  setInterval(tick, 15000);  // 15 giây cho chắc nhịp
-  document.addEventListener('visibilitychange', ()=>{ if (!document.hidden) tick(); });
+  // ===== Boot =====
+  (async ()=>{
+    try{
+      await ensureAuth();
 
-  log('runner ready (edge-triggered, 15s tick)');
+      // Subscribe config
+      db.ref('control/schedule').on('value', s=>{
+        cfg = s.val() || null;
+        log('config updated', cfg);
+      });
+
+      log('runner boot');
+      tick();                       // chạy ngay 1 lần
+      setInterval(tick, 15000);     // 15s tick
+      document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) tick(); });
+
+    }catch(e){
+      console.error(NS, 'boot error:', e?.message||e);
+    }
+  })();
+
 })();
