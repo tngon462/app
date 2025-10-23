@@ -1,6 +1,7 @@
 // assets/js/blackout.js
 // Điều khiển “màn đen” theo GLOBAL + THEO BÀN (tableId hiện tại của iPad)
 // Ưu tiên: control/screen == 'off'  || control/tables/{tableId}/screen == 'off'  => phủ đen
+// Bổ sung: window.blackout.on/off để runner (schedule-runner) có thể điều khiển thủ công.
 
 (function(){
   'use strict';
@@ -19,8 +20,15 @@
     document.body.appendChild(overlay);
     return overlay;
   }
-  function showBlack(){ ensureOverlay().style.display = 'block'; }
-  function hideBlack(){ ensureOverlay().style.display = 'none'; }
+
+  function showBlack(src){
+    ensureOverlay().style.display = 'block';
+    console.log('[blackout] showBlack from', src);
+  }
+  function hideBlack(src){
+    ensureOverlay().style.display = 'none';
+    console.log('[blackout] hideBlack from', src);
+  }
 
   // ===== Firebase guard =====
   function getDb(){
@@ -36,7 +44,7 @@
 
   function apply(){
     const off = (String(globalState||'on') === 'off') || (String(tableState||'on') === 'off');
-    if (off) showBlack(); else hideBlack();
+    if (off) showBlack('apply'); else hideBlack('apply');
   }
 
   // ===== Subscribe GLOBAL =====
@@ -93,7 +101,6 @@
   });
 
   // Một số code phía client có phát sự kiện tuỳ chỉnh khi admin “Đổi số bàn”
-  // (bind-commands.js có thể dispatch 'tngon:tableChanged'), nghe luôn cho chắc:
   window.addEventListener('tngon:tableChanged', ()=>{
     resubIfTableChanged();
   });
@@ -112,4 +119,20 @@
 
     apply();
   });
+
+  // ===== Bridge API cho schedule-runner & admin =====
+  window.blackout = {
+    on: (src)=> showBlack(src||'manual'),
+    off: (src)=> hideBlack(src||'manual'),
+    toggle: (src)=>{
+      const el = ensureOverlay();
+      const vis = el.style.display !== 'none';
+      vis ? hideBlack(src||'toggle') : showBlack(src||'toggle');
+    },
+    get state(){
+      const el = ensureOverlay();
+      return (el.style.display !== 'none') ? 'off' : 'on';
+    }
+  };
+
 })();
