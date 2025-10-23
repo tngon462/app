@@ -1,7 +1,8 @@
 // /assets/js/device-bind.js  v3
 (function(){
   'use strict';
-
+// ✅ Disable overlay nhập mã vì device-bind.js đã lo phần này
+window.TNGON_DISABLE_BIND_OVERLAY = true;
   const log  = (...a)=> console.log('[bind]', ...a);
   const warn = (...a)=> console.warn('[bind]', ...a);
   const err  = (...a)=> console.error('[bind]', ...a);
