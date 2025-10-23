@@ -1,219 +1,262 @@
-// ========== T-NGON | Admin Schedule (UI đơn giản) ==========
-// Làm việc với runner trên iPad qua node: control/schedule
-// - Save: ghi {enabled, ranges[], tz, savedAt}
-// - Apply: tính "on/off" hiện tại và ghi các node control/screen + control/tables/*/screen
-//   (để hiệu lực ngay cả khi admin đóng tab)
 
+// ========== bản UI chuẩn T-NGON | Admin Schedule – Visual Builder ==========
 (function(){
   'use strict';
 
-  // ---- Helpers ----
-  const $ = (sel, root=document)=> root.querySelector(sel);
-  const $$= (sel, root=document)=> Array.from(root.querySelectorAll(sel));
+  // ---------- tiny helpers ----------
+  const $  = (sel, root=document)=> root.querySelector(sel);
+  const $$ = (sel, root=document)=> Array.from(root.querySelectorAll(sel));
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Ho_Chi_Minh';
 
-  function hmToMinutes(hm){ // "22:30" -> 22*60+30
+  function hmToMin(hm){
     const m = /^(\d{1,2}):(\d{2})$/.exec(hm||'');
     if (!m) return null;
-    const h = +m[1], mm= +m[2];
-    if (h>23||mm>59) return null;
+    const h=+m[1], mm=+m[2]; if (h>23||mm>59) return null;
     return h*60+mm;
   }
-  function minutesNow(tzStr){
-    const now = new Date();
-    // Dùng local time của trình duyệt admin; runner trên iPad cũng dùng local time,
-    // vì vậy cứ đồng nhất theo local máy (đã ổn trong thực tế).
-    return now.getHours()*60 + now.getMinutes();
-  }
-  function todayDow(){ // 0..6 (CN..T7)
-    return new Date().getDay();
+  function nowMin(){ const d=new Date(); return d.getHours()*60+d.getMinutes(); }
+  function todayDow(){ return new Date().getDay(); } // 0..6
+
+  function computeState(cfg, dow, minutes){
+    if (!cfg || !cfg.enabled) return 'on';
+    const ranges = Array.isArray(cfg.ranges)? cfg.ranges : [];
+    let off=false;
+    for (const r of ranges){
+      const days = (r.days||[]).map(Number);
+      if (!days.includes(dow)) continue;
+      const offM=hmToMin(r.off), onM=hmToMin(r.on);
+      if (offM==null || onM==null) continue;
+      if (offM < onM){ if (minutes>=offM && minutes<onM) off=true; }
+      else { if (minutes>=offM || minutes<onM) off=true; }
+    }
+    return off?'off':'on';
   }
 
-  function makePreset(type){
-    // trả về ranges[]
-    if (type==='allweek'){
-      return [{days:[0,1,2,3,4,5,6], off:"22:30", on:"08:00"}];
-    }
-    if (type==='weekday'){
-      return [
-        {days:[1,2,3,4,5], off:"22:30", on:"08:00"},
-        {days:[0,6],       off:"23:30", on:"09:00"}
-      ];
-    }
-    if (type==='none'){
-      return [];
-    }
-    return [{days:[0,1,2,3,4,5,6], off:"22:30", on:"08:00"}];
-  }
-
-  // ---- Firebase (đã có firebase ở admin.html) ----
+  // ---------- Firebase ----------
   async function ensureDB(){
     if (!window.firebase || !firebase.apps?.length) throw new Error('Firebase chưa init');
     if (!firebase.auth().currentUser){
       await firebase.auth().signInAnonymously();
       await new Promise(res=>{
-        const un = firebase.auth().onAuthStateChanged(u=>{ if(u){ un(); res(); }});
+        const un=firebase.auth().onAuthStateChanged(u=>{ if(u){ un(); res(); }});
       });
     }
     return firebase.database();
   }
 
-  // ---- Mount UI vào section "Hẹn giờ" có sẵn ----
+  // ---------- UI mount ----------
   document.addEventListener('DOMContentLoaded', async ()=>{
     const sec = document.getElementById('viewSchedule');
     if (!sec) return;
 
     const elEnabled = $('#sch-enabled', sec);
-    const elTextarea= $('#sch-ranges',  sec);
+    const elTextarea= $('#sch-ranges',  sec);   // sẽ ẩn, dùng làm storage JSON
     const btnSave   = $('#sch-save',    sec);
     const btnApply  = $('#sch-apply',   sec);
     const chk30s    = $('#sch-30s',     sec);
 
-    // Thêm builder đơn giản ngay dưới textarea (dựng bằng JS để khỏi sửa HTML)
-    const helper = document.createElement('div');
-    helper.className = 'mt-3 space-y-2';
-    helper.innerHTML = `
-      <div class="flex flex-wrap gap-2">
-        <button type="button" id="preset-allweek"  class="px-2 py-1 rounded border">Mẫu: Cả tuần 22:30→08:00</button>
-        <button type="button" id="preset-weekday"  class="px-2 py-1 rounded border">Mẫu: Ngày thường/ Cuối tuần</button>
-        <button type="button" id="preset-none"     class="px-2 py-1 rounded border">Xóa hết lịch</button>
+    // Ẩn textarea thô, dựng visual builder
+    elTextarea.classList.add('hidden');
+
+    const wrap = document.createElement('div');
+    wrap.className = 'rounded-xl border bg-white p-3 space-y-3';
+    wrap.innerHTML = `
+      <div class="flex flex-wrap items-center gap-2 text-sm">
+        <div class="font-semibold mr-1">Chọn ngày:</div>
+        ${['CN','T2','T3','T4','T5','T6','T7'].map((lb,i)=>`
+          <button data-dow="${i}" class="dow-chip px-2 py-1 rounded-full border hover:bg-gray-50">${lb}</button>
+        `).join('')}
+        <button id="dow-all" class="ml-1 px-2 py-1 rounded border text-xs">Chọn cả tuần</button>
+        <button id="dow-wd"  class="px-2 py-1 rounded border text-xs">Ngày thường</button>
+        <button id="dow-we"  class="px-2 py-1 rounded border text-xs">Cuối tuần</button>
       </div>
-      <div class="p-2 rounded border bg-white">
-        <div class="font-semibold mb-2">Biểu mẫu nhanh</div>
-        <div class="flex flex-wrap items-center gap-2 text-sm">
-          <label>Ngày áp dụng:</label>
-          <label><input type="checkbox" class="dchk" value="0"> CN</label>
-          <label><input type="checkbox" class="dchk" value="1"> T2</label>
-          <label><input type="checkbox" class="dchk" value="2"> T3</label>
-          <label><input type="checkbox" class="dchk" value="3"> T4</label>
-          <label><input type="checkbox" class="dchk" value="4"> T5</label>
-          <label><input type="checkbox" class="dchk" value="5"> T6</label>
-          <label><input type="checkbox" class="dchk" value="6"> T7</label>
-          <span class="mx-2">• Tắt lúc</span>
-          <input id="f-off" type="time" value="22:30" class="border rounded px-1 py-0.5">
-          <span class="mx-2">• Mở lúc</span>
-          <input id="f-on"  type="time" value="08:00" class="border rounded px-1 py-0.5">
-          <button type="button" id="btn-add-range" class="ml-2 px-2 py-1 rounded bg-gray-800 text-white">Thêm vào danh sách</button>
+
+      <div class="flex flex-wrap items-center gap-3">
+        <label class="text-sm">Tắt lúc
+          <input id="time-off" type="time" value="22:30" class="ml-1 border rounded px-2 py-1">
+        </label>
+        <label class="text-sm">Mở lúc
+          <input id="time-on"  type="time" value="08:00" class="ml-1 border rounded px-2 py-1">
+        </label>
+        <button id="btn-add" class="px-3 py-2 rounded bg-gray-800 text-white">Thêm vào danh sách</button>
+        <div class="text-xs text-gray-500">* Qua đêm tự hiểu (VD: 22:30→08:00)</div>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <div class="font-semibold">Danh sách khoảng giờ</div>
+          <div class="flex gap-2">
+            <button id="preset-all" class="px-2 py-1 rounded border text-xs">Mẫu: Cả tuần 22:30→08:00</button>
+            <button id="preset-split" class="px-2 py-1 rounded border text-xs">Mẫu: Ngày thường/ Cuối tuần</button>
+            <button id="preset-clear" class="px-2 py-1 rounded border text-xs">Xoá hết</button>
+          </div>
         </div>
-        <div class="text-xs text-gray-500 mt-1">Danh sách cuối cùng vẫn nằm trong ô JSON bên trên – bạn có thể chỉnh tay nếu cần.</div>
+        <div id="range-list" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-2"></div>
       </div>
+
       <div id="sch-preview" class="text-sm text-gray-700"></div>
     `;
-    elTextarea.after(helper);
+    elTextarea.after(wrap);
 
-    // Presets
-    helper.querySelector('#preset-allweek').addEventListener('click', ()=> putRanges(makePreset('allweek')));
-    helper.querySelector('#preset-weekday').addEventListener('click',()=> putRanges(makePreset('weekday')));
-    helper.querySelector('#preset-none').addEventListener('click',   ()=> putRanges(makePreset('none')));
+    // state trong UI
+    let uiDays = new Set();         // set các dow được chọn cho lần thêm
+    let ranges = [];                // [{days:[...], off:"22:30", on:"08:00"}, ...]
 
-    // Thêm 1 range từ form nhỏ
-    helper.querySelector('#btn-add-range').addEventListener('click', ()=>{
-      const off = $('#f-off',helper).value.trim();
-      const on  = $('#f-on', helper).value.trim();
-      const days = $$('.dchk', helper).filter(x=>x.checked).map(x=> +x.value);
-      if (!days.length) return alert('Chọn ít nhất 1 ngày.');
-      if (hmToMinutes(off)==null || hmToMinutes(on)==null) return alert('Giờ không hợp lệ.');
-      const cur = getRanges();
-      cur.push({days, off, on});
-      putRanges(cur);
-    });
-
-    // Preview trạng thái nếu áp dụng ngay
-    function refreshPreview(){
-      const nowMin = minutesNow(tz);
-      const dow    = todayDow();
-      const state  = computeState({enabled: elEnabled.checked, ranges: getRanges()}, dow, nowMin);
-      $('#sch-preview').textContent =
-        `Bây giờ: ${state==='off'?'ĐANG TẮT (blackout)':'ĐANG MỞ'} • Sẽ ghi vào control/screen="${state}".`;
+    // helpers UI
+    function paintDays(){
+      $$('.dow-chip', wrap).forEach(btn=>{
+        const d = +btn.dataset.dow;
+        btn.classList.toggle('bg-blue-600', uiDays.has(d));
+        btn.classList.toggle('text-white', uiDays.has(d));
+        btn.classList.toggle('border-blue-600', uiDays.has(d));
+      });
     }
-
-    // JSON <-> ranges helpers
-    function getRanges(){
-      try{
-        const v = JSON.parse(elTextarea.value||'[]');
-        if (Array.isArray(v)) return v;
-        if (Array.isArray(v.ranges)) return v.ranges;
-        return [];
-      }catch(_){ return []; }
-    }
-    function putRanges(arr){
-      elTextarea.value = JSON.stringify(arr, null, 2);
+    function putRanges(newRanges){
+      ranges = newRanges.slice();
+      // sync xuống textarea (để giữ tương thích)
+      elTextarea.value = JSON.stringify(ranges, null, 2);
+      renderRangeList();
       refreshPreview();
     }
+    function getCfg(){ return { enabled: !!elEnabled.checked, ranges }; }
 
-    function computeState(cfg, dow, nowMin){
-      if (!cfg || !cfg.enabled) return 'on';
-      const rules = Array.isArray(cfg.ranges)? cfg.ranges : [];
-      // Nếu khớp nhiều rule trong 1 ngày, chỉ cần một rule bao "qua đêm" là đủ: off từ off->23:59, tiếp on->...
-      let shouldOff = false;
-      for (const r of rules){
-        const days = (r.days||[]).map(Number);
-        if (!days.includes(dow)) continue;
-        const offM = hmToMinutes(r.off);
-        const onM  = hmToMinutes(r.on);
-        if (offM==null || onM==null) continue;
-
-        if (offM < onM){
-          // Tắt trong cùng ngày: [off, on)
-          if (nowMin >= offM && nowMin < onM) shouldOff = true;
-        } else {
-          // Qua đêm: [off, 24h) U [0, on)
-          if (nowMin >= offM || nowMin < onM) shouldOff = true;
-        }
-      }
-      return shouldOff ? 'off' : 'on';
+    function dayLabel(ds){
+      const map = ['CN','T2','T3','T4','T5','T6','T7'];
+      const sorted = ds.slice().sort((a,b)=>a-b);
+      return sorted.map(d=>map[d]).join(', ');
     }
 
-    // Load cấu hình hiện có
-    let db = null;
+    function renderRangeList(){
+      const box = $('#range-list', wrap);
+      box.innerHTML = '';
+      if (!ranges.length){
+        box.innerHTML = `<div class="text-sm text-gray-500">Chưa có khoảng giờ nào.</div>`;
+        return;
+      }
+      ranges.forEach((r,idx)=>{
+        const card = document.createElement('div');
+        card.className = 'border rounded-lg p-2 bg-white';
+        card.innerHTML = `
+          <div class="text-sm font-medium">${dayLabel(r.days||[])}</div>
+          <div class="text-xs text-gray-600 mt-0.5">Tắt: <b>${r.off}</b> • Mở: <b>${r.on}</b></div>
+          <div class="mt-2 flex gap-2">
+            <button data-act="edit"   data-i="${idx}" class="px-2 py-1 rounded border text-xs">Sửa</button>
+            <button data-act="delete" data-i="${idx}" class="px-2 py-1 rounded bg-red-600 text-white text-xs">Xoá</button>
+          </div>
+        `;
+        card.addEventListener('click', (ev)=>{
+          const act = ev.target?.dataset?.act;
+          const i   = +ev.target?.dataset?.i;
+          if (Number.isNaN(i)) return;
+          if (act==='delete'){
+            const clone = ranges.slice(); clone.splice(i,1); putRanges(clone);
+          } else if (act==='edit'){
+            const rr = ranges[i];
+            // đổ vào form add để sửa nhanh
+            uiDays = new Set((rr.days||[]).map(Number));
+            $('#time-off',wrap).value = rr.off||'22:30';
+            $('#time-on', wrap).value = rr.on ||'08:00';
+            paintDays();
+            // xoá mục cũ, người dùng bấm "Thêm" sẽ tạo lại
+            const clone = ranges.slice(); clone.splice(i,1); putRanges(clone);
+          }
+        });
+        box.appendChild(card);
+      });
+    }
+
+    function refreshPreview(){
+      const st = computeState(getCfg(), todayDow(), nowMin());
+      $('#sch-preview',wrap).textContent =
+        `Bây giờ: ${st==='off'?'ĐANG TẮT (blackout)':'ĐANG MỞ'} • Nếu "Áp dụng ngay" sẽ ghi: control/screen="${st}".`;
+    }
+
+    // events: chọn ngày
+    $$('.dow-chip', wrap).forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const d = +btn.dataset.dow;
+        if (uiDays.has(d)) uiDays.delete(d); else uiDays.add(d);
+        paintDays();
+      });
+    });
+    $('#dow-all', wrap).addEventListener('click', ()=>{
+      uiDays = new Set([0,1,2,3,4,5,6]); paintDays();
+    });
+    $('#dow-wd', wrap).addEventListener('click', ()=>{
+      uiDays = new Set([1,2,3,4,5]); paintDays();
+    });
+    $('#dow-we', wrap).addEventListener('click', ()=>{
+      uiDays = new Set([0,6]); paintDays();
+    });
+
+    // Thêm range
+    $('#btn-add', wrap).addEventListener('click', ()=>{
+      const days = Array.from(uiDays.values()).sort((a,b)=>a-b);
+      if (!days.length) { alert('Chọn ít nhất 1 ngày.'); return; }
+      const off = String($('#time-off',wrap).value||'').trim();
+      const on  = String($('#time-on', wrap).value||'').trim();
+      if (hmToMin(off)==null || hmToMin(on)==null){ alert('Giờ không hợp lệ.'); return; }
+      const next = ranges.slice(); next.push({days, off, on}); putRanges(next);
+    });
+
+    // Presets
+    function presetAll(){ return [{days:[0,1,2,3,4,5,6], off:'22:30', on:'08:00'}]; }
+    function presetSplit(){
+      return [
+        {days:[1,2,3,4,5], off:'22:30', on:'08:00'},
+        {days:[0,6],       off:'23:30', on:'09:00'}
+      ];
+    }
+    $('#preset-all', wrap).addEventListener('click', ()=> putRanges(presetAll()));
+    $('#preset-split',wrap).addEventListener('click', ()=> putRanges(presetSplit()));
+    $('#preset-clear',wrap).addEventListener('click', ()=> putRanges([]));
+
+    // Load từ Firebase
+    let db=null;
     try{
       db = await ensureDB();
       const snap = await db.ref('control/schedule').get();
       const v = snap.exists()? snap.val() : null;
-      const enabled = !!(v && v.enabled!==false);
-      const ranges  = v && Array.isArray(v.ranges) ? v.ranges : makePreset('allweek');
-      elEnabled.checked = enabled;
-      putRanges(ranges);
+      elEnabled.checked = !!(v && v.enabled!==false);
+      const saved = v && Array.isArray(v.ranges) ? v.ranges : presetAll();
+      putRanges(saved);
     }catch(e){
-      console.error('[schedule] load error:', e);
-      // fill preset mặc định cho dễ
+      console.warn('[schedule] load error:', e);
       elEnabled.checked = true;
-      putRanges(makePreset('allweek'));
+      putRanges(presetAll());
     }
 
-    // Lưu cấu hình
-    btnSave.addEventListener('click', async ()=>{
+    // Save
+    $('#sch-save')?.addEventListener('click', async ()=>{
       try{
-        const ranges = getRanges();
-        // validate đơn giản
+        // validate ranges
         for (const r of ranges){
-          if (!Array.isArray(r.days) || r.days.some(d=> d<0||d>6)) throw new Error('days không hợp lệ');
-          if (hmToMinutes(r.off)==null || hmToMinutes(r.on)==null) throw new Error('Giờ off/on không hợp lệ');
+          if (!Array.isArray(r.days) || !r.days.length || r.days.some(d=>d<0||d>6)) throw new Error('Ngày không hợp lệ');
+          if (hmToMin(r.off)==null || hmToMin(r.on)==null) throw new Error('Giờ không hợp lệ');
         }
         await db.ref('control/schedule').set({
           enabled: !!elEnabled.checked,
           ranges, tz,
           savedAt: firebase.database.ServerValue.TIMESTAMP
         });
-        alert('Đã lưu cấu hình hẹn giờ.');
-        refreshPreview();
+        alert('Đã lưu cấu hình.');
       }catch(e){
         alert('Lưu lỗi: '+(e?.message||e));
       }
     });
 
-    // Áp dụng ngay (ghi control/screen + control/tables/*/screen)
-    btnApply.addEventListener('click', async ()=>{
+    // Apply now
+    $('#sch-apply')?.addEventListener('click', async ()=>{
       try{
-        const cfg = { enabled: !!elEnabled.checked, ranges: getRanges() };
-        const state = computeState(cfg, todayDow(), minutesNow(tz)); // 'on'|'off'
-        // Ghi schedule (để iPad runner dùng sau này)
+        const cfg = getCfg();
+        const state = computeState(cfg, todayDow(), nowMin()); // 'on'|'off'
+        // ghi schedule (runner sẽ dùng) + dấu apply
         await db.ref('control/schedule').set({
           enabled: cfg.enabled, ranges: cfg.ranges, tz,
           savedAt: firebase.database.ServerValue.TIMESTAMP,
           applyNowAt: firebase.database.ServerValue.TIMESTAMP
         });
-        // Đẩy hiệu lực ngay (khỏi chờ runner tick): global + từng bàn (nếu đã có control/tables)
+        // ép hiệu lực ngay (để không cần chờ runner tick)
         await db.ref('control/screen').set(state);
         const tblSnap = await db.ref('control/tables').get().catch(()=>null);
         if (tblSnap && tblSnap.exists()){
@@ -221,13 +264,8 @@
           Object.keys(tblSnap.val()||{}).forEach(k=> up[`control/tables/${k}/screen`] = state);
           if (Object.keys(up).length) await db.ref().update(up);
         }
-        if ($('#sch-30s').checked){
-          // Tùy chọn “áp dụng 30s”: đặt lại về 'on' sau 30s (chạy khi tab admin còn mở)
-          setTimeout(async ()=>{
-            try{
-              await db.ref('control/screen').set('on');
-            }catch(_){}
-          }, 30000);
+        if (chk30s?.checked){
+          setTimeout(async ()=>{ try{ await db.ref('control/screen').set('on'); }catch(_){}} , 30000);
         }
         alert(`Đã áp dụng ngay: ${state==='off'?'TẮT (blackout)':'MỞ màn hình'}.`);
       }catch(e){
@@ -235,9 +273,8 @@
       }
     });
 
-    // Cập nhật preview khi người dùng chỉnh JSON tay
-    elTextarea.addEventListener('input', refreshPreview);
+    // khi bật/tắt enabled → cập nhật preview
     elEnabled.addEventListener('change', refreshPreview);
     refreshPreview();
-  })();
+  });
 })();
