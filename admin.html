@@ -675,7 +675,29 @@
         }
       });
     })();
+  
   </script>
 <script src="./assets/js/admin-home-inject.js?v=1"></script>
+
+  <section id="viewSchedule" class="p-4 md:p-6 hidden">
+  <h2 class="text-2xl font-bold mb-3">Hẹn giờ bật/tắt blackout</h2>
+  <div class="space-y-3">
+    <label class="flex items-center gap-2">
+      <input id="sch-enabled" type="checkbox"> Bật hẹn giờ
+    </label>
+    <div>
+      <textarea id="sch-ranges" class="w-full h-40 border rounded p-2 font-mono text-sm"></textarea>
+      <div class="text-xs text-gray-500 mt-1">VD: [{"days":[0,1,2,3,4,5,6],"off":"22:30","on":"08:00"}]</div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="sch-save" class="px-3 py-2 bg-blue-600 text-white rounded">Lưu cấu hình</button>
+      <button id="sch-apply" class="px-3 py-2 bg-gray-800 text-white rounded">Áp dụng ngay</button>
+      <label class="flex items-center gap-2 text-sm">
+        <input id="sch-30s" type="checkbox"> Áp dụng 30s
+      </label>
+    </div>
+  </div>
+</section>
+  
 </body>
 </html>
