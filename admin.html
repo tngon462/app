@@ -570,6 +570,28 @@ function renderGrid(grid, db, devices) {
           renderGrid(grid, db, devicesCache);
         }, e=> alert('Lỗi subscribe devices: '+(e?.message||e)));
 
+        // 1) Ý định (cũ): control/tables  -> on|off (fallback)
+db.ref('control/tables').on('value', s=>{
+  const v = s.val() || {};
+  Object.keys(v).forEach(k=>{
+    // có nơi lưu 'screen' hoặc value thẳng; normalize:
+    const raw = v[k];
+    const st  = (typeof raw === 'string') ? raw : (raw?.screen || 'on');
+    tableScreen[String(k)] = (String(st).toLowerCase()==='off') ? 'off' : 'on';
+  });
+  if (grid && devicesCache) renderGrid(grid, db, devicesCache);
+}, e=> console.warn('Lỗi subscribe control/tables:', e?.message||e));
+
+// 2) TRẠNG THÁI THẬT (mới): status/tables  -> state:'on'|'off' (ƯU TIÊN)
+db.ref('status/tables').on('value', s=>{
+  const v = s.val() || {};
+  Object.keys(v).forEach(k=>{
+    const st = (v[k]?.screen?.state === 'off') ? 'off' : 'on';
+    tableScreen[String(k)] = st; // 👈 ghi đè để ưu tiên trạng thái thực tế
+  });
+  if (grid && devicesCache) renderGrid(grid, db, devicesCache);
+}, e=> console.warn('Lỗi subscribe status/tables:', e?.message||e));
+        
         // Subscribe per-table screen state
         db.ref('control/tables').on('value', s=>{
           const v = s.val()||{};
