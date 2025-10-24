@@ -169,6 +169,8 @@
   setInterval(()=> heartbeat(), 20000);
   document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) heartbeat(); });
 
+  
+
   // ===== Presence sớm để Admin thấy device ngay cả trước khi bind =====
   async function startPassivePresence(){
     try{
@@ -180,6 +182,14 @@
         inPOS: appState()==='pos',
         lastSeen: firebase.database.ServerValue.TIMESTAMP
       });
+      await db.ref('devices/'+deviceId).update({
+  code: LS.getItem('deviceCode') || null,
+  table: tableId(),
+  stage: appState(),
+  inPOS: appState()==='pos',
+  screen: (window.__screenState || 'on'),   // <= thêm dòng này
+  lastSeen: firebase.database.ServerValue.TIMESTAMP
+});
     }catch(e){
       console.warn('[bind] passive presence error:', e?.message||e);
     }
