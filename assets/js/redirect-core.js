@@ -1,9 +1,11 @@
 /**
- * assets/js/redirect-core.js (safe fallback)
+ * assets/js/redirect-core.js (updated 2025-11-03)
  * - Giữ nguyên 3 màn: #select-table, #start-screen, #pos-container
- * - Load links.json; nếu lỗi vẫn render fallback 1..15
+ * - Load links.json từ GitHub repo tngon462/QR (raw.githubusercontent.com)
+ * - Fallback local nếu lỗi mạng
  * - Expose: window.gotoSelect/gotoStart/gotoPos + window.getLinkForTable
  */
+
 (function(){
   'use strict';
 
@@ -69,26 +71,41 @@
 
   // ----- links.json -----
   let LINKS_MAP = null;
-  function cb(u){ return u + (u.includes('?')?'&':'?') + 'cb=' + Date.now(); }
 
   async function loadLinks(){
-    try{
-      const res = await fetch('https://raw.githubusercontent.com/tngon462/QR/refs/heads/main/links.json?cb' + Date.now(), { cache:'no-store' });
-      if (!res.ok) throw new Error('HTTP '+res.status);
+    const remoteUrl = 'https://raw.githubusercontent.com/tngon462/QR/main/links.json?cb=' + Date.now();
+    const localUrl  = './links.json?cb=' + Date.now();
+
+    try {
+      console.log('[redirect-core] 📡 Đang tải links.json từ repo QR...');
+      const res = await fetch(remoteUrl, { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
       const map = data?.links || data;
       if (!map || typeof map !== 'object' || Array.isArray(map)) throw new Error('invalid links.json shape');
       LINKS_MAP = map;
       window.LINKS_MAP = map;
-      console.log('[redirect-core] links.json loaded:', Object.keys(map).length, 'entries');
+      console.log('[redirect-core] ✅ Loaded links.json từ QR repo:', Object.keys(map).length, 'bàn');
       return map;
-    }catch(e){
-      console.error('[redirect-core] loadLinks FAILED:', e);
-      LINKS_MAP = null;
-      window.LINKS_MAP = null;
-      return null;
+    } catch (e) {
+      console.warn('[redirect-core] ⚠️ Không tải được online, thử bản local:', e);
+      try {
+        const res2 = await fetch(localUrl, { cache: 'no-store' });
+        const data2 = await res2.json();
+        const map2 = data2?.links || data2;
+        LINKS_MAP = map2;
+        window.LINKS_MAP = map2;
+        console.log('[redirect-core] ✅ Loaded links.json local:', Object.keys(map2).length, 'bàn');
+        return map2;
+      } catch (e2) {
+        console.error('[redirect-core] ❌ loadLinks FAILED hoàn toàn:', e2);
+        LINKS_MAP = null;
+        window.LINKS_MAP = null;
+        return null;
+      }
     }
   }
+
   window.getLinkForTable = function(t){
     if (!LINKS_MAP) return null;
     return (t in LINKS_MAP) ? LINKS_MAP[t] : null;
@@ -160,13 +177,23 @@
   (async function(){
     const map = await loadLinks();
     if (map) renderTablesFromMap(map);
-    else     renderTablesFallback(15); // vẫn hiện nút chọn bàn để dùng tạm
+    else     renderTablesFallback(15);
 
     const state = getState();
     const {id, url} = getTable();
     if (state==='pos' && url){ gotoPos(url); }
     else if (state==='start' && id){ if (elTable) elTable.textContent=id; gotoStart(); }
     else { gotoSelect(false); }
+
+    // Cập nhật link mỗi 60 giây (tránh phải reload app)
+    setInterval(() => {
+      loadLinks().then(newMap => {
+        if (newMap) {
+          LINKS_MAP = newMap;
+          window.LINKS_MAP = newMap;
+        }
+      }).catch(()=>{});
+    }, 60000);
   })();
 
 })();
