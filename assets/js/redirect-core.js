@@ -73,7 +73,7 @@
 
   async function loadLinks(){
     try{
-      const res = await fetch(cb('./links.json'), { cache:'no-store' });
+      const res = await fetch(cb('https://raw.githubusercontent.com/tngon462/QR/refs/heads/main/links.json'), { cache:'no-store' });
       if (!res.ok) throw new Error('HTTP '+res.status);
       const data = await res.json();
       const map = data?.links || data;
