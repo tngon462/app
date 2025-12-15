@@ -30,7 +30,6 @@
   const DEFAULT_TABLE_COUNT = 15;
 
   // GitHub RAW URL chuẩn
-  // Lưu ý: URL cũ của sếp có lỗi "?cb" thiếu "=" và đường dẫn refs/heads không cần thiết
   const REMOTE_URL = () =>
     `https://raw.githubusercontent.com/tngon462/QR/main/links.json?cb=${Date.now()}`;
 
@@ -74,7 +73,6 @@
 
     if (!map || typeof map !== "object" || Array.isArray(map)) return null;
 
-    // lọc sạch: key phải là string/number, value là string url
     const out = {};
     for (const [k, v] of Object.entries(map)) {
       const key = String(k).trim();
@@ -108,7 +106,11 @@
       if (!map) throw new Error("invalid links.json shape/empty");
 
       applyLinksMap(map, "QR_REPO");
-      console.log("[redirect-core] ✅ Loaded links.json từ QR repo:", Object.keys(map).length, "bàn");
+      console.log(
+        "[redirect-core] ✅ Loaded links.json từ QR repo:",
+        Object.keys(map).length,
+        "bàn"
+      );
       return map;
     } catch (e1) {
       console.warn("[redirect-core] ⚠️ Không tải được online, thử bản local:", e1);
@@ -119,7 +121,11 @@
         if (!map2) throw new Error("invalid local links.json shape/empty");
 
         applyLinksMap(map2, "LOCAL");
-        console.log("[redirect-core] ✅ Loaded links.json local:", Object.keys(map2).length, "bàn");
+        console.log(
+          "[redirect-core] ✅ Loaded links.json local:",
+          Object.keys(map2).length,
+          "bàn"
+        );
         return map2;
       } catch (e2) {
         console.error("[redirect-core] ❌ loadLinks FAILED hoàn toàn:", e2);
@@ -132,7 +138,11 @@
             const map3 = normalizeLinksMap(obj);
             if (map3) {
               applyLinksMap(map3, "LS_CACHE");
-              console.log("[redirect-core] ✅ Loaded links from LS cache:", Object.keys(map3).length, "bàn");
+              console.log(
+                "[redirect-core] ✅ Loaded links from LS cache:",
+                Object.keys(map3).length,
+                "bàn"
+              );
               return map3;
             }
           }
@@ -165,7 +175,6 @@
     } catch (e) {}
 
     // Nếu đang ở màn chọn bàn: render lại list bàn theo map
-    // (để khi QRMASTER tăng/giảm bàn cũng OK)
     const curState = getState(LS.appState) || "select";
     if (curState === "select") {
       renderTablesFromMap(norm);
@@ -232,7 +241,6 @@
     if (!u) return;
 
     console.log("[redirect-core] setPosLink from", source, u);
-    // cập nhật posLink trong LS để các module khác đọc được
     setState(LS.posLink, u);
 
     // nếu đang ở POS hoặc START thì cho nhảy thẳng vào POS luôn
@@ -240,38 +248,67 @@
   };
 
   // ---------------------------
-  // RENDER TABLES
+  // RENDER TABLES (RESPONSIVE giống ảnh)
   // ---------------------------
+  function ensureResponsiveTableGrid() {
+    if (!elTableBox) return;
+
+    // Grid auto-fit theo màn hình: tự tăng/giảm số cột
+    elTableBox.style.display = "grid";
+    elTableBox.style.gridTemplateColumns = "repeat(auto-fit, minmax(170px, 1fr))";
+    elTableBox.style.gap = "22px";
+
+    // Giống ảnh: cụm nút nằm giữa, không kéo quá rộng
+    elTableBox.style.maxWidth = "980px"; // desktop ra khoảng 5 cột như ảnh
+    elTableBox.style.margin = "0 auto";
+    elTableBox.style.padding = "10px 16px";
+    elTableBox.style.alignItems = "stretch";
+  }
+
+  function createTableButton(tableId) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = `Bàn ${tableId}`;
+
+    // Style giống ảnh: xanh, chữ trắng, bo tròn
+    btn.className =
+      "bg-blue-600 text-white font-semibold rounded-2xl " +
+      "hover:bg-blue-700 active:scale-[0.99] transition " +
+      "shadow-sm";
+
+    // Vuông theo ô grid + chữ giữa
+    btn.style.width = "100%";
+    btn.style.aspectRatio = "1 / 1";
+    btn.style.display = "flex";
+    btn.style.alignItems = "center";
+    btn.style.justifyContent = "center";
+    btn.style.fontSize = "22px";
+
+    btn.onclick = () => window.gotoStart(String(tableId));
+    return btn;
+  }
+
   function renderTablesFallback(n = DEFAULT_TABLE_COUNT) {
     if (!elTableBox) return;
     elTableBox.innerHTML = "";
+    ensureResponsiveTableGrid();
 
     for (let i = 1; i <= n; i++) {
-      const btn = document.createElement("button");
-      btn.textContent = i;
-      btn.className =
-        "rounded-xl bg-gray-100 text-gray-900 font-bold h-20 text-2xl hover:bg-blue-500 hover:text-white";
-      btn.onclick = () => window.gotoStart(String(i));
-      elTableBox.appendChild(btn);
+      elTableBox.appendChild(createTableButton(i));
     }
   }
 
   function renderTablesFromMap(map) {
     if (!elTableBox) return;
     elTableBox.innerHTML = "";
+    ensureResponsiveTableGrid();
 
     const keys = Object.keys(map)
       .map((k) => String(k))
-      .sort((a, b) => Number(a) - Number(b)); // nếu key là số
+      .sort((a, b) => Number(a) - Number(b));
 
-    // nếu map rác / key không phải số → vẫn render theo keys
     for (const k of keys) {
-      const btn = document.createElement("button");
-      btn.textContent = k;
-      btn.className =
-        "rounded-xl bg-gray-100 text-gray-900 font-bold h-20 text-2xl hover:bg-blue-500 hover:text-white";
-      btn.onclick = () => window.gotoStart(k);
-      elTableBox.appendChild(btn);
+      elTableBox.appendChild(createTableButton(k));
     }
 
     if (!keys.length) renderTablesFallback(DEFAULT_TABLE_COUNT);
