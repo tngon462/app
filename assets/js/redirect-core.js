@@ -1,342 +1,392 @@
 /**
- * assets/js/redirect-core.js (SAFE FULL - FIXED)
- * - Giữ 3 màn: #select-table, #start-screen, #pos-container
- * - Load links.json từ GitHub raw + fallback local + fallback cache + fallback render 1..N
- * - Responsive grid + auto size nút
- * - Expose:
- *    window.gotoSelect / gotoStart / gotoPos
- *    window.getLinkForTable(tableId)
- *    window.applyLinksMap(map, source)
- *    window.setPosLink(url, source)
- *    window.getCurrentTable()
- */
+* assets/js/redirect-core.js (SAFE FULL)
+* - Giữ 3 màn: #select-table, #start-screen, #pos-container
+* - Load links.json từ GitHub (repo QR) + fallback local + fallback render 1..N
+* - Không được tạo vòng lặp đệ quy / stack overflow
+* - Expose:
+*    window.gotoSelect / gotoStart / gotoPos
+*    window.getLinkForTable(tableId)
+*    window.applyLinksMap(map, source)
+*    window.setPosLink(url, source)   // listener LIVE gọi vào đây
+*    window.getCurrentTable()
+*/
 
 (function () {
-  "use strict";
+"use strict";
 
-  const $ = (id) => document.getElementById(id);
+const $ = (id) => document.getElementById(id);
 
-  const elSelect = $("select-table");
-  const elStart = $("start-screen");
-  const elPos = $("pos-container");
-  const elTableBox = $("table-container");
-  const elSelectedTable = $("selected-table");
-  const iframe = $("pos-frame");
-  const btnStart = $("start-order");
+const elSelect = $("select-table");
+const elStart = $("start-screen");
+const elPos = $("pos-container");
+const elTableBox = $("table-container");
+const elSelectedTable = $("selected-table");
+const iframe = $("pos-frame");
+const btnStart = $("start-order");
 
-  const DEFAULT_TABLE_COUNT = 15;
+// ---------------------------
+// CONFIG
+// ---------------------------
+const DEFAULT_TABLE_COUNT = 15;
 
-  const REMOTE_URL = () =>
-    `https://raw.githubusercontent.com/tngon462/QR/main/links.json?cb=${Date.now()}`;
-  const LOCAL_URL = () => `./links.json?cb=${Date.now()}`;
+// GitHub RAW URL chuẩn
+  // Lưu ý: URL cũ của sếp có lỗi "?cb" thiếu "=" và đường dẫn refs/heads không cần thiết
+const REMOTE_URL = () =>
+`https://raw.githubusercontent.com/tngon462/QR/main/links.json?cb=${Date.now()}`;
 
-  const LS = {
-    tableId: "tableId",
-    posLink: "posLink",
-    appState: "appState", // 'select'|'start'|'pos'
-    linksCache: "linksCache",
-  };
+const LOCAL_URL = () => `./links.json?cb=${Date.now()}`;
 
-  const setState = (k, v) => {
-    try {
-      v == null ? localStorage.removeItem(k) : localStorage.setItem(k, String(v));
-    } catch {}
-  };
-  const getState = (k) => {
-    try {
-      return localStorage.getItem(k);
-    } catch {
-      return null;
-    }
-  };
+// ---------------------------
+// STATE (localStorage)
+// ---------------------------
+const LS = {
+tableId: "tableId",
+posLink: "posLink",
+appState: "appState", // select | start | pos
+linksCache: "linksCache", // optional
+linksCacheAt: "linksCacheAt",
+};
 
-  // ===== UI helpers (quan trọng để tránh kẹt display) =====
-  function hide(el) {
-    if (!el) return;
-    el.classList.add("hidden");
-    // tránh trường hợp CSS/inline display kẹt
-    if (el === elPos) el.style.display = "none";
-  }
-  function show(el) {
-    if (!el) return;
-    el.classList.remove("hidden");
-    if (el === elPos) el.style.display = "";
-  }
+function setState(k, v) {
+try {
+if (v === null || v === undefined) localStorage.removeItem(k);
+else localStorage.setItem(k, String(v));
+} catch (e) {}
+}
+function getState(k) {
+try {
+return localStorage.getItem(k);
+} catch (e) {
+return null;
+}
+}
 
-  // ===== Links Map =====
-  let LINKS_MAP = null;
+// ---------------------------
+// LINKS MAP
+// ---------------------------
+let LINKS_MAP = null;
 
-  function normalizeLinksMap(data) {
-    const map = data?.links || data;
-    if (!map || typeof map !== "object" || Array.isArray(map)) return null;
+function normalizeLinksMap(data) {
+// hỗ trợ 2 shape:
+// 1) { updated_at, links: { "1": "...", ... } }
+// 2) { "1": "...", ... }
+const map = data && data.links && typeof data.links === "object" ? data.links : data;
 
-    const out = {};
-    for (const [k, v] of Object.entries(map)) {
-      // giữ selector/logic cũ: chỉ nhận link atpos
-      if (typeof v === "string" && /^https?:\/\/order\.atpos\.net/.test(v)) {
-        out[String(k)] = v;
-      }
-    }
-    return Object.keys(out).length ? out : null;
-  }
+if (!map || typeof map !== "object" || Array.isArray(map)) return null;
 
-  async function fetchJson(url) {
-    const r = await fetch(url, { cache: "no-store" });
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    return r.json();
-  }
+    // lọc sạch: key phải là string/number, value là string url
+const out = {};
+for (const [k, v] of Object.entries(map)) {
+const key = String(k).trim();
+const val = typeof v === "string" ? v.trim() : "";
+if (!key) continue;
+if (!val) continue;
+// chỉ nhận link order.atpos.net để tránh rác
+if (!/^https?:\/\/order\.atpos\.net\//i.test(val)) continue;
+out[key] = val;
+}
+return Object.keys(out).length ? out : null;
+}
 
-  function applyLinksMap(map, source = "unknown") {
-    LINKS_MAP = map;
-    window.LINKS_MAP = map;
-    setState(LS.linksCache, JSON.stringify({ links: map, source, savedAt: Date.now() }));
+async function fetchJson(url) {
+const res = await fetch(url, { cache: "no-store" });
+if (!res.ok) throw new Error("HTTP " + res.status);
+return await res.json();
+}
 
-    // nếu đang ở màn select thì render lại ngay
-    if ((getState(LS.appState) || "select") === "select") {
-      renderTablesFromMap(map);
-    }
-  }
-  window.applyLinksMap = applyLinksMap;
+// chống loop: loadLinks không được tự gọi applyLinksMap theo kiểu gây recursion
+let _isLoadingLinks = false;
 
-  async function loadLinks() {
-    // 1) remote
-    try {
-      const map = normalizeLinksMap(await fetchJson(REMOTE_URL()));
-      if (map) {
-        applyLinksMap(map, "remote");
-        return map;
-      }
-    } catch {}
+async function loadLinks() {
+if (_isLoadingLinks) return null;
+_isLoadingLinks = true;
 
-    // 2) local
-    try {
-      const map = normalizeLinksMap(await fetchJson(LOCAL_URL()));
-      if (map) {
-        applyLinksMap(map, "local");
-        return map;
-      }
-    } catch {}
+try {
+console.log("[redirect-core] 📡 Đang tải links.json từ repo QR...");
+const data = await fetchJson(REMOTE_URL());
+const map = normalizeLinksMap(data);
+if (!map) throw new Error("invalid links.json shape/empty");
 
-    // 3) cache
-    try {
-      const cache = getState(LS.linksCache);
-      if (cache) {
-        const map = normalizeLinksMap(JSON.parse(cache));
-        if (map) {
-          applyLinksMap(map, "cache");
-          return map;
-        }
-      }
-    } catch {}
+applyLinksMap(map, "QR_REPO");
+      console.log("[redirect-core] ✅ Loaded links.json từ QR repo:", Object.keys(map).length, "bàn");
+      console.log(
+        "[redirect-core] ✅ Loaded links.json từ QR repo:",
+        Object.keys(map).length,
+        "bàn"
+      );
+return map;
+} catch (e1) {
+console.warn("[redirect-core] ⚠️ Không tải được online, thử bản local:", e1);
 
-    return null;
-  }
+try {
+const data2 = await fetchJson(LOCAL_URL());
+const map2 = normalizeLinksMap(data2);
+if (!map2) throw new Error("invalid local links.json shape/empty");
 
-  window.getLinkForTable = (t) => {
-    const key = String(t ?? "");
-    return LINKS_MAP?.[key] || null;
-  };
+applyLinksMap(map2, "LOCAL");
+        console.log("[redirect-core] ✅ Loaded links.json local:", Object.keys(map2).length, "bàn");
+        console.log(
+          "[redirect-core] ✅ Loaded links.json local:",
+          Object.keys(map2).length,
+          "bàn"
+        );
+return map2;
+} catch (e2) {
+console.error("[redirect-core] ❌ loadLinks FAILED hoàn toàn:", e2);
 
-  window.getCurrentTable = () => getState(LS.tableId) || null;
+// thử cache trong localStorage (nếu có)
+try {
+const cached = getState(LS.linksCache);
+if (cached) {
+const obj = JSON.parse(cached);
+const map3 = normalizeLinksMap(obj);
+if (map3) {
+applyLinksMap(map3, "LS_CACHE");
+              console.log("[redirect-core] ✅ Loaded links from LS cache:", Object.keys(map3).length, "bàn");
+              console.log(
+                "[redirect-core] ✅ Loaded links from LS cache:",
+                Object.keys(map3).length,
+                "bàn"
+              );
+return map3;
+}
+}
+} catch (e3) {}
 
-  // ===== Navigation =====
-  window.gotoSelect = (clear = false) => {
-    if (clear) {
-      setState(LS.tableId, null);
-      setState(LS.posLink, null);
-      // compatibility keys
-      setState("table", null);
-      setState("tngon_table", null);
-      try {
-        delete window.tableId;
-      } catch {}
-    }
+LINKS_MAP = null;
+window.LINKS_MAP = null;
+return null;
+}
+} finally {
+_isLoadingLinks = false;
+}
+}
 
-    setState(LS.appState, "select");
+// Expose cho listener LIVE: apply map mới (không render lại nếu không cần)
+function applyLinksMap(map, source = "unknown") {
+const norm = normalizeLinksMap(map) || null;
+if (!norm) {
+console.warn("[redirect-core] applyLinksMap: map invalid/empty, ignore. source=", source);
+return false;
+}
 
-    // reset iframe
-    if (iframe) iframe.src = "about:blank";
+LINKS_MAP = norm;
+window.LINKS_MAP = norm;
 
-    hide(elPos);
-    hide(elStart);
-    show(elSelect);
+// cache lại để dự phòng
+try {
+setState(LS.linksCache, JSON.stringify({ links: norm }));
+setState(LS.linksCacheAt, Date.now());
+} catch (e) {}
 
-    requestAnimationFrame(refreshTableLayout);
-  };
+// Nếu đang ở màn chọn bàn: render lại list bàn theo map
+    // (để khi QRMASTER tăng/giảm bàn cũng OK)
+const curState = getState(LS.appState) || "select";
+if (curState === "select") {
+renderTablesFromMap(norm);
+}
 
-  window.gotoStart = (id) => {
-    // ✅ cho phép gọi gotoStart() không truyền id (QRBACK/QRMASTER hay gọi kiểu này)
-    id = String(
-      id ||
-        getState(LS.tableId) ||
-        getState("table") ||
-        getState("tngon_table") ||
-        ""
-    ).trim();
+console.log("[redirect-core] applyLinksMap OK from", source, "count=", Object.keys(norm).length);
+return true;
+}
 
-    if (!id) return window.gotoSelect(false);
+window.applyLinksMap = applyLinksMap;
 
-    // lưu table
-    setState(LS.tableId, id);
-    // compat keys
-    setState("table", id);
-    setState("tngon_table", id);
-    window.tableId = id;
+window.getLinkForTable = function (t) {
+if (!LINKS_MAP) return null;
+const key = String(t);
+return LINKS_MAP[key] || null;
+};
 
-    setState(LS.appState, "start");
+// ---------------------------
+// UI NAV
+// ---------------------------
+window.gotoSelect = function (keepState = false) {
+if (!keepState) setState(LS.appState, "select");
+if (elSelect) elSelect.classList.remove("hidden");
+if (elStart) elStart.classList.add("hidden");
+if (elPos) elPos.classList.add("hidden");
+};
 
-    if (elSelectedTable) elSelectedTable.textContent = id;
+window.gotoStart = function (tableId) {
+const id = String(tableId || getState(LS.tableId) || "").trim();
+if (!id) return;
 
-    // reset iframe khi quay về start (tránh kẹt / about:blank loop)
-    if (iframe) iframe.src = "about:blank";
+setState(LS.tableId, id);
+setState(LS.appState, "start");
 
-    hide(elPos);
-    hide(elSelect);
-    show(elStart);
-  };
+if (elSelectedTable) elSelectedTable.textContent = id;
 
-  window.gotoPos = (url) => {
-    const id = getState(LS.tableId);
-    const finalUrl = url || getState(LS.posLink) || window.getLinkForTable(id);
+if (elSelect) elSelect.classList.add("hidden");
+if (elStart) elStart.classList.remove("hidden");
+if (elPos) elPos.classList.add("hidden");
+};
 
-    if (!finalUrl) {
-      alert("Chưa có link POS của bàn này.");
-      return window.gotoSelect(false);
-    }
+window.gotoPos = function (url) {
+if (!url || typeof url !== "string") return;
+const u = url.trim();
+if (!u) return;
 
-    setState(LS.posLink, finalUrl);
-    setState(LS.appState, "pos");
+setState(LS.posLink, u);
+setState(LS.appState, "pos");
 
-    hide(elSelect);
-    hide(elStart);
-    show(elPos);
+if (elSelect) elSelect.classList.add("hidden");
+if (elStart) elStart.classList.add("hidden");
+if (elPos) elPos.classList.remove("hidden");
 
-    if (iframe && iframe.src !== finalUrl) iframe.src = finalUrl;
-  };
+if (iframe && iframe.src !== u) iframe.src = u;
+};
 
-  window.setPosLink = (url /*, source */) => window.gotoPos(url);
+window.getCurrentTable = function () {
+return getState(LS.tableId);
+};
 
-  // ===== Responsive grid + auto size button =====
-  function ensureGrid() {
+// Listener LIVE gọi vào đây để ép link mới ngay
+window.setPosLink = function (url, source = "LIVE") {
+const u = (url || "").trim();
+if (!u) return;
+
+console.log("[redirect-core] setPosLink from", source, u);
+    // cập nhật posLink trong LS để các module khác đọc được
+setState(LS.posLink, u);
+
+// nếu đang ở POS hoặc START thì cho nhảy thẳng vào POS luôn
+window.gotoPos(u);
+};
+
+// ---------------------------
+  // RENDER TABLES
+  // RENDER TABLES (RESPONSIVE giống ảnh)
+// ---------------------------
+  function ensureResponsiveTableGrid() {
     if (!elTableBox) return;
+
+    // Grid auto-fit theo màn hình: tự tăng/giảm số cột
     elTableBox.style.display = "grid";
-    elTableBox.style.gridTemplateColumns = "repeat(auto-fit, minmax(120px, 1fr))";
-    elTableBox.style.gap = "clamp(10px, 2vw, 22px)";
-    elTableBox.style.width = "100%";
-    elTableBox.style.maxWidth = "min(980px, 100%)";
+    elTableBox.style.gridTemplateColumns = "repeat(auto-fit, minmax(170px, 1fr))";
+    elTableBox.style.gap = "22px";
+
+    // Giống ảnh: cụm nút nằm giữa, không kéo quá rộng
+    elTableBox.style.maxWidth = "980px"; // desktop ra khoảng 5 cột như ảnh
     elTableBox.style.margin = "0 auto";
-    elTableBox.style.padding = "12px";
+    elTableBox.style.padding = "10px 16px";
+    elTableBox.style.alignItems = "stretch";
   }
 
-  function createTableButton(id) {
-    const b = document.createElement("button");
-    b.textContent = `Bàn ${id}`;
-    b.className =
-      "bg-blue-600 text-white font-semibold rounded-2xl shadow-sm " +
-      "hover:bg-blue-700 active:scale-[0.98] transition";
+  function createTableButton(tableId) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = `Bàn ${tableId}`;
 
-    // AUTO SIZE
-    b.style.height = "clamp(90px, 18vw, 150px)";
-    b.style.fontSize = "clamp(16px, 4vw, 22px)";
-    b.style.display = "flex";
-    b.style.alignItems = "center";
-    b.style.justifyContent = "center";
-    b.style.width = "100%";
+    // Style giống ảnh: xanh, chữ trắng, bo tròn
+    btn.className =
+      "bg-blue-600 text-white font-semibold rounded-2xl " +
+      "hover:bg-blue-700 active:scale-[0.99] transition " +
+      "shadow-sm";
 
-    b.onclick = () => window.gotoStart(String(id));
-    return b;
+    // Vuông theo ô grid + chữ giữa
+    btn.style.width = "100%";
+    btn.style.aspectRatio = "1 / 1";
+    btn.style.display = "flex";
+    btn.style.alignItems = "center";
+    btn.style.justifyContent = "center";
+    btn.style.fontSize = "22px";
+
+    btn.onclick = () => window.gotoStart(String(tableId));
+    return btn;
   }
 
-  function renderTablesFallback(n = DEFAULT_TABLE_COUNT) {
-    if (!elTableBox) return;
-    elTableBox.innerHTML = "";
-    ensureGrid();
-    for (let i = 1; i <= n; i++) {
+function renderTablesFallback(n = DEFAULT_TABLE_COUNT) {
+if (!elTableBox) return;
+elTableBox.innerHTML = "";
+    ensureResponsiveTableGrid();
+
+for (let i = 1; i <= n; i++) {
+      const btn = document.createElement("button");
+      btn.textContent = i;
+      btn.className =
+        "rounded-xl bg-gray-100 text-gray-900 font-bold h-20 text-2xl hover:bg-blue-500 hover:text-white";
+      btn.onclick = () => window.gotoStart(String(i));
+      elTableBox.appendChild(btn);
       elTableBox.appendChild(createTableButton(i));
-    }
-    refreshTableLayout();
-  }
+}
+}
 
-  function renderTablesFromMap(map) {
-    if (!elTableBox) return;
-    elTableBox.innerHTML = "";
-    ensureGrid();
-    Object.keys(map)
-      .sort((a, b) => Number(a) - Number(b))
-      .forEach((k) => elTableBox.appendChild(createTableButton(k)));
-    refreshTableLayout();
-  }
+function renderTablesFromMap(map) {
+if (!elTableBox) return;
+elTableBox.innerHTML = "";
+    ensureResponsiveTableGrid();
 
-  function refreshTableLayout() {
-    // chỉ cần refresh khi đang ở select
-    if ((getState(LS.appState) || "select") !== "select") return;
-    if (!elTableBox) return;
+const keys = Object.keys(map)
+.map((k) => String(k))
+      .sort((a, b) => Number(a) - Number(b)); // nếu key là số
+      .sort((a, b) => Number(a) - Number(b));
 
-    ensureGrid();
+    // nếu map rác / key không phải số → vẫn render theo keys
+for (const k of keys) {
+      const btn = document.createElement("button");
+      btn.textContent = k;
+      btn.className =
+        "rounded-xl bg-gray-100 text-gray-900 font-bold h-20 text-2xl hover:bg-blue-500 hover:text-white";
+      btn.onclick = () => window.gotoStart(k);
+      elTableBox.appendChild(btn);
+      elTableBox.appendChild(createTableButton(k));
+}
 
-    // trick reflow để grid co giãn chuẩn
-    elTableBox.style.display = "none";
-    // eslint-disable-next-line no-unused-expressions
-    elTableBox.offsetHeight;
-    elTableBox.style.display = "grid";
-  }
+if (!keys.length) renderTablesFallback(DEFAULT_TABLE_COUNT);
+}
 
-  window.addEventListener("resize", () => requestAnimationFrame(refreshTableLayout));
-  window.addEventListener("orientationchange", () => setTimeout(refreshTableLayout, 80));
+// ---------------------------
+// START BUTTON
+// ---------------------------
+if (btnStart) {
+btnStart.addEventListener("click", () => {
+const tableId = getState(LS.tableId);
+if (!tableId) return;
 
-  // ===== Start button =====
-  if (btnStart) {
-    btnStart.onclick = () => {
-      const live = getState(LS.posLink);
-      if (live) return window.gotoPos(live);
+// ưu tiên: nếu listener LIVE đã set posLink trong LS thì dùng luôn
+const livePos = getState(LS.posLink);
+if (livePos) {
+window.gotoPos(livePos);
+return;
+}
 
-      const id = getState(LS.tableId);
-      const link = window.getLinkForTable(id);
-      if (link) return window.gotoPos(link);
+// fallback: lấy từ LINKS_MAP (links.json)
+const url = window.getLinkForTable(tableId);
+if (url) window.gotoPos(url);
+else console.warn("[redirect-core] No link for table", tableId);
+});
+}
 
-      alert("Chưa có link POS của bàn này.");
-      window.gotoSelect(false);
-    };
-  }
+// ---------------------------
+// BOOT
+// ---------------------------
+(async function boot() {
+console.log("[redirect-core] boot...");
 
-  // ===== Remote table change event (nếu device-bind dùng) =====
-  window.addEventListener("tngon:tableChanged", (ev) => {
-    const { table, url } = (ev && ev.detail) || {};
-    if (!table) return;
+// 1) Load links.json (nếu fail vẫn render fallback)
+const map = await loadLinks();
+if (map) renderTablesFromMap(map);
+else renderTablesFallback(DEFAULT_TABLE_COUNT);
 
-    const id = String(table);
-    setState(LS.tableId, id);
-    setState("table", id);
-    setState("tngon_table", id);
-    window.tableId = id;
+// 2) Restore state
+const appState = getState(LS.appState) || "select";
+const tableId = getState(LS.tableId);
+const posLink = getState(LS.posLink);
 
-    const finalUrl = url ?? window.getLinkForTable(id) ?? getState(LS.posLink) ?? null;
-    if (finalUrl) setState(LS.posLink, finalUrl);
+if (appState === "pos" && posLink) {
+window.gotoPos(posLink);
+} else if (appState === "start" && tableId) {
+window.gotoStart(tableId);
+} else {
+window.gotoSelect();
+}
 
-    if (elSelectedTable) elSelectedTable.textContent = id;
-    window.gotoStart(id);
-  });
+// 3) refresh links.json mỗi 60s (dự phòng)
+setInterval(() => {
+loadLinks().catch(() => {});
+}, 60000);
 
-  // ===== Boot =====
-  (async function boot() {
-    // nếu element bị thiếu => khỏi chạy để tránh reload loop
-    if (!elSelect || !elStart || !elPos || !elTableBox) {
-      console.warn("[redirect-core] Missing required DOM elements. Abort init.");
-      return;
-    }
-
-    const map = await loadLinks();
-    map ? renderTablesFromMap(map) : renderTablesFallback(DEFAULT_TABLE_COUNT);
-
-    const state = getState(LS.appState) || "select";
-    if (state === "pos") {
-      window.gotoPos(getState(LS.posLink));
-    } else if (state === "start") {
-      window.gotoStart(getState(LS.tableId));
-    } else {
-      window.gotoSelect(false);
-    }
-
-    setTimeout(refreshTableLayout, 120);
-  })();
+console.log("[redirect-core] boot OK");
+})();
 })();
