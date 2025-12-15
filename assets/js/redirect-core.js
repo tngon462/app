@@ -103,8 +103,8 @@ window.getCurrentTable = () => getState(LS.tableId) || null;
   };
 
   window.gotoStart = (id) => {
-  id = String(id || getState(LS.tableId) || "").trim();
-if (!id) return;
+  id = String(id || "").trim();
+  if (!id) return;
 
   setState(LS.tableId, id);
 
