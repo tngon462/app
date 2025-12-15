@@ -1,4 +1,3 @@
-/**
 * assets/js/redirect-core.js (SAFE FULL)
 * - Giữ 3 màn: #select-table, #start-screen, #pos-container
 * - Load links.json từ GitHub (repo QR) + fallback local + fallback render 1..N
