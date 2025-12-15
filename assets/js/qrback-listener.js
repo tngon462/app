@@ -32,7 +32,7 @@
     try { localStorage.setItem('appState', 'start'); } catch {}
     if (typeof window.gotoStart === 'function'){
       log('→ gotoStart()');
-      window.gotoStart();
+      window.gotoStart(getLS('tableId') || lastGoodTable || currentTable);
     } else {
       log('→ reload fallback');
       location.reload();
