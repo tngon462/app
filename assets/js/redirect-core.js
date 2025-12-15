@@ -91,6 +91,8 @@
   }
 
   window.getLinkForTable = (t) => LINKS_MAP?.[String(t)] || null;
+  // ✅ expose current table cho các module khác (probe / pos-link-fix / qrback-listener)
+window.getCurrentTable = () => getState(LS.tableId) || null;
 
   window.gotoSelect = () => {
     setState(LS.appState, "select");
@@ -101,13 +103,21 @@
   };
 
   window.gotoStart = (id) => {
-    setState(LS.tableId, id);
-    setState(LS.appState, "start");
-    elSelectedTable.textContent = id;
-    elSelect.classList.add("hidden");
-    elStart.classList.remove("hidden");
-    elPos.classList.add("hidden");
-  };
+  id = String(id || "").trim();
+  if (!id) return;
+
+  setState(LS.tableId, id);
+
+  // ✅ thêm 2 dòng này để tương thích mấy file khác (nếu nó đọc key khác)
+  setState("table", id);
+  setState("tngon_table", id);
+
+  setState(LS.appState, "start");
+  elSelectedTable.textContent = id;
+  elSelect.classList.add("hidden");
+  elStart.classList.remove("hidden");
+  elPos.classList.add("hidden");
+};
 
   window.gotoPos = (url) => {
     setState(LS.posLink, url);
