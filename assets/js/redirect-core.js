@@ -103,8 +103,14 @@ window.getCurrentTable = () => getState(LS.tableId) || null;
   };
 
   window.gotoStart = (id) => {
-  id = String(id || "").trim();
-  if (!id) return;
+  // ✅ cho phép gọi gotoStart() không truyền id (QRBACK/QRMASTER hay gọi kiểu này)
+  id = String(
+    id || getState(LS.tableId) || getState("table") || getState("tngon_table") || ""
+  ).trim();
+
+  if (!id) return window.gotoSelect?.(); // hoặc: return;
+  ...
+};
 
   setState(LS.tableId, id);
 
