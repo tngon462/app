@@ -81,8 +81,7 @@ async function loadLinks(){
       const v = snap && snap.val ? snap.val() : null;
       const map = v && v.links ? v.links : null;
       if (map && typeof map === 'object' && !Array.isArray(map) && Object.keys(map).length){
-        LINKS_MAP = map;
-        window.LINKS_MAP = map;
+        _applyLinksMap(map, 'firebase:get');
         console.log('[redirect-core] ✅ Loaded links_live:', Object.keys(map).length, 'bàn');
         return map;
       }
@@ -102,8 +101,7 @@ async function loadLinks(){
     const data = await res.json();
     const map = data?.links || data;
     if (!map || typeof map !== 'object' || Array.isArray(map)) throw new Error('invalid links.json shape');
-    LINKS_MAP = map;
-    window.LINKS_MAP = map;
+    _applyLinksMap(map, 'github');
     console.log('[redirect-core] ✅ Loaded links.json từ QR repo:', Object.keys(map).length, 'bàn');
     return map;
   } catch (e) {
@@ -111,12 +109,75 @@ async function loadLinks(){
     const res2 = await fetch(localUrl, { cache: 'no-store' });
     const data2 = await res2.json();
     const map2 = data2?.links || data2;
-    LINKS_MAP = map2;
-    window.LINKS_MAP = map2;
+    _applyLinksMap(map2, 'local');
     console.log('[redirect-core] ✅ Loaded links.json local:', Object.keys(map2).length, 'bàn');
     return map2;
   }
 }
+
+
+  // ----- realtime links_live -----
+  let _linksLiveSubscribed = false;
+
+  function _isValidLinksMap(map){
+    return map && typeof map === 'object' && !Array.isArray(map) && Object.keys(map).length > 0;
+  }
+
+  function _applyLinksMap(map, source){
+    if (!_isValidLinksMap(map)) return false;
+
+    _applyLinksMap(map, 'github');
+
+    // Nếu đang chọn bàn thì update lại tableUrl theo map mới
+    const curId = LS.getItem(LS_TID);
+    if (curId && (curId in map)) {
+      const newUrl = map[curId];
+      const oldUrl = LS.getItem(LS_TURL);
+      if (newUrl && newUrl !== oldUrl) {
+        LS.setItem(LS_TURL, newUrl);
+        console.log('[links-live] 🔁 Update tableUrl bàn', curId, '->', newUrl);
+
+        // Nếu đang ở POS thì reload iframe ngay
+        if (getState() === 'pos' && iframe) {
+          iframe.src = newUrl;
+          console.log('[links-live] ▶️ Reload iframe (pos) theo link mới');
+        }
+      }
+    }
+
+    // Nếu đang ở màn chọn bàn thì re-render (để luôn đúng số bàn)
+    if (getState() === 'select') {
+      try { renderTablesFromMap(map); } catch(_){}
+    }
+
+    console.log('[links-live] ✅ Applied links from', source || 'unknown', '(', Object.keys(map).length, 'bàn )');
+    return true;
+  }
+
+  function subscribeLinksLive(){
+    if (_linksLiveSubscribed) return;
+    if (!(window.firebase && firebase.database)) return;
+
+    _linksLiveSubscribed = true;
+    console.log('[redirect-core] 👂 Subscribe Firebase links_live realtime...');
+
+    firebase.database().ref('links_live').on('value', (snap)=>{
+      try{
+        const v = snap && snap.val ? snap.val() : null;
+        const map = v && v.links ? v.links : null;
+        if (!_isValidLinksMap(map)) return;
+
+        const changed = JSON.stringify(map) !== JSON.stringify(LINKS_MAP);
+        if (changed){
+          _applyLinksMap(map, 'firebase:onValue');
+        }
+      }catch(e){
+        console.warn('[redirect-core] ⚠️ links_live onValue error', e);
+      }
+    }, (err)=>{
+      console.warn('[redirect-core] ⚠️ links_live subscribe fail', err);
+    });
+  }
 
   window.getLinkForTable = function(t){
     if (!LINKS_MAP) return null;
@@ -188,6 +249,8 @@ async function loadLinks(){
   // Boot
   (async function(){
     const map = await loadLinks();
+    // Realtime: tự cập nhật ngay khi QRMASTER đổi link
+    subscribeLinksLive();
     if (map) renderTablesFromMap(map);
     else     renderTablesFallback(15);
 
@@ -198,14 +261,12 @@ async function loadLinks(){
     else { gotoSelect(false); }
 
     // Cập nhật link mỗi 60 giây (tránh phải reload app)
+    // Fallback: thỉnh thoảng refresh lại (phòng trường hợp realtime bị chặn)
     setInterval(() => {
       loadLinks().then(newMap => {
-        if (newMap) {
-          LINKS_MAP = newMap;
-          window.LINKS_MAP = newMap;
-        }
+        if (newMap) _applyLinksMap(newMap, 'poll');
       }).catch(()=>{});
-    }, 60000);
+    }, 180000);
   })();
 
 })();
