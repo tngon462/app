@@ -1,14 +1,5 @@
 /**
  * assets/js/redirect-core.js (SAFE FULL)
- * - Giữ 3 màn: #select-table, #start-screen, #pos-container
- * - Load links.json từ GitHub (repo QR) + fallback local + fallback render 1..N
- * - Không được tạo vòng lặp đệ quy / stack overflow
- * - Expose:
- *    window.gotoSelect / gotoStart / gotoPos
- *    window.getLinkForTable(tableId)
- *    window.applyLinksMap(map, source)
- *    window.setPosLink(url, source)   // listener LIVE gọi vào đây
- *    window.getCurrentTable()
  */
 
 (function () {
@@ -24,390 +15,197 @@
   const iframe = $("pos-frame");
   const btnStart = $("start-order");
 
-  // ---------------------------
-  // CONFIG
-  // ---------------------------
   const DEFAULT_TABLE_COUNT = 15;
 
-  // GitHub RAW URL chuẩn
   const REMOTE_URL = () =>
     `https://raw.githubusercontent.com/tngon462/QR/main/links.json?cb=${Date.now()}`;
-
   const LOCAL_URL = () => `./links.json?cb=${Date.now()}`;
 
-  // ---------------------------
-  // STATE (localStorage)
-  // ---------------------------
   const LS = {
     tableId: "tableId",
     posLink: "posLink",
-    appState: "appState", // select | start | pos
-    linksCache: "linksCache", // optional
-    linksCacheAt: "linksCacheAt",
+    appState: "appState",
+    linksCache: "linksCache",
   };
 
-  function setState(k, v) {
+  const setState = (k, v) => {
     try {
-      if (v === null || v === undefined) localStorage.removeItem(k);
-      else localStorage.setItem(k, String(v));
-    } catch (e) {}
-  }
-  function getState(k) {
+      v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+    } catch {}
+  };
+  const getState = (k) => {
     try {
       return localStorage.getItem(k);
-    } catch (e) {
+    } catch {
       return null;
     }
-  }
+  };
 
-  // ---------------------------
-  // LINKS MAP
-  // ---------------------------
   let LINKS_MAP = null;
 
   function normalizeLinksMap(data) {
-    // hỗ trợ 2 shape:
-    // 1) { updated_at, links: { "1": "...", ... } }
-    // 2) { "1": "...", ... }
-    const map = data && data.links && typeof data.links === "object" ? data.links : data;
-
-    if (!map || typeof map !== "object" || Array.isArray(map)) return null;
+    const map = data?.links || data;
+    if (!map || typeof map !== "object") return null;
 
     const out = {};
     for (const [k, v] of Object.entries(map)) {
-      const key = String(k).trim();
-      const val = typeof v === "string" ? v.trim() : "";
-      if (!key) continue;
-      if (!val) continue;
-      // chỉ nhận link order.atpos.net để tránh rác
-      if (!/^https?:\/\/order\.atpos\.net\//i.test(val)) continue;
-      out[key] = val;
+      if (typeof v === "string" && /^https?:\/\/order\.atpos\.net/.test(v)) {
+        out[String(k)] = v;
+      }
     }
     return Object.keys(out).length ? out : null;
   }
 
   async function fetchJson(url) {
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    return await res.json();
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
   }
-
-  // chống loop: loadLinks không được tự gọi applyLinksMap theo kiểu gây recursion
-  let _isLoadingLinks = false;
 
   async function loadLinks() {
-    if (_isLoadingLinks) return null;
-    _isLoadingLinks = true;
+    try {
+      const map = normalizeLinksMap(await fetchJson(REMOTE_URL()));
+      if (map) return applyLinksMap(map), map;
+    } catch {}
 
     try {
-      console.log("[redirect-core] 📡 Đang tải links.json từ repo QR...");
-      const data = await fetchJson(REMOTE_URL());
-      const map = normalizeLinksMap(data);
-      if (!map) throw new Error("invalid links.json shape/empty");
+      const map = normalizeLinksMap(await fetchJson(LOCAL_URL()));
+      if (map) return applyLinksMap(map), map;
+    } catch {}
 
-      applyLinksMap(map, "QR_REPO");
-      console.log(
-        "[redirect-core] ✅ Loaded links.json từ QR repo:",
-        Object.keys(map).length,
-        "bàn"
-      );
-      return map;
-    } catch (e1) {
-      console.warn("[redirect-core] ⚠️ Không tải được online, thử bản local:", e1);
+    const cache = getState(LS.linksCache);
+    if (cache) {
+      const map = normalizeLinksMap(JSON.parse(cache));
+      if (map) return applyLinksMap(map), map;
+    }
+    return null;
+  }
 
-      try {
-        const data2 = await fetchJson(LOCAL_URL());
-        const map2 = normalizeLinksMap(data2);
-        if (!map2) throw new Error("invalid local links.json shape/empty");
-
-        applyLinksMap(map2, "LOCAL");
-        console.log(
-          "[redirect-core] ✅ Loaded links.json local:",
-          Object.keys(map2).length,
-          "bàn"
-        );
-        return map2;
-      } catch (e2) {
-        console.error("[redirect-core] ❌ loadLinks FAILED hoàn toàn:", e2);
-
-        // thử cache trong localStorage (nếu có)
-        try {
-          const cached = getState(LS.linksCache);
-          if (cached) {
-            const obj = JSON.parse(cached);
-            const map3 = normalizeLinksMap(obj);
-            if (map3) {
-              applyLinksMap(map3, "LS_CACHE");
-              console.log(
-                "[redirect-core] ✅ Loaded links from LS cache:",
-                Object.keys(map3).length,
-                "bàn"
-              );
-              return map3;
-            }
-          }
-        } catch (e3) {}
-
-        LINKS_MAP = null;
-        window.LINKS_MAP = null;
-        return null;
-      }
-    } finally {
-      _isLoadingLinks = false;
+  function applyLinksMap(map) {
+    LINKS_MAP = map;
+    window.LINKS_MAP = map;
+    setState(LS.linksCache, JSON.stringify({ links: map }));
+    if ((getState(LS.appState) || "select") === "select") {
+      renderTablesFromMap(map);
     }
   }
 
-  // Expose cho listener LIVE: apply map mới (không render lại nếu không cần)
-  function applyLinksMap(map, source = "unknown") {
-    const norm = normalizeLinksMap(map) || null;
-    if (!norm) {
-      console.warn("[redirect-core] applyLinksMap: map invalid/empty, ignore. source=", source);
-      return false;
-    }
+  window.getLinkForTable = (t) => LINKS_MAP?.[String(t)] || null;
 
-    LINKS_MAP = norm;
-    window.LINKS_MAP = norm;
-
-    // cache lại để dự phòng
-    try {
-      setState(LS.linksCache, JSON.stringify({ links: norm }));
-      setState(LS.linksCacheAt, Date.now());
-    } catch (e) {}
-
-    // Nếu đang ở màn chọn bàn: render lại list bàn theo map
-    const curState = getState(LS.appState) || "select";
-    if (curState === "select") {
-      renderTablesFromMap(norm);
-      // ép layout reflow sau khi render (fix iOS/Safari)
-      requestAnimationFrame(refreshTableLayout);
-    }
-
-    console.log("[redirect-core] applyLinksMap OK from", source, "count=", Object.keys(norm).length);
-    return true;
-  }
-
-  window.applyLinksMap = applyLinksMap;
-
-  window.getLinkForTable = function (t) {
-    if (!LINKS_MAP) return null;
-    const key = String(t);
-    return LINKS_MAP[key] || null;
-  };
-
-  // ---------------------------
-  // UI NAV
-  // ---------------------------
-  window.gotoSelect = function (keepState = false) {
-    if (!keepState) setState(LS.appState, "select");
-    if (elSelect) elSelect.classList.remove("hidden");
-    if (elStart) elStart.classList.add("hidden");
-    if (elPos) elPos.classList.add("hidden");
-
-    // vào màn chọn bàn thì refresh layout luôn (mở app / xoay màn hình)
+  window.gotoSelect = () => {
+    setState(LS.appState, "select");
+    elSelect?.classList.remove("hidden");
+    elStart?.classList.add("hidden");
+    elPos?.classList.add("hidden");
     requestAnimationFrame(refreshTableLayout);
   };
 
-  window.gotoStart = function (tableId) {
-    const id = String(tableId || getState(LS.tableId) || "").trim();
-    if (!id) return;
-
+  window.gotoStart = (id) => {
     setState(LS.tableId, id);
     setState(LS.appState, "start");
-
-    if (elSelectedTable) elSelectedTable.textContent = id;
-
-    if (elSelect) elSelect.classList.add("hidden");
-    if (elStart) elStart.classList.remove("hidden");
-    if (elPos) elPos.classList.add("hidden");
+    elSelectedTable.textContent = id;
+    elSelect.classList.add("hidden");
+    elStart.classList.remove("hidden");
+    elPos.classList.add("hidden");
   };
 
-  window.gotoPos = function (url) {
-    if (!url || typeof url !== "string") return;
-    const u = url.trim();
-    if (!u) return;
-
-    setState(LS.posLink, u);
+  window.gotoPos = (url) => {
+    setState(LS.posLink, url);
     setState(LS.appState, "pos");
-
-    if (elSelect) elSelect.classList.add("hidden");
-    if (elStart) elStart.classList.add("hidden");
-    if (elPos) elPos.classList.remove("hidden");
-
-    if (iframe && iframe.src !== u) iframe.src = u;
+    elSelect.classList.add("hidden");
+    elStart.classList.add("hidden");
+    elPos.classList.remove("hidden");
+    if (iframe.src !== url) iframe.src = url;
   };
 
-  window.getCurrentTable = function () {
-    return getState(LS.tableId);
-  };
+  window.setPosLink = (url) => window.gotoPos(url);
 
-  // Listener LIVE gọi vào đây để ép link mới ngay
-  window.setPosLink = function (url, source = "LIVE") {
-    const u = (url || "").trim();
-    if (!u) return;
-
-    console.log("[redirect-core] setPosLink from", source, u);
-    setState(LS.posLink, u);
-
-    // nếu đang ở POS hoặc START thì cho nhảy thẳng vào POS luôn
-    window.gotoPos(u);
-  };
-
-  // ---------------------------
-  // RENDER TABLES (RESPONSIVE giống ảnh)
-  // ---------------------------
-  function ensureResponsiveTableGrid() {
-    if (!elTableBox) return;
-
+  /* ===============================
+     RESPONSIVE GRID + AUTO SIZE
+     =============================== */
+  function ensureGrid() {
     elTableBox.style.display = "grid";
-    // xuống cột tốt hơn trên màn nhỏ / xoay dọc
-    elTableBox.style.gridTemplateColumns = "repeat(auto-fit, minmax(140px, 1fr))";
-    elTableBox.style.gap = "22px";
-
-    // không khóa cứng theo chiều ngang (fix xoay màn hình / PWA)
+    elTableBox.style.gridTemplateColumns =
+      "repeat(auto-fit, minmax(120px, 1fr))";
+    elTableBox.style.gap = "clamp(10px, 2vw, 22px)";
     elTableBox.style.width = "100%";
     elTableBox.style.maxWidth = "min(980px, 100%)";
     elTableBox.style.margin = "0 auto";
-    elTableBox.style.padding = "10px 16px";
-    elTableBox.style.alignItems = "stretch";
-    elTableBox.style.boxSizing = "border-box";
+    elTableBox.style.padding = "12px";
   }
 
-  function createTableButton(tableId) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.textContent = `Bàn ${tableId}`;
+  function createTableButton(id) {
+    const b = document.createElement("button");
+    b.textContent = `Bàn ${id}`;
 
-    btn.className =
-      "bg-blue-600 text-white font-semibold rounded-2xl " +
-      "hover:bg-blue-700 active:scale-[0.99] transition " +
-      "shadow-sm";
+    b.className =
+      "bg-blue-600 text-white font-semibold rounded-2xl shadow-sm " +
+      "hover:bg-blue-700 active:scale-[0.98] transition";
 
-    btn.style.width = "100%";
-    btn.style.aspectRatio = "1 / 1";
-    btn.style.display = "flex";
-    btn.style.alignItems = "center";
-    btn.style.justifyContent = "center";
-    btn.style.fontSize = "22px";
+    /* 🔥 AUTO SIZE */
+    b.style.height = "clamp(90px, 18vw, 150px)";
+    b.style.fontSize = "clamp(16px, 4vw, 22px)";
+    b.style.display = "flex";
+    b.style.alignItems = "center";
+    b.style.justifyContent = "center";
+    b.style.width = "100%";
 
-    btn.onclick = () => window.gotoStart(String(tableId));
-    return btn;
+    b.onclick = () => window.gotoStart(id);
+    return b;
   }
 
-  function renderTablesFallback(n = DEFAULT_TABLE_COUNT) {
-    if (!elTableBox) return;
+  function renderTablesFallback(n) {
     elTableBox.innerHTML = "";
-    ensureResponsiveTableGrid();
-
+    ensureGrid();
     for (let i = 1; i <= n; i++) {
       elTableBox.appendChild(createTableButton(i));
     }
-
-    // ép reflow sau khi render (fix iOS)
-    requestAnimationFrame(refreshTableLayout);
+    refreshTableLayout();
   }
 
   function renderTablesFromMap(map) {
-    if (!elTableBox) return;
     elTableBox.innerHTML = "";
-    ensureResponsiveTableGrid();
-
-    const keys = Object.keys(map)
-      .map((k) => String(k))
-      .sort((a, b) => Number(a) - Number(b));
-
-    for (const k of keys) {
-      elTableBox.appendChild(createTableButton(k));
-    }
-
-    if (!keys.length) renderTablesFallback(DEFAULT_TABLE_COUNT);
-
-    // ép reflow sau khi render (fix iOS)
-    requestAnimationFrame(refreshTableLayout);
+    ensureGrid();
+    Object.keys(map)
+      .sort((a, b) => a - b)
+      .forEach((k) => elTableBox.appendChild(createTableButton(k)));
+    refreshTableLayout();
   }
 
-  // ---------------------------
-  // FORCE REFLOW (fix xoay màn hình / iOS Safari / PWA)
-  // ---------------------------
   function refreshTableLayout() {
-    if (!elTableBox) return;
-
-    // chỉ refresh khi đang hiển thị màn chọn bàn
-    const curState = getState(LS.appState) || "select";
-    if (curState !== "select") return;
-
-    ensureResponsiveTableGrid();
-
-    // Ép browser tính lại layout (Safari hay bị giữ layout cũ)
-    const prev = elTableBox.style.display;
+    if ((getState(LS.appState) || "select") !== "select") return;
+    ensureGrid();
     elTableBox.style.display = "none";
-    // eslint-disable-next-line no-unused-expressions
     elTableBox.offsetHeight;
-    elTableBox.style.display = prev || "grid";
+    elTableBox.style.display = "grid";
   }
 
-  // khi xoay / đổi kích thước cửa sổ
-  window.addEventListener("resize", () => {
-    requestAnimationFrame(refreshTableLayout);
-  });
+  window.addEventListener("resize", () =>
+    requestAnimationFrame(refreshTableLayout)
+  );
+  window.addEventListener("orientationchange", () =>
+    setTimeout(refreshTableLayout, 80)
+  );
 
-  window.addEventListener("orientationchange", () => {
-    setTimeout(refreshTableLayout, 80);
-  });
-
-  // ---------------------------
-  // START BUTTON
-  // ---------------------------
   if (btnStart) {
-    btnStart.addEventListener("click", () => {
-      const tableId = getState(LS.tableId);
-      if (!tableId) return;
-
-      // ưu tiên: nếu listener LIVE đã set posLink trong LS thì dùng luôn
-      const livePos = getState(LS.posLink);
-      if (livePos) {
-        window.gotoPos(livePos);
-        return;
-      }
-
-      // fallback: lấy từ LINKS_MAP (links.json)
-      const url = window.getLinkForTable(tableId);
-      if (url) window.gotoPos(url);
-      else console.warn("[redirect-core] No link for table", tableId);
-    });
+    btnStart.onclick = () => {
+      const id = getState(LS.tableId);
+      const live = getState(LS.posLink);
+      if (live) return window.gotoPos(live);
+      const link = window.getLinkForTable(id);
+      if (link) window.gotoPos(link);
+    };
   }
 
-  // ---------------------------
-  // BOOT
-  // ---------------------------
   (async function boot() {
-    console.log("[redirect-core] boot...");
-
-    // 1) Load links.json (nếu fail vẫn render fallback)
     const map = await loadLinks();
-    if (map) renderTablesFromMap(map);
-    else renderTablesFallback(DEFAULT_TABLE_COUNT);
+    map ? renderTablesFromMap(map) : renderTablesFallback(DEFAULT_TABLE_COUNT);
 
-    // 2) Restore state
-    const appState = getState(LS.appState) || "select";
-    const tableId = getState(LS.tableId);
-    const posLink = getState(LS.posLink);
+    const state = getState(LS.appState);
+    if (state === "pos") window.gotoPos(getState(LS.posLink));
+    else if (state === "start") window.gotoStart(getState(LS.tableId));
+    else window.gotoSelect();
 
-    if (appState === "pos" && posLink) {
-      window.gotoPos(posLink);
-    } else if (appState === "start" && tableId) {
-      window.gotoStart(tableId);
-    } else {
-      window.gotoSelect();
-    }
-
-    // 3) refresh links.json mỗi 60s (dự phòng)
-    setInterval(() => {
-      loadLinks().catch(() => {});
-    }, 60000);
-
-    // 4) khi mới mở app (đặc biệt PWA) ép refresh layout 1 lần nữa
     setTimeout(refreshTableLayout, 120);
-
-    console.log("[redirect-core] boot OK");
   })();
 })();
