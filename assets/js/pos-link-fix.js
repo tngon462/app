@@ -116,7 +116,7 @@
   }
 
   function boot(){
-    hookStartButton();
+    //hookStartButton();
     hookTableChange();
     wrapGotoStart();
     log('patch ready (prefer links_live)');
