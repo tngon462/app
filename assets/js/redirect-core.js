@@ -1,9 +1,10 @@
 /**
- * assets/js/redirect-core.js (CLEAN SAFE)
+ * assets/js/redirect-core.js (CLEAN SAFE + AUTO-FIT)
  * - Giữ 3 màn: #select-table, #start-screen, #pos-container
- * - Render nút bàn vào #table-container (UI giữ nguyên theo HTML/CSS hiện tại)
+ * - Auto-fit grid: tự đổi số cột theo màn hình (PC/iPad/Phone)
+ * - Nút bàn: "Bàn X" + tự co giãn kích thước
  * - Load links.json từ GitHub raw (repo QR/main) + fallback local + fallback LS cache + fallback 1..N
- * - Không đệ quy / không loop / không override hàm lung tung
+ * - Không loop / không override bừa
  * - Expose:
  *    window.gotoSelect(keepState?)
  *    window.gotoStart(tableId)
@@ -142,18 +143,64 @@
   }
 
   // ---------------------------
-  // Render buttons (UI giữ nguyên)
+  // AUTO-FIT GRID (100%)
+  // ---------------------------
+  function setAutoFitGrid() {
+    if (!elTableBox) return;
+
+    const w = Math.max(320, window.innerWidth || 0);
+
+    // min ô theo màn hình
+    let minCell = 160;   // phone
+    if (w >= 768) minCell = 220;   // iPad
+    if (w >= 1024) minCell = 260;  // PC
+
+    // ép container nhìn giống ảnh, không kéo quá rộng
+    elTableBox.style.width = "min(1200px, 96vw)";
+    elTableBox.style.marginLeft = "auto";
+    elTableBox.style.marginRight = "auto";
+
+    // auto-fit
+    elTableBox.style.display = "grid";
+    elTableBox.style.gridTemplateColumns = `repeat(auto-fit, minmax(${minCell}px, 1fr))`;
+    elTableBox.style.alignItems = "stretch";
+    elTableBox.style.justifyItems = "stretch";
+
+    // gap ưu tiên giống ảnh (nếu HTML đã có gap thì vẫn ok)
+    // Nếu sếp muốn giữ đúng HTML thì comment 2 dòng dưới.
+    elTableBox.style.gap = "24px";
+    elTableBox.style.paddingLeft = "16px";
+    elTableBox.style.paddingRight = "16px";
+  }
+
+  // ---------------------------
+  // Render buttons (UI giống ảnh)
   // ---------------------------
   function makeTableButton(label) {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.textContent = String(label);
+    btn.textContent = `Bàn ${String(label)}`;
 
-    // Giữ style giống bản trước (không đụng UI)
-    // Nếu sếp muốn auto-size mạnh hơn thì chỉnh tại đây, nhưng hiện tại giữ ổn định.
-    btn.className =
-      "rounded-xl bg-gray-100 text-gray-900 font-bold hover:bg-blue-500 hover:text-white " +
-      "h-20 text-2xl";
+    btn.className = [
+      "w-full",
+      "rounded-2xl",
+      "bg-blue-600",
+      "text-white",
+      "font-extrabold",
+      "shadow-lg",
+      "hover:bg-blue-700",
+      "active:scale-[0.99]",
+      "transition",
+      "select-none",
+      "flex",
+      "items-center",
+      "justify-center",
+      "px-4",
+      // chiều cao tự co giãn: phone ~90px, tablet ~120px, pc ~150px
+      "min-h-[clamp(90px,12vh,150px)]",
+      // chữ tự co giãn
+      "text-[clamp(18px,2.2vw,34px)]",
+    ].join(" ");
 
     btn.addEventListener("click", () => window.gotoStart(String(label)));
     return btn;
@@ -161,6 +208,7 @@
 
   function renderTablesFromKeys(keys) {
     if (!elTableBox) return;
+    setAutoFitGrid();
     elTableBox.innerHTML = "";
     for (const k of keys) elTableBox.appendChild(makeTableButton(k));
   }
@@ -233,7 +281,6 @@
   };
 
   window.getCurrentTable = function () {
-    // ưu tiên state, fallback LS
     return state.tableId || getLS(LS.tableId, null);
   };
 
@@ -242,16 +289,12 @@
     const u = String(url || "").trim();
     if (!u) return;
 
-    // tránh spam cùng 1 link
     const cur = state.posLink || getLS(LS.posLink, "");
     if (cur === u) return;
 
     console.log("[redirect-core] setPosLink from", source, u);
 
-    // lưu + nhảy POS
     setLS(LS.posLink, u);
-
-    // nếu đã chọn bàn rồi hoặc đang ở start/pos thì nhảy luôn
     window.gotoPos(u);
   };
 
@@ -265,21 +308,18 @@
 
     const newHash = stableHashFromMap(norm);
     if (newHash && state.linksHash === newHash) {
-      // không đổi -> khỏi render lại
       return true;
     }
 
     state.linksMap = norm;
     state.linksHash = newHash;
 
-    // cache LS để dự phòng
     try {
       setLS(LS.linksCache, JSON.stringify({ links: norm }));
       setLS(LS.linksCacheAt, Date.now());
       if (newHash) setLS(LS.linksCacheHash, newHash);
     } catch (_) {}
 
-    // chỉ render lại list bàn khi đang ở màn chọn bàn
     const curState = getLS(LS.appState, "select");
     if (curState === "select") renderTablesFromMap(norm);
 
@@ -342,7 +382,7 @@
   }
 
   // ---------------------------
-  // START button (giữ logic như HTML)
+  // START button
   // ---------------------------
   if (btnStart) {
     btnStart.addEventListener("click", () => {
@@ -366,8 +406,19 @@
   // ---------------------------
   // BOOT
   // ---------------------------
+  let _resizeTimer = null;
+  function onResize() {
+    if (_resizeTimer) clearTimeout(_resizeTimer);
+    _resizeTimer = setTimeout(() => {
+      setAutoFitGrid();
+    }, 120);
+  }
+
   async function boot() {
     console.log("[redirect-core] boot...");
+
+    setAutoFitGrid();
+    window.addEventListener("resize", onResize, { passive: true });
 
     // 1) load links (nếu fail vẫn render fallback)
     const map = await loadLinksOnce();
