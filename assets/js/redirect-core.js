@@ -72,39 +72,60 @@
   // ----- links.json -----
   let LINKS_MAP = null;
 
-  async function loadLinks(){
-    const remoteUrl = 'https://raw.githubusercontent.com/tngon462/QR/main/links.json?cb=' + Date.now();
-    const localUrl  = './links.json?cb=' + Date.now();
-
-    try {
-      console.log('[redirect-core] 📡 Đang tải links.json từ repo QR...');
-      const res = await fetch(remoteUrl, { cache: 'no-store' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
-      const map = data?.links || data;
-      if (!map || typeof map !== 'object' || Array.isArray(map)) throw new Error('invalid links.json shape');
-      LINKS_MAP = map;
-      window.LINKS_MAP = map;
-      console.log('[redirect-core] ✅ Loaded links.json từ QR repo:', Object.keys(map).length, 'bàn');
-      return map;
-    } catch (e) {
-      console.warn('[redirect-core] ⚠️ Không tải được online, thử bản local:', e);
-      try {
-        const res2 = await fetch(localUrl, { cache: 'no-store' });
-        const data2 = await res2.json();
-        const map2 = data2?.links || data2;
-        LINKS_MAP = map2;
-        window.LINKS_MAP = map2;
-        console.log('[redirect-core] ✅ Loaded links.json local:', Object.keys(map2).length, 'bàn');
-        return map2;
-      } catch (e2) {
-        console.error('[redirect-core] ❌ loadLinks FAILED hoàn toàn:', e2);
-        LINKS_MAP = null;
-        window.LINKS_MAP = null;
-        return null;
+async function loadLinks(){
+  // 1) Ưu tiên Firebase live links (từ QRMASTER)
+  try {
+    if (window.firebase?.database) {
+      console.log('[redirect-core] 🔥 Đang tải links từ Firebase links_live...');
+      const snap = await window.firebase.database().ref('links_live/links').get();
+      const mapFb = snap?.val?.() ?? snap?.val?.();
+      if (mapFb && typeof mapFb === 'object' && !Array.isArray(mapFb) && Object.keys(mapFb).length) {
+        LINKS_MAP = mapFb;
+        window.LINKS_MAP = mapFb;
+        console.log('[redirect-core] ✅ Loaded links từ Firebase:', Object.keys(mapFb).length, 'bàn');
+        return mapFb;
       }
+      console.warn('[redirect-core] ⚠️ Firebase links_live rỗng/invalid -> fallback GitHub');
+    } else {
+      console.warn('[redirect-core] ⚠️ Firebase chưa sẵn sàng -> fallback GitHub');
+    }
+  } catch (e) {
+    console.warn('[redirect-core] ⚠️ Lỗi đọc Firebase links_live -> fallback GitHub:', e);
+  }
+
+  // 2) Fallback GitHub (như cũ)
+  const remoteUrl = 'https://raw.githubusercontent.com/tngon462/QR/main/links.json?cb=' + Date.now();
+  const localUrl  = './links.json?cb=' + Date.now();
+
+  try {
+    console.log('[redirect-core] 📡 Đang tải links.json từ repo QR (GitHub fallback)...');
+    const res = await fetch(remoteUrl, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const map = data?.links || data;
+    if (!map || typeof map !== 'object' || Array.isArray(map)) throw new Error('invalid links.json shape');
+    LINKS_MAP = map;
+    window.LINKS_MAP = map;
+    console.log('[redirect-core] ✅ Loaded links.json từ QR repo:', Object.keys(map).length, 'bàn');
+    return map;
+  } catch (e) {
+    console.warn('[redirect-core] ⚠️ Không tải được online, thử bản local:', e);
+    try {
+      const res2 = await fetch(localUrl, { cache: 'no-store' });
+      const data2 = await res2.json();
+      const map2 = data2?.links || data2;
+      LINKS_MAP = map2;
+      window.LINKS_MAP = map2;
+      console.log('[redirect-core] ✅ Loaded links.json local:', Object.keys(map2).length, 'bàn');
+      return map2;
+    } catch (e2) {
+      console.error('[redirect-core] ❌ loadLinks FAILED hoàn toàn:', e2);
+      LINKS_MAP = null;
+      window.LINKS_MAP = null;
+      return null;
     }
   }
+}
 
   window.getLinkForTable = function(t){
     if (!LINKS_MAP) return null;
