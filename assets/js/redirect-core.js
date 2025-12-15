@@ -178,6 +178,8 @@
     const curState = getState(LS.appState) || "select";
     if (curState === "select") {
       renderTablesFromMap(norm);
+      // ép layout reflow sau khi render (fix iOS/Safari)
+      requestAnimationFrame(refreshTableLayout);
     }
 
     console.log("[redirect-core] applyLinksMap OK from", source, "count=", Object.keys(norm).length);
@@ -200,6 +202,9 @@
     if (elSelect) elSelect.classList.remove("hidden");
     if (elStart) elStart.classList.add("hidden");
     if (elPos) elPos.classList.add("hidden");
+
+    // vào màn chọn bàn thì refresh layout luôn (mở app / xoay màn hình)
+    requestAnimationFrame(refreshTableLayout);
   };
 
   window.gotoStart = function (tableId) {
@@ -253,16 +258,18 @@
   function ensureResponsiveTableGrid() {
     if (!elTableBox) return;
 
-    // Grid auto-fit theo màn hình: tự tăng/giảm số cột
     elTableBox.style.display = "grid";
-    elTableBox.style.gridTemplateColumns = "repeat(auto-fit, minmax(170px, 1fr))";
+    // xuống cột tốt hơn trên màn nhỏ / xoay dọc
+    elTableBox.style.gridTemplateColumns = "repeat(auto-fit, minmax(140px, 1fr))";
     elTableBox.style.gap = "22px";
 
-    // Giống ảnh: cụm nút nằm giữa, không kéo quá rộng
-    elTableBox.style.maxWidth = "980px"; // desktop ra khoảng 5 cột như ảnh
+    // không khóa cứng theo chiều ngang (fix xoay màn hình / PWA)
+    elTableBox.style.width = "100%";
+    elTableBox.style.maxWidth = "min(980px, 100%)";
     elTableBox.style.margin = "0 auto";
     elTableBox.style.padding = "10px 16px";
     elTableBox.style.alignItems = "stretch";
+    elTableBox.style.boxSizing = "border-box";
   }
 
   function createTableButton(tableId) {
@@ -270,13 +277,11 @@
     btn.type = "button";
     btn.textContent = `Bàn ${tableId}`;
 
-    // Style giống ảnh: xanh, chữ trắng, bo tròn
     btn.className =
       "bg-blue-600 text-white font-semibold rounded-2xl " +
       "hover:bg-blue-700 active:scale-[0.99] transition " +
       "shadow-sm";
 
-    // Vuông theo ô grid + chữ giữa
     btn.style.width = "100%";
     btn.style.aspectRatio = "1 / 1";
     btn.style.display = "flex";
@@ -296,6 +301,9 @@
     for (let i = 1; i <= n; i++) {
       elTableBox.appendChild(createTableButton(i));
     }
+
+    // ép reflow sau khi render (fix iOS)
+    requestAnimationFrame(refreshTableLayout);
   }
 
   function renderTablesFromMap(map) {
@@ -312,7 +320,39 @@
     }
 
     if (!keys.length) renderTablesFallback(DEFAULT_TABLE_COUNT);
+
+    // ép reflow sau khi render (fix iOS)
+    requestAnimationFrame(refreshTableLayout);
   }
+
+  // ---------------------------
+  // FORCE REFLOW (fix xoay màn hình / iOS Safari / PWA)
+  // ---------------------------
+  function refreshTableLayout() {
+    if (!elTableBox) return;
+
+    // chỉ refresh khi đang hiển thị màn chọn bàn
+    const curState = getState(LS.appState) || "select";
+    if (curState !== "select") return;
+
+    ensureResponsiveTableGrid();
+
+    // Ép browser tính lại layout (Safari hay bị giữ layout cũ)
+    const prev = elTableBox.style.display;
+    elTableBox.style.display = "none";
+    // eslint-disable-next-line no-unused-expressions
+    elTableBox.offsetHeight;
+    elTableBox.style.display = prev || "grid";
+  }
+
+  // khi xoay / đổi kích thước cửa sổ
+  window.addEventListener("resize", () => {
+    requestAnimationFrame(refreshTableLayout);
+  });
+
+  window.addEventListener("orientationchange", () => {
+    setTimeout(refreshTableLayout, 80);
+  });
 
   // ---------------------------
   // START BUTTON
@@ -364,6 +404,9 @@
     setInterval(() => {
       loadLinks().catch(() => {});
     }, 60000);
+
+    // 4) khi mới mở app (đặc biệt PWA) ép refresh layout 1 lần nữa
+    setTimeout(refreshTableLayout, 120);
 
     console.log("[redirect-core] boot OK");
   })();
