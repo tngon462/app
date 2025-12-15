@@ -1,5 +1,14 @@
 /**
- * assets/js/redirect-core.js (SAFE FULL)
+ * assets/js/redirect-core.js (SAFE FULL - FIXED)
+ * - Giữ 3 màn: #select-table, #start-screen, #pos-container
+ * - Load links.json từ GitHub raw + fallback local + fallback cache + fallback render 1..N
+ * - Responsive grid + auto size nút
+ * - Expose:
+ *    window.gotoSelect / gotoStart / gotoPos
+ *    window.getLinkForTable(tableId)
+ *    window.applyLinksMap(map, source)
+ *    window.setPosLink(url, source)
+ *    window.getCurrentTable()
  */
 
 (function () {
@@ -24,13 +33,13 @@
   const LS = {
     tableId: "tableId",
     posLink: "posLink",
-    appState: "appState",
+    appState: "appState", // 'select'|'start'|'pos'
     linksCache: "linksCache",
   };
 
   const setState = (k, v) => {
     try {
-      v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+      v == null ? localStorage.removeItem(k) : localStorage.setItem(k, String(v));
     } catch {}
   };
   const getState = (k) => {
@@ -41,14 +50,29 @@
     }
   };
 
+  // ===== UI helpers (quan trọng để tránh kẹt display) =====
+  function hide(el) {
+    if (!el) return;
+    el.classList.add("hidden");
+    // tránh trường hợp CSS/inline display kẹt
+    if (el === elPos) el.style.display = "none";
+  }
+  function show(el) {
+    if (!el) return;
+    el.classList.remove("hidden");
+    if (el === elPos) el.style.display = "";
+  }
+
+  // ===== Links Map =====
   let LINKS_MAP = null;
 
   function normalizeLinksMap(data) {
     const map = data?.links || data;
-    if (!map || typeof map !== "object") return null;
+    if (!map || typeof map !== "object" || Array.isArray(map)) return null;
 
     const out = {};
     for (const [k, v] of Object.entries(map)) {
+      // giữ selector/logic cũ: chỉ nhận link atpos
       if (typeof v === "string" && /^https?:\/\/order\.atpos\.net/.test(v)) {
         out[String(k)] = v;
       }
@@ -58,91 +82,145 @@
 
   async function fetchJson(url) {
     const r = await fetch(url, { cache: "no-store" });
-    if (!r.ok) throw new Error(r.status);
+    if (!r.ok) throw new Error("HTTP " + r.status);
     return r.json();
   }
 
-  async function loadLinks() {
-    try {
-      const map = normalizeLinksMap(await fetchJson(REMOTE_URL()));
-      if (map) return applyLinksMap(map), map;
-    } catch {}
-
-    try {
-      const map = normalizeLinksMap(await fetchJson(LOCAL_URL()));
-      if (map) return applyLinksMap(map), map;
-    } catch {}
-
-    const cache = getState(LS.linksCache);
-    if (cache) {
-      const map = normalizeLinksMap(JSON.parse(cache));
-      if (map) return applyLinksMap(map), map;
-    }
-    return null;
-  }
-
-  function applyLinksMap(map) {
+  function applyLinksMap(map, source = "unknown") {
     LINKS_MAP = map;
     window.LINKS_MAP = map;
-    setState(LS.linksCache, JSON.stringify({ links: map }));
+    setState(LS.linksCache, JSON.stringify({ links: map, source, savedAt: Date.now() }));
+
+    // nếu đang ở màn select thì render lại ngay
     if ((getState(LS.appState) || "select") === "select") {
       renderTablesFromMap(map);
     }
   }
+  window.applyLinksMap = applyLinksMap;
 
-  window.getLinkForTable = (t) => LINKS_MAP?.[String(t)] || null;
-  // ✅ expose current table cho các module khác (probe / pos-link-fix / qrback-listener)
-window.getCurrentTable = () => getState(LS.tableId) || null;
+  async function loadLinks() {
+    // 1) remote
+    try {
+      const map = normalizeLinksMap(await fetchJson(REMOTE_URL()));
+      if (map) {
+        applyLinksMap(map, "remote");
+        return map;
+      }
+    } catch {}
 
-  window.gotoSelect = () => {
+    // 2) local
+    try {
+      const map = normalizeLinksMap(await fetchJson(LOCAL_URL()));
+      if (map) {
+        applyLinksMap(map, "local");
+        return map;
+      }
+    } catch {}
+
+    // 3) cache
+    try {
+      const cache = getState(LS.linksCache);
+      if (cache) {
+        const map = normalizeLinksMap(JSON.parse(cache));
+        if (map) {
+          applyLinksMap(map, "cache");
+          return map;
+        }
+      }
+    } catch {}
+
+    return null;
+  }
+
+  window.getLinkForTable = (t) => {
+    const key = String(t ?? "");
+    return LINKS_MAP?.[key] || null;
+  };
+
+  window.getCurrentTable = () => getState(LS.tableId) || null;
+
+  // ===== Navigation =====
+  window.gotoSelect = (clear = false) => {
+    if (clear) {
+      setState(LS.tableId, null);
+      setState(LS.posLink, null);
+      // compatibility keys
+      setState("table", null);
+      setState("tngon_table", null);
+      try {
+        delete window.tableId;
+      } catch {}
+    }
+
     setState(LS.appState, "select");
-    elSelect?.classList.remove("hidden");
-    elStart?.classList.add("hidden");
-    elPos?.classList.add("hidden");
+
+    // reset iframe
+    if (iframe) iframe.src = "about:blank";
+
+    hide(elPos);
+    hide(elStart);
+    show(elSelect);
+
     requestAnimationFrame(refreshTableLayout);
   };
 
   window.gotoStart = (id) => {
-  // ✅ cho phép gọi gotoStart() không truyền id (QRBACK/QRMASTER hay gọi kiểu này)
-  id = String(
-    id || getState(LS.tableId) || getState("table") || getState("tngon_table") || ""
-  ).trim();
+    // ✅ cho phép gọi gotoStart() không truyền id (QRBACK/QRMASTER hay gọi kiểu này)
+    id = String(
+      id ||
+        getState(LS.tableId) ||
+        getState("table") ||
+        getState("tngon_table") ||
+        ""
+    ).trim();
 
-  if (!id) return window.gotoSelect?.(); // hoặc: return;
-  ...
-};
+    if (!id) return window.gotoSelect(false);
 
-  setState(LS.tableId, id);
+    // lưu table
+    setState(LS.tableId, id);
+    // compat keys
+    setState("table", id);
+    setState("tngon_table", id);
+    window.tableId = id;
 
-  // ✅ thêm 2 dòng này để tương thích mấy file khác (nếu nó đọc key khác)
-  setState("table", id);
-  setState("tngon_table", id);
+    setState(LS.appState, "start");
 
-  setState(LS.appState, "start");
-  elSelectedTable.textContent = id;
-  elSelect.classList.add("hidden");
-  elStart.classList.remove("hidden");
-  elPos.classList.add("hidden");
-};
+    if (elSelectedTable) elSelectedTable.textContent = id;
 
-  window.gotoPos = (url) => {
-    setState(LS.posLink, url);
-    setState(LS.appState, "pos");
-    elSelect.classList.add("hidden");
-    elStart.classList.add("hidden");
-    elPos.classList.remove("hidden");
-    if (iframe.src !== url) iframe.src = url;
+    // reset iframe khi quay về start (tránh kẹt / about:blank loop)
+    if (iframe) iframe.src = "about:blank";
+
+    hide(elPos);
+    hide(elSelect);
+    show(elStart);
   };
 
-  window.setPosLink = (url) => window.gotoPos(url);
+  window.gotoPos = (url) => {
+    const id = getState(LS.tableId);
+    const finalUrl = url || getState(LS.posLink) || window.getLinkForTable(id);
 
-  /* ===============================
-     RESPONSIVE GRID + AUTO SIZE
-     =============================== */
+    if (!finalUrl) {
+      alert("Chưa có link POS của bàn này.");
+      return window.gotoSelect(false);
+    }
+
+    setState(LS.posLink, finalUrl);
+    setState(LS.appState, "pos");
+
+    hide(elSelect);
+    hide(elStart);
+    show(elPos);
+
+    if (iframe && iframe.src !== finalUrl) iframe.src = finalUrl;
+  };
+
+  window.setPosLink = (url /*, source */) => window.gotoPos(url);
+
+  // ===== Responsive grid + auto size button =====
   function ensureGrid() {
+    if (!elTableBox) return;
     elTableBox.style.display = "grid";
-    elTableBox.style.gridTemplateColumns =
-      "repeat(auto-fit, minmax(120px, 1fr))";
+    elTableBox.style.gridTemplateColumns = "repeat(auto-fit, minmax(120px, 1fr))";
     elTableBox.style.gap = "clamp(10px, 2vw, 22px)";
     elTableBox.style.width = "100%";
     elTableBox.style.maxWidth = "min(980px, 100%)";
@@ -153,12 +231,11 @@ window.getCurrentTable = () => getState(LS.tableId) || null;
   function createTableButton(id) {
     const b = document.createElement("button");
     b.textContent = `Bàn ${id}`;
-
     b.className =
       "bg-blue-600 text-white font-semibold rounded-2xl shadow-sm " +
       "hover:bg-blue-700 active:scale-[0.98] transition";
 
-    /* 🔥 AUTO SIZE */
+    // AUTO SIZE
     b.style.height = "clamp(90px, 18vw, 150px)";
     b.style.fontSize = "clamp(16px, 4vw, 22px)";
     b.style.display = "flex";
@@ -166,11 +243,12 @@ window.getCurrentTable = () => getState(LS.tableId) || null;
     b.style.justifyContent = "center";
     b.style.width = "100%";
 
-    b.onclick = () => window.gotoStart(id);
+    b.onclick = () => window.gotoStart(String(id));
     return b;
   }
 
-  function renderTablesFallback(n) {
+  function renderTablesFallback(n = DEFAULT_TABLE_COUNT) {
+    if (!elTableBox) return;
     elTableBox.innerHTML = "";
     ensureGrid();
     for (let i = 1; i <= n; i++) {
@@ -180,47 +258,84 @@ window.getCurrentTable = () => getState(LS.tableId) || null;
   }
 
   function renderTablesFromMap(map) {
+    if (!elTableBox) return;
     elTableBox.innerHTML = "";
     ensureGrid();
     Object.keys(map)
-      .sort((a, b) => a - b)
+      .sort((a, b) => Number(a) - Number(b))
       .forEach((k) => elTableBox.appendChild(createTableButton(k)));
     refreshTableLayout();
   }
 
   function refreshTableLayout() {
+    // chỉ cần refresh khi đang ở select
     if ((getState(LS.appState) || "select") !== "select") return;
+    if (!elTableBox) return;
+
     ensureGrid();
+
+    // trick reflow để grid co giãn chuẩn
     elTableBox.style.display = "none";
+    // eslint-disable-next-line no-unused-expressions
     elTableBox.offsetHeight;
     elTableBox.style.display = "grid";
   }
 
-  window.addEventListener("resize", () =>
-    requestAnimationFrame(refreshTableLayout)
-  );
-  window.addEventListener("orientationchange", () =>
-    setTimeout(refreshTableLayout, 80)
-  );
+  window.addEventListener("resize", () => requestAnimationFrame(refreshTableLayout));
+  window.addEventListener("orientationchange", () => setTimeout(refreshTableLayout, 80));
 
+  // ===== Start button =====
   if (btnStart) {
     btnStart.onclick = () => {
-      const id = getState(LS.tableId);
       const live = getState(LS.posLink);
       if (live) return window.gotoPos(live);
+
+      const id = getState(LS.tableId);
       const link = window.getLinkForTable(id);
-      if (link) window.gotoPos(link);
+      if (link) return window.gotoPos(link);
+
+      alert("Chưa có link POS của bàn này.");
+      window.gotoSelect(false);
     };
   }
 
+  // ===== Remote table change event (nếu device-bind dùng) =====
+  window.addEventListener("tngon:tableChanged", (ev) => {
+    const { table, url } = (ev && ev.detail) || {};
+    if (!table) return;
+
+    const id = String(table);
+    setState(LS.tableId, id);
+    setState("table", id);
+    setState("tngon_table", id);
+    window.tableId = id;
+
+    const finalUrl = url ?? window.getLinkForTable(id) ?? getState(LS.posLink) ?? null;
+    if (finalUrl) setState(LS.posLink, finalUrl);
+
+    if (elSelectedTable) elSelectedTable.textContent = id;
+    window.gotoStart(id);
+  });
+
+  // ===== Boot =====
   (async function boot() {
+    // nếu element bị thiếu => khỏi chạy để tránh reload loop
+    if (!elSelect || !elStart || !elPos || !elTableBox) {
+      console.warn("[redirect-core] Missing required DOM elements. Abort init.");
+      return;
+    }
+
     const map = await loadLinks();
     map ? renderTablesFromMap(map) : renderTablesFallback(DEFAULT_TABLE_COUNT);
 
-    const state = getState(LS.appState);
-    if (state === "pos") window.gotoPos(getState(LS.posLink));
-    else if (state === "start") window.gotoStart(getState(LS.tableId));
-    else window.gotoSelect();
+    const state = getState(LS.appState) || "select";
+    if (state === "pos") {
+      window.gotoPos(getState(LS.posLink));
+    } else if (state === "start") {
+      window.gotoStart(getState(LS.tableId));
+    } else {
+      window.gotoSelect(false);
+    }
 
     setTimeout(refreshTableLayout, 120);
   })();
