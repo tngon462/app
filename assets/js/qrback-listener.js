@@ -1,4 +1,4 @@
-// /assets/js/qrback-listener.js
+// /assets/js/qrback-listener.js ccc
 (function () {
   'use strict';
   const log  = (...a)=> console.log('[qrback]', ...a);
