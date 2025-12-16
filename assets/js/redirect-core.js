@@ -1,194 +1,236 @@
 /**
- * assets/js/redirect-core.js (PATCHED FINAL)
- * - Đổi bàn ăn NGAY, không cần reload
- * - Đồng bộ STAGE cho admin (select / start / pos)
- * - Không phá qrback
+ * assets/js/redirect-core.js
+ * FULL + SAFE + NO RACE
+ *
+ * Quy ước:
+ *  - redirect-core: QUYỀN DUY NHẤT gotoPos
+ *  - links-live: CHỈ set LIVE url
+ *  - qrback: CHỈ gotoStart
  */
 
 (function () {
   "use strict";
 
+  /* ===================== DOM ===================== */
   const $ = (id) => document.getElementById(id);
 
   const elSelect = $("select-table");
-  const elStart = $("start-screen");
-  const elPos = $("pos-container");
-  const elTableBox = $("table-container");
-  const elSelectedTable = $("selected-table");
-  const iframe = $("pos-frame");
+  const elStart  = $("start-screen");
+  const elPos    = $("pos-container");
+  const elBox    = $("table-container");
+  const elLabel  = $("selected-table");
+  const iframe   = $("pos-frame");
   const btnStart = $("start-order");
 
+  /* ===================== CONFIG ===================== */
   const DEFAULT_TABLE_COUNT = 15;
+  const REFRESH_MS = 60_000;
+
   const REMOTE_URL = () =>
     `https://raw.githubusercontent.com/tngon462/QR/main/links.json?cb=${Date.now()}`;
   const LOCAL_URL = () => `./links.json?cb=${Date.now()}`;
-  const REFRESH_MS = 60_000;
-  const ACCEPT_URL = /^https?:\/\/order\.atpos\.net\//i;
 
+  const ACCEPT_POS = /^https?:\/\/order\.atpos\.net\//i;
+  const LIVE_TTL = 10 * 60 * 1000;
+
+  /* ===================== STORAGE ===================== */
   const LS = {
-    tableId: "tableId",
-    posLink: "posLink",
-    appState: "appState",
+    table: "tableId",
+    state: "appState", // select | start | pos
     linksCache: "linksCache",
-    linksCacheHash: "linksCacheHash",
+    liveUrlPrefix: "liveUrl:",
+    liveAtPrefix:  "liveAt:",
   };
 
+  const liveKey = (t) => LS.liveUrlPrefix + t;
+  const liveAt  = (t) => LS.liveAtPrefix + t;
+
+  const getLS = (k, d = null) => {
+    try { return localStorage.getItem(k) ?? d; } catch { return d; }
+  };
+  const setLS = (k, v) => {
+    try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {}
+  };
+
+  /* ===================== STATE ===================== */
   const state = {
     tableId: null,
-    posLink: null,
     linksMap: null,
-    linksHash: null,
-  };
-  // ---------------------------
-  // Report stage to Admin (if screen-state.js provides it)
-  // ---------------------------
-  function reportStageSafe(stage, by) {
-    try {
-      if (typeof window.reportStage === 'function') window.reportStage(stage, by);
-    } catch (_) {}
-  }
-  const setLS = (k, v) => {
-    try {
-      if (v == null || v === "") localStorage.removeItem(k);
-      else localStorage.setItem(k, String(v));
-    } catch {}
-  };
-  const getLS = (k, d = null) => {
-    try {
-      const v = localStorage.getItem(k);
-      return v === null ? d : v;
-    } catch {
-      return d;
-    }
   };
 
-  // ===== report STAGE cho admin (nếu có screen-state.js)
-  function reportStageSafe(stage, by) {
-    try {
-      if (typeof window.reportStage === "function") {
-        window.reportStage(stage, by);
-      }
-    } catch {}
-  }
+  const now = () => Date.now();
 
-  function showScreen(which) {
-    if (elSelect) elSelect.classList.toggle("hidden", which !== "select");
-    if (elStart) elStart.classList.toggle("hidden", which !== "start");
-    if (elPos) elPos.classList.toggle("hidden", which !== "pos");
+  /* ===================== UI ===================== */
+  function show(screen) {
+    elSelect?.classList.toggle("hidden", screen !== "select");
+    elStart ?.classList.toggle("hidden", screen !== "start");
+    elPos   ?.classList.toggle("hidden", screen !== "pos");
   }
 
   function resetIframe() {
-    try {
-      if (iframe) iframe.src = "about:blank";
-    } catch {}
+    if (iframe) iframe.src = "about:blank";
   }
 
-  function clearPosLink(reason) {
-    state.posLink = null;
-    setLS(LS.posLink, null);
-    resetIframe();
-    if (reason) console.log("[redirect-core] clearPosLink:", reason);
+  function setAutoFit() {
+    if (!elBox) return;
+    const w = window.innerWidth || 800;
+    const min = w >= 1024 ? 260 : w >= 768 ? 220 : 160;
+    elBox.style.display = "grid";
+    elBox.style.gridTemplateColumns = `repeat(auto-fit,minmax(${min}px,1fr))`;
+    elBox.style.gap = "24px";
   }
 
-  // ===== NAVIGATION =====
-  window.gotoSelect = function (keep = false) {
-    if (!keep) {
-      setLS(LS.appState, "select");
-      clearPosLink("gotoSelect");
-    }
-    showScreen("select");
-    reportStageSafe("select", "gotoSelect");
-  };
+  /* ===================== TABLE RENDER ===================== */
+  function makeBtn(t) {
+    const b = document.createElement("button");
+    b.textContent = `Bàn ${t}`;
+    b.className =
+      "rounded-2xl bg-blue-600 text-white font-extrabold text-2xl py-10 shadow";
+    b.onclick = () => window.gotoStart(String(t));
+    return b;
+  }
 
-  window.gotoStart = function (tableId) {
-    const id = String(tableId || "").trim();
-    if (!id) return;
+  function renderTables(keys) {
+    if (!elBox) return;
+    elBox.innerHTML = "";
+    setAutoFit();
+    keys.forEach((k) => elBox.appendChild(makeBtn(k)));
+  }
 
-    state.tableId = id;
-    setLS(LS.tableId, id);
-    setLS(LS.appState, "start");
+  function renderFallback(n = DEFAULT_TABLE_COUNT) {
+    const keys = [];
+    for (let i = 1; i <= n; i++) keys.push(String(i));
+    renderTables(keys);
+  }
 
-    clearPosLink("gotoStart(" + id + ")");
-    if (elSelectedTable) elSelectedTable.textContent = id;
-
-    showScreen("start");
-    reportStageSafe("start", "gotoStart");
-  };
-
-  window.gotoPos = function (url) {
-    const u = String(url || "").trim();
-    if (!u) return;
-
-    state.posLink = u;
-    setLS(LS.posLink, u);
-    setLS(LS.appState, "pos");
-
-    showScreen("pos");
-    reportStageSafe("pos", "gotoPos");
-
-    if (iframe) {
-      iframe.src = "about:blank";
-      setTimeout(() => (iframe.src = u), 30);
-    }
-  };
-
-  // ===== ADMIN đổi bàn → ăn NGAY
-  window.addEventListener("tngon:tableChanged", (e) => {
-    const t =
-      e?.detail?.value ||
-      e?.detail?.table ||
-      getLS(LS.tableId, "");
-    if (t) window.gotoStart(String(t));
-  });
-
-  // ===== LINKS =====
-  function normalizeLinksMap(data) {
-    const raw =
-      data && data.links && typeof data.links === "object"
-        ? data.links
-        : data;
+  /* ===================== LINKS ===================== */
+  function normalizeLinks(data) {
+    const raw = data?.links ?? data;
     if (!raw || typeof raw !== "object") return null;
+
     const out = {};
     for (const [k, v] of Object.entries(raw)) {
-      if (typeof v === "string" && ACCEPT_URL.test(v)) out[k] = v;
+      if (typeof v === "string" && ACCEPT_POS.test(v)) out[String(k)] = v;
     }
     return Object.keys(out).length ? out : null;
   }
 
-  window.setPosLink = function (url, source = "LIVE") {
-    const u = String(url || "").trim();
-    if (!u) return;
-    console.log("[redirect-core] setPosLink FORCE", source, u);
-    window.gotoPos(u);
-  };
-
-    // ---------------------------
-  // Admin đổi bàn -> ép gotoStart ngay (khỏi reload)
-  // bind module sẽ dispatch event 'tngon:tableChanged'
-  // ---------------------------
-  window.addEventListener('tngon:tableChanged', (e) => {
+  async function fetchLinks() {
     try {
-      const t = (e && e.detail && (e.detail.value || e.detail.table))
-        ? String(e.detail.value || e.detail.table)
-        : getLS(LS.tableId, "");
-      if (t) window.gotoStart(t);
-    } catch (_) {}
-  });
-  // ===== BOOT =====
-  
-  async function boot() {
-    const appState = getLS(LS.appState, "select");
-    const tableId = getLS(LS.tableId, "");
-    const posLink = getLS(LS.posLink, "");
+      const r = await fetch(REMOTE_URL(), { cache: "no-store" });
+      const j = await r.json();
+      return normalizeLinks(j);
+    } catch {}
 
-    if (appState === "pos" && posLink) window.gotoPos(posLink);
-    else if (appState === "start" && tableId) window.gotoStart(tableId);
-    else window.gotoSelect(true);
+    try {
+      const r = await fetch(LOCAL_URL(), { cache: "no-store" });
+      const j = await r.json();
+      return normalizeLinks(j);
+    } catch {}
 
-    console.log("[redirect-core] boot OK");
+    try {
+      const c = getLS(LS.linksCache);
+      if (c) return normalizeLinks(JSON.parse(c));
+    } catch {}
+
+    return null;
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", boot, { once: true });
-  } else boot();
+  /* ===================== LIVE ===================== */
+  function setLive(t, url) {
+    setLS(liveKey(t), url);
+    setLS(liveAt(t), String(now()));
+  }
+
+  function getLive(t) {
+    return {
+      url: getLS(liveKey(t), ""),
+      at: Number(getLS(liveAt(t), "0")) || 0,
+    };
+  }
+
+  function liveFresh(at) {
+    return at && now() - at < LIVE_TTL;
+  }
+
+  function allowedPos(url) {
+    if (!ACCEPT_POS.test(url)) return false;
+    const t = state.tableId;
+    if (!t) return false;
+    const { url: live } = getLive(t);
+    return live && url === live;
+  }
+
+  /* ===================== CORE API ===================== */
+  window.gotoSelect = function () {
+    setLS(LS.state, "select");
+    resetIframe();
+    show("select");
+  };
+
+  window.gotoStart = function (tableId) {
+    const t = String(tableId || "").trim();
+    if (!t) return;
+
+    state.tableId = t;
+    setLS(LS.table, t);
+    setLS(LS.state, "start");
+
+    elLabel && (elLabel.textContent = t);
+    resetIframe();
+    show("start");
+  };
+
+  window.gotoPos = function (url, meta) {
+    const u = String(url || "").trim();
+    if (!allowedPos(u)) {
+      console.warn("[redirect-core] REJECT gotoPos", u, meta);
+      console.trace();
+      return;
+    }
+
+    setLS(LS.state, "pos");
+    show("pos");
+    resetIframe();
+    setTimeout(() => iframe && (iframe.src = u), 30);
+  };
+
+  window.getLinkForTable = function (t) {
+    return state.linksMap?.[String(t)] ?? null;
+  };
+
+  /* ===================== START BTN ===================== */
+  btnStart?.addEventListener("click", () => {
+    const t = state.tableId;
+    if (!t) return;
+    const { url, at } = getLive(t);
+    if (url) window.gotoPos(url, { by: "btnStart", fresh: liveFresh(at) });
+  });
+
+  /* ===================== BOOT ===================== */
+  async function boot() {
+    console.log("[redirect-core] boot");
+
+    const links = await fetchLinks();
+    if (links) {
+      state.linksMap = links;
+      setLS(LS.linksCache, JSON.stringify({ links }));
+      renderTables(Object.keys(links));
+    } else {
+      renderFallback();
+    }
+
+    const t = getLS(LS.table);
+    if (t) window.gotoStart(t);
+    else window.gotoSelect();
+
+    setInterval(async () => {
+      const l = await fetchLinks();
+      if (l) state.linksMap = l;
+    }, REFRESH_MS);
+  }
+
+  document.readyState === "loading"
+    ? document.addEventListener("DOMContentLoaded", boot, { once: true })
+    : boot();
 })();
