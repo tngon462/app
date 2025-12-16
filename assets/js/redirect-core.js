@@ -300,17 +300,24 @@
 
   // Listener LIVE gọi vào đây
   window.setPosLink = function (url, source = "LIVE") {
-    const u = String(url || "").trim();
-    if (!u) return;
+  const u = String(url || "").trim();
+  if (!u) return;
 
-    const cur = state.posLink || getLS(LS.posLink, "");
-    if (cur === u) return;
+  console.log("[redirect-core] setPosLink FORCE from", source, u);
 
-    console.log("[redirect-core] setPosLink from", source, u);
+  // ❌ KHÔNG so sánh với link cũ nữa
+  state.posLink = u;
+  setLS(LS.posLink, u);
 
-    setLS(LS.posLink, u);
-    window.gotoPos(u);
-  };
+  // 👉 LUÔN reload iframe
+  showScreen("pos");
+  if (iframe) {
+    iframe.src = "about:blank";
+    setTimeout(() => {
+      iframe.src = u;
+    }, 30);
+  }
+};
 
   window.applyLinksMap = function (mapOrObj, source = "unknown") {
     const norm = normalizeLinksMap(mapOrObj);
