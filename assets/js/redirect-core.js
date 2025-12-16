@@ -1,5 +1,5 @@
 /**
- * assets/js/redirect-core.js (FINAL SAFE + AUTO-FIT + ADMIN CHANGE TABLE FIX + FORCE START ON RELOAD)
+ * assets/js/redirect-core.js (FINAL SAFE + AUTO-FIT + ADMIN CHANGE TABLE FIX)
  * - Giữ 3 màn: #select-table, #start-screen, #pos-container
  * - Auto-fit grid
  * - Load links.json: GitHub raw (QR/main) + local + LS cache + fallback 1..N
@@ -7,7 +7,9 @@
  *    + Đổi bàn / Home ăn NGAY nhiều lần: luôn clear posLink + reset iframe khi gotoStart/gotoSelect
  *    + Admin đổi bàn: nghe event 'tngon:tableChanged' => gotoStart()
  *    + Không còn mất số bàn: luôn sync #selected-table từ tableId
- *    + Reload thủ công (F5/Cmd+R): luôn về START (không auto nhảy POS)
+ *    + (NEW) Reload thủ công luôn về START (không tự nhảy POS)
+ *    + (NEW) setPosLink chỉ LƯU link LIVE, không auto gotoPos
+ *    + (NEW) Chặn gotoPos ngay sau gotoStart 1.5s
  * - Expose:
  *    window.gotoSelect(keepState?)
  *    window.gotoStart(tableId)
@@ -83,6 +85,9 @@
     posLink: null,
     linksMap: null,
     linksHash: null,
+
+    // (NEW) chống bị auto kéo vào POS ngay sau khi vừa gotoStart
+    lastGotoStartAt: 0,
   };
 
   // ---------------------------
@@ -264,6 +269,9 @@
     setLS(LS.tableId, id);
     setLS(LS.appState, "start");
 
+    // (NEW) đánh dấu vừa gotoStart
+    state.lastGotoStartAt = Date.now();
+
     // QUAN TRỌNG: đổi bàn => bỏ hẳn posLink cũ + reset iframe để lần sau start ăn đúng
     clearPosLink("gotoStart(" + id + ")");
 
@@ -277,6 +285,12 @@
   window.gotoPos = function (url) {
     const u = String(url || "").trim();
     if (!u) return;
+
+    // (NEW) chặn auto nhảy POS ngay sau khi vừa gotoStart (tránh load link cũ / race)
+    if (Date.now() - (state.lastGotoStartAt || 0) < 1500) {
+      console.warn("[redirect-core] gotoPos blocked (recent gotoStart)");
+      return;
+    }
 
     state.posLink = u;
     setLS(LS.posLink, u);
@@ -324,9 +338,9 @@
 
     console.log("[redirect-core] setPosLink from", source, u);
 
-    // luôn lưu vào LS để nút START ORDER ưu tiên link mới nhất
+    // (NEW) CHỈ LƯU link LIVE, KHÔNG auto gotoPos
+    // => QRMASTER sẽ bắn gotoStart riêng, user bấm START thì vào POS bằng link mới.
     setLS(LS.posLink, u);
-    window.gotoPos(u);
   };
 
   window.applyLinksMap = function (mapOrObj, source = "unknown") {
@@ -446,20 +460,6 @@
   });
 
   // ---------------------------
-  // FORCE START ON MANUAL RELOAD
-  // ---------------------------
-  function isManualReload() {
-    try {
-      const nav = performance.getEntriesByType?.("navigation")?.[0];
-      if (nav && nav.type) return nav.type === "reload";
-    } catch (_) {}
-    try {
-      return performance?.navigation?.type === 1;
-    } catch (_) {}
-    return false;
-  }
-
-  // ---------------------------
   // BOOT
   // ---------------------------
   let _resizeTimer = null;
@@ -480,28 +480,16 @@
     else renderTablesFallback(DEFAULT_TABLE_COUNT);
 
     // restore state
-    const appState = getLS(LS.appState, "select");
     const tableId = getLS(LS.tableId, "");
-    const posLink = getLS(LS.posLink, "");
 
     // luôn sync số bàn ra UI nếu có
     if (tableId) safeText(elSelectedTable, tableId);
 
-    // ✅ NEW: reload thủ công => ép về START
-    if (isManualReload()) {
-      if (tableId) window.gotoStart(tableId);
-      else window.gotoSelect(true);
-      console.log("[redirect-core] manual reload => force START");
-      // vẫn chạy interval refresh links bình thường
+    // (NEW) Reload thủ công => luôn về START nếu đã có bàn
+    if (tableId) {
+      window.gotoStart(tableId);
     } else {
-      // logic cũ
-      if (appState === "pos" && posLink) {
-        window.gotoPos(posLink);
-      } else if (appState === "start" && tableId) {
-        window.gotoStart(tableId);
-      } else {
-        window.gotoSelect(true);
-      }
+      window.gotoSelect(true);
     }
 
     // periodic refresh links
