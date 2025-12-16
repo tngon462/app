@@ -76,18 +76,28 @@ function gotoStart(tableId){
   setState('start');
 }
   
-  function gotoPos(url){
-    const t = getTable();
-    const finalUrl = url || t.url;
-    if (!finalUrl){
-      alert('Chưa có link POS của bàn này.');
-      gotoSelect(false);
-      return;
-    }
-    if (iframe) iframe.src = finalUrl;
-    hide(elSelect); hide(elStart); show(elPos);
-    setState('pos');
+ function gotoPos(url){
+  const t = getTable();
+
+  // ✅ ưu tiên LIVE map trước (đúng tinh thần LIVE-FIRST)
+  const liveUrl = t?.id ? (window.getLinkForTable?.(t.id) || null) : null;
+
+  // url ưu tiên theo thứ tự: url truyền vào -> liveUrl -> tableUrl trong LS
+  const finalUrl = url || liveUrl || t.url;
+
+  if (!finalUrl){
+    alert('Chưa có link POS của bàn này.');
+    gotoSelect(false);
+    return;
   }
+
+  // ✅ ghi lại tableUrl chuẩn để không bao giờ dính link cũ nữa
+  setTable(t.id, finalUrl);
+
+  if (iframe) iframe.src = finalUrl;
+  hide(elSelect); hide(elStart); show(elPos);
+  setState('pos');
+}
 
   // Expose
   window.gotoSelect = gotoSelect;
