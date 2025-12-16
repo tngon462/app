@@ -1,10 +1,10 @@
 /**
- * assets/js/redirect-core.js (CLEAN SAFE + AUTO-FIT)
+ * assets/js/redirect-core.js (CLEAN SAFE + AUTO-FIT) — FIX HOME / CHANGE TABLE
  * - Giữ 3 màn: #select-table, #start-screen, #pos-container
  * - Auto-fit grid: tự đổi số cột theo màn hình (PC/iPad/Phone)
- * - Nút bàn: "Bàn X" + tự co giãn kích thước
  * - Load links.json từ GitHub raw (repo QR/main) + fallback local + fallback LS cache + fallback 1..N
- * - Không loop / không override bừa
+ * - FIX:
+ *    + gotoStart() / gotoSelect(): clear posLink + reset iframe để đổi bàn/home ăn ngay, không cần "làm mới"
  * - Expose:
  *    window.gotoSelect(keepState?)
  *    window.gotoStart(tableId)
@@ -40,7 +40,7 @@
   const REMOTE_URL = () =>
     `https://raw.githubusercontent.com/tngon462/QR/main/links.json?cb=${Date.now()}`;
 
-  // Local fallback: đặt links.json cùng thư mục redirect.html (hoặc tùy layout của sếp)
+  // Local fallback: đặt links.json cùng thư mục redirect.html
   const LOCAL_URL = () => `./links.json?cb=${Date.now()}`;
 
   // Refresh interval (dự phòng)
@@ -101,8 +101,23 @@
     if (elPos) elPos.classList.toggle("hidden", which !== "pos");
   }
 
+  function resetIframe() {
+    if (!iframe) return;
+    try {
+      // tránh giữ session cũ / history cũ
+      iframe.src = "about:blank";
+    } catch (_) {}
+  }
+
+  function clearPosLink(reason = "") {
+    // XÓA posLink để đổi bàn/home không bị ưu tiên link cũ
+    state.posLink = null;
+    setLS(LS.posLink, null);
+    if (reason) console.log("[redirect-core] clearPosLink:", reason);
+    resetIframe();
+  }
+
   function stableHashFromMap(map) {
-    // hash đơn giản: stringify theo keys sort
     try {
       const keys = Object.keys(map || {}).sort((a, b) => {
         const na = Number(a), nb = Number(b);
@@ -143,38 +158,33 @@
   }
 
   // ---------------------------
-  // AUTO-FIT GRID (100%)
+  // AUTO-FIT GRID
   // ---------------------------
   function setAutoFitGrid() {
     if (!elTableBox) return;
 
     const w = Math.max(320, window.innerWidth || 0);
 
-    // min ô theo màn hình
     let minCell = 160;   // phone
     if (w >= 768) minCell = 220;   // iPad
     if (w >= 1024) minCell = 260;  // PC
 
-    // ép container nhìn giống ảnh, không kéo quá rộng
     elTableBox.style.width = "min(1200px, 96vw)";
     elTableBox.style.marginLeft = "auto";
     elTableBox.style.marginRight = "auto";
 
-    // auto-fit
     elTableBox.style.display = "grid";
     elTableBox.style.gridTemplateColumns = `repeat(auto-fit, minmax(${minCell}px, 1fr))`;
     elTableBox.style.alignItems = "stretch";
     elTableBox.style.justifyItems = "stretch";
 
-    // gap ưu tiên giống ảnh (nếu HTML đã có gap thì vẫn ok)
-    // Nếu sếp muốn giữ đúng HTML thì comment 2 dòng dưới.
     elTableBox.style.gap = "24px";
     elTableBox.style.paddingLeft = "16px";
     elTableBox.style.paddingRight = "16px";
   }
 
   // ---------------------------
-  // Render buttons (UI giống ảnh)
+  // Render buttons
   // ---------------------------
   function makeTableButton(label) {
     const btn = document.createElement("button");
@@ -196,9 +206,7 @@
       "items-center",
       "justify-center",
       "px-4",
-      // chiều cao tự co giãn: phone ~90px, tablet ~120px, pc ~150px
       "min-h-[clamp(90px,12vh,150px)]",
-      // chữ tự co giãn
       "text-[clamp(18px,2.2vw,34px)]",
     ].join(" ");
 
@@ -223,7 +231,6 @@
     const keys = Object.keys(map || {});
     if (!keys.length) return renderTablesFallback(DEFAULT_TABLE_COUNT);
 
-    // sort numeric if possible
     keys.sort((a, b) => {
       const na = Number(a), nb = Number(b);
       const aNum = Number.isFinite(na), bNum = Number.isFinite(nb);
@@ -238,7 +245,11 @@
   // Public APIs: navigation
   // ---------------------------
   window.gotoSelect = function (keepState = false) {
-    if (!keepState) setLS(LS.appState, "select");
+    if (!keepState) {
+      setLS(LS.appState, "select");
+      // FIX: về màn chọn bàn => clear posLink luôn để khỏi dính link cũ
+      clearPosLink("gotoSelect");
+    }
     showScreen("select");
   };
 
@@ -249,6 +260,9 @@
     state.tableId = id;
     setLS(LS.tableId, id);
     setLS(LS.appState, "start");
+
+    // FIX: Đổi bàn/Home về Start => bỏ hẳn posLink cũ + reset iframe
+    clearPosLink("gotoStart(" + id + ")");
 
     safeText(elSelectedTable, id);
     showScreen("start");
@@ -284,7 +298,7 @@
     return state.tableId || getLS(LS.tableId, null);
   };
 
-  // Listener LIVE gọi vào đây: set link ngay (không cần đợi links.json)
+  // Listener LIVE gọi vào đây
   window.setPosLink = function (url, source = "LIVE") {
     const u = String(url || "").trim();
     if (!u) return;
@@ -298,7 +312,6 @@
     window.gotoPos(u);
   };
 
-  // applyLinksMap: dùng cho listener live / module khác bơm map mới
   window.applyLinksMap = function (mapOrObj, source = "unknown") {
     const norm = normalizeLinksMap(mapOrObj);
     if (!norm) {
@@ -420,7 +433,7 @@
     setAutoFitGrid();
     window.addEventListener("resize", onResize, { passive: true });
 
-    // 1) load links (nếu fail vẫn render fallback)
+    // 1) load links
     const map = await loadLinksOnce();
     if (map) renderTablesFromMap(map);
     else renderTablesFallback(DEFAULT_TABLE_COUNT);
@@ -438,7 +451,7 @@
       window.gotoSelect(true);
     }
 
-    // 3) periodic refresh (chỉ apply nếu khác hash)
+    // 3) periodic refresh
     setInterval(() => {
       loadLinksOnce().catch(() => {});
     }, REFRESH_MS);
