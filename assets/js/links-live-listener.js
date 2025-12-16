@@ -1,77 +1,94 @@
-// /assets/js/links-live-listener.js (FIXED)
-// - Không set iframe.src trực tiếp
-// - Không tự ý set posLink global để điều hướng
-// - Chỉ cập nhật LIVE cache qua redirect-core: setPosLink(url, source, tableId)
-// - Nếu đang ở POS thì gọi gotoPos(newLink) để reload đúng link mới (đi qua allowlist)
-
+// assets/js/links-live-listener.js (FIXED SAFE)
+// - Nghe Firebase RTDB: control/tables/{tableId}/posUrl (hoặc links-live schema cũ)
+// - CHỈ cập nhật LIVE link qua window.setPosLink(url,'links-live',tableId)
+// - KHÔNG tự ý set iframe.src khi đang ở START (tránh nhảy vào link sai / link cũ)
+// - Nếu đang ở POS của đúng bàn -> tự refresh sang LIVE mới bằng window.gotoPos(url, {by:'links-live'})
 (function () {
-  'use strict';
+  "use strict";
+  const log  = (...a)=> console.log("[links-live]", ...a);
+  const warn = (...a)=> console.warn("[links-live]", ...a);
 
-  const log  = (...a)=>console.log('[links-live]', ...a);
-  const warn = (...a)=>console.warn('[links-live]', ...a);
+  const getLS = (k, d=null)=>{ try{ const v=localStorage.getItem(k); return v ?? d; }catch(_){ return d; } };
 
-  if (!window.firebase || !firebase.apps?.length) {
-    warn('Firebase chưa init -> bỏ qua links-live listener.');
-    return;
+  if (!window.firebase || !firebase.apps?.length){
+    return warn("Firebase chưa init -> bỏ qua links-live listener.");
   }
-
   const db = firebase.database();
-
-  function getLS(k,d=null){ try{ const v=localStorage.getItem(k); return v ?? d; }catch(_){ return d; } }
 
   const ACCEPT_URL = /^https?:\/\/order\.atpos\.net\//i;
 
-  function currentTable() {
-    // ưu tiên core (nếu có)
-    try {
-      if (typeof window.getCurrentTable === 'function') {
-        const t = window.getCurrentTable();
-        if (t) return String(t);
-      }
-    } catch(_) {}
-    return String(getLS('tableId','') || '');
+  function getTableId(){
+    return String(getLS("tableId","") || "").trim();
+  }
+  function getAppState(){
+    return String(getLS("appState","") || "").trim(); // select | start | pos
   }
 
-  function currentStage() {
-    return String(getLS('appState','') || '');
-  }
+  let lastUrlByTable = Object.create(null);
 
-  function applyLive(tableId, newLink) {
-    if (!tableId || !newLink) return;
-    if (!ACCEPT_URL.test(newLink)) return;
+  function applyUrl(tableId, url, sourcePath){
+    const t = String(tableId||"").trim();
+    const u = String(url||"").trim();
+    if(!t || !u) return;
+    if(!ACCEPT_URL.test(u)) return warn("Ignore non-atpos url", {t,u,sourcePath});
 
-    // 1) update LIVE cache qua core
-    if (typeof window.setPosLink === 'function') {
-      window.setPosLink(newLink, 'links-live', tableId);
+    if(lastUrlByTable[t] === u) return;
+    lastUrlByTable[t] = u;
+
+    if (typeof window.setPosLink === "function") {
+      window.setPosLink(u, "links-live", t);
     } else {
-      // fallback (không khuyến khích): vẫn lưu nhưng sẽ mất allowlist
-      try { localStorage.setItem('posLiveUrl:' + tableId, newLink); } catch(_) {}
-      try { localStorage.setItem('posLiveAt:'  + tableId, String(Date.now())); } catch(_) {}
+      warn("window.setPosLink chưa có (redirect-core chưa load?)");
+      return;
     }
 
-    log('🔄 LIVE QR bàn', tableId, newLink);
+    log("🔄 LIVE QR bàn", t, u);
 
-    // 2) nếu đang ở POS -> reload theo core (để about:blank rồi vào link)
-    if (currentStage() === 'pos' && typeof window.gotoPos === 'function') {
-      window.gotoPos(newLink, { by:'links-live', table: tableId });
+    // Chỉ auto refresh nếu đang ở POS và đúng bàn
+    const curTable = (typeof window.getCurrentTable === "function") ? window.getCurrentTable() : getTableId();
+    const st = getAppState();
+    if (st === "pos" && curTable === t && typeof window.gotoPos === "function") {
+      window.gotoPos(u, { by: "links-live", source: sourcePath || "firebase", table: t });
     }
   }
 
-  // ========== LISTEN ==========
-  // Giữ đúng path như sếp đang dùng: db.ref('links_live').on('value')
-  const ref = db.ref('links_live');
+  // ====== Listener 1: control/tables/{tableId}/posUrl (khuyến nghị) ======
+  function attachPosUrlListener(tableId){
+    const t = String(tableId||"").trim();
+    if(!t) return;
 
-  ref.on('value', (snap) => {
-    const data = snap.val();
-    if (!data || !data.links) return;
+    const ref = db.ref(`control/tables/${t}/posUrl`);
+    ref.on("value", (snap)=>{
+      const u = snap?.val();
+      if(typeof u === "string" && u.trim()){
+        applyUrl(t, u, `control/tables/${t}/posUrl`);
+      }
+    }, (err)=> warn("posUrl listener error", err));
+    log("listen", `control/tables/${t}/posUrl`);
+  }
 
-    const tableId = currentTable();
-    if (!tableId) { log('chưa có tableId -> chờ'); return; }
+  // ====== Listener 2: schema cũ (nếu có): links-live { links: {12: url} } ======
+  const legacyRef = db.ref("links-live");
+  legacyRef.on("value", (snap)=>{
+    const v = snap?.val();
+    const t = getTableId();
+    if(!t) return;
+    const u = v?.links?.[t] || v?.[t];
+    if(typeof u === "string" && u.trim()){
+      applyUrl(t, u, "links-live(legacy)");
+    }
+  }, (err)=> warn("legacy links-live error", err));
+  log("listen", "links-live (legacy)");
 
-    const newLink = data.links[String(tableId)];
-    if (!newLink) return;
-
-    applyLive(String(tableId), String(newLink));
-  });
-
+  // ====== Re-attach when table changes (poll nhẹ) ======
+  let lastTable = "";
+  function tickTable(){
+    const t = getTableId();
+    if(t && t !== lastTable){
+      lastTable = t;
+      attachPosUrlListener(t);
+    }
+  }
+  tickTable();
+  setInterval(tickTable, 1500);
 })();
