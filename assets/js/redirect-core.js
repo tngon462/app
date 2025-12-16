@@ -41,21 +41,36 @@
     LS.removeItem(LS_TID); LS.removeItem(LS_TURL); delete window.tableId;
   }
 
-  function gotoSelect(clear=false){
-    hide(elPos); if (iframe) iframe.src = 'about:blank';
-    hide(elStart);
-    show(elSelect);
-    if (clear) clearTable();
-    setState('select');
+  // ✅ BACKWARD-COMPAT: gotoSelect(keepState?)
+// - keepState=true: về Home nhưng giữ bàn
+// - keepState=false: về Home và xóa bàn
+function gotoSelect(keepState = true){
+  hide(elPos); if (iframe) iframe.src = 'about:blank';
+  hide(elStart);
+  show(elSelect);
+
+  if (!keepState) clearTable();     // 👈 đúng nghĩa keepState
+  setState('select');
+}
+
+// ✅ BACKWARD-COMPAT: gotoStart(tableId?)
+// - nếu truyền tableId: set bàn + set url theo LIVE map trước rồi mới vào Start
+function gotoStart(tableId){
+  if (tableId != null && String(tableId).trim() !== ''){
+    const tid = String(tableId).trim();
+    const liveUrl = window.getLinkForTable?.(tid) || null;
+    setTable(tid, liveUrl || null);
   }
-  function gotoStart(){
-    const {id} = getTable();
-    if (!id){ gotoSelect(false); return; }
-    if (elTable) elTable.textContent = String(id).replace('+','');
-    hide(elPos); if (iframe) iframe.src = 'about:blank';
-    hide(elSelect);
-    show(elStart);
-    setState('start');
+
+  const {id} = getTable();
+  if (!id){ gotoSelect(true); return; }   // giữ state, không phá
+
+  if (elTable) elTable.textContent = String(id).replace('+','');
+  hide(elPos); if (iframe) iframe.src = 'about:blank';
+  hide(elSelect);
+  show(elStart);
+  setState('start');
+}
   }
   function gotoPos(url){
     const t = getTable();
