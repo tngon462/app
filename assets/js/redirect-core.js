@@ -1,5 +1,5 @@
 /**
- * assets/js/redirect-core.js (FINAL SAFE + AUTO-FIT + ADMIN CHANGE TABLE FIX)
+ * assets/js/redirect-core.js (FINAL SAFE + AUTO-FIT + ADMIN CHANGE TABLE FIX + FORCE START ON RELOAD)
  * - Giữ 3 màn: #select-table, #start-screen, #pos-container
  * - Auto-fit grid
  * - Load links.json: GitHub raw (QR/main) + local + LS cache + fallback 1..N
@@ -7,6 +7,7 @@
  *    + Đổi bàn / Home ăn NGAY nhiều lần: luôn clear posLink + reset iframe khi gotoStart/gotoSelect
  *    + Admin đổi bàn: nghe event 'tngon:tableChanged' => gotoStart()
  *    + Không còn mất số bàn: luôn sync #selected-table từ tableId
+ *    + Reload thủ công (F5/Cmd+R): luôn về START (không auto nhảy POS)
  * - Expose:
  *    window.gotoSelect(keepState?)
  *    window.gotoStart(tableId)
@@ -121,8 +122,10 @@
   function stableHashFromMap(map) {
     try {
       const keys = Object.keys(map || {}).sort((a, b) => {
-        const na = Number(a), nb = Number(b);
-        const aNum = Number.isFinite(na), bNum = Number.isFinite(nb);
+        const na = Number(a),
+          nb = Number(b);
+        const aNum = Number.isFinite(na),
+          bNum = Number.isFinite(nb);
         if (aNum && bNum) return na - nb;
         return String(a).localeCompare(String(b));
       });
@@ -229,8 +232,10 @@
     if (!keys.length) return renderTablesFallback(DEFAULT_TABLE_COUNT);
 
     keys.sort((a, b) => {
-      const na = Number(a), nb = Number(b);
-      const aNum = Number.isFinite(na), bNum = Number.isFinite(nb);
+      const na = Number(a),
+        nb = Number(b);
+      const aNum = Number.isFinite(na),
+        bNum = Number.isFinite(nb);
       if (aNum && bNum) return na - nb;
       return String(a).localeCompare(String(b));
     });
@@ -441,6 +446,20 @@
   });
 
   // ---------------------------
+  // FORCE START ON MANUAL RELOAD
+  // ---------------------------
+  function isManualReload() {
+    try {
+      const nav = performance.getEntriesByType?.("navigation")?.[0];
+      if (nav && nav.type) return nav.type === "reload";
+    } catch (_) {}
+    try {
+      return performance?.navigation?.type === 1;
+    } catch (_) {}
+    return false;
+  }
+
+  // ---------------------------
   // BOOT
   // ---------------------------
   let _resizeTimer = null;
@@ -468,12 +487,21 @@
     // luôn sync số bàn ra UI nếu có
     if (tableId) safeText(elSelectedTable, tableId);
 
-    if (appState === "pos" && posLink) {
-      window.gotoPos(posLink);
-    } else if (appState === "start" && tableId) {
-      window.gotoStart(tableId);
+    // ✅ NEW: reload thủ công => ép về START
+    if (isManualReload()) {
+      if (tableId) window.gotoStart(tableId);
+      else window.gotoSelect(true);
+      console.log("[redirect-core] manual reload => force START");
+      // vẫn chạy interval refresh links bình thường
     } else {
-      window.gotoSelect(true);
+      // logic cũ
+      if (appState === "pos" && posLink) {
+        window.gotoPos(posLink);
+      } else if (appState === "start" && tableId) {
+        window.gotoStart(tableId);
+      } else {
+        window.gotoSelect(true);
+      }
     }
 
     // periodic refresh links
