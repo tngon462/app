@@ -1,4 +1,4 @@
-// /assets/js/qrback-listener.js  (BASELINE by VALUE - KHÔNG DÙNG TS)
+// /assets/js/qrback-listener.js
 (function () {
   'use strict';
   const log  = (...a)=> console.log('[qrback]', ...a);
@@ -20,26 +20,37 @@
   let offFns = [];
   let attachTimer = null;
 
+  // ===== anti-spam gotoStart =====
+  let lastGotoStartAt = 0;
+  const GOTO_START_COOLDOWN = 2000; // 2s
+
+  function canGotoStart(){
+    const now = Date.now();
+    if (now - lastGotoStartAt < GOTO_START_COOLDOWN) return false;
+    lastGotoStartAt = now;
+    return true;
+  }
+
   function offAll(){
     offFns.forEach(fn => { try{ fn(); }catch(_){} });
     offFns = [];
   }
 
   function triggerGotoStart(reason){
+    const appState = getLS('appState');
+    if (appState === 'start') return; // đã ở start → bỏ
+    if (!canGotoStart()) return;
+
     log('triggerGotoStart', reason);
-    try { localStorage.setItem('appState', 'start'); } catch {}
+    try { setLS('appState', 'start'); } catch {}
+
     if (typeof window.gotoStart === 'function'){
       window.gotoStart(getLS('tableId') || lastGoodTable || currentTable);
-    } else {
-      location.reload();
     }
   }
 
   function _attachForTable(table){
-    if (!table){
-      warn('Bỏ qua attach vì table rỗng.');
-      return;
-    }
+    if (!table) return;
     if (table === currentTable) return;
 
     offAll();
@@ -50,7 +61,6 @@
     log('device table =', table);
 
     // ===== 1) signals/<table> =====
-    // Baseline: bỏ qua lần đầu. Sau đó: nếu status=expired và (value thay đổi) -> gotoStart
     let sigReady = false;
     let sigLastStr = null;
 
@@ -60,24 +70,21 @@
       if (!v) return;
 
       const curStr = JSON.stringify(v);
-
       if (!sigReady){
         sigReady = true;
         sigLastStr = curStr;
-        return; // baseline snapshot
+        return;
       }
-
-      if (curStr === sigLastStr) return; // không đổi
+      if (curStr === sigLastStr) return;
       sigLastStr = curStr;
 
       if (String(v.status||'').toLowerCase() === 'expired'){
         triggerGotoStart({ from:'signals', v });
       }
-    }, e=> warn('signals error:', e?.message||e));
+    });
     offFns.push(()=> refSig.off('value', onSig));
 
     // ===== 2) control/tables/<table>/qrbackAt =====
-    // Baseline: bỏ qua lần đầu. Sau đó: nếu value đổi -> gotoStart
     let ctrlReady = false;
     let ctrlLast = null;
 
@@ -94,46 +101,24 @@
       if (cur === ctrlLast) return;
       ctrlLast = cur;
 
-      triggerGotoStart({ from:'control/tables/qrbackAt', ts: cur });
-    }, e=> warn('control/tables error:', e?.message||e));
+      triggerGotoStart({ from:'control', ts: cur });
+    });
     offFns.push(()=> refCtrl.off('value', onCtrl));
 
-    // ===== 3) broadcast/qrbackAt =====
-    let bcReady = false;
-    let bcLast = null;
-
-    const refBc = db.ref('broadcast/qrbackAt');
-    const onBc = refBc.on('value', s=>{
-      if (!s.exists()) return;
-      const cur = s.val();
-
-      if (!bcReady){
-        bcReady = true;
-        bcLast = cur;
-        return;
-      }
-      if (cur === bcLast) return;
-      bcLast = cur;
-
-      triggerGotoStart({ from:'broadcast/qrbackAt', ts: cur, global:true });
-    }, e=> warn('broadcast error:', e?.message||e));
-    offFns.push(()=> refBc.off('value', onBc));
-
+    // ❌ BỎ broadcast/qrbackAt HOÀN TOÀN
     log('listen signals/'+table);
     log('listen control/tables/'+table+'/qrbackAt');
-    log('listen broadcast/qrbackAt');
   }
 
   function attachForTableDebounced(table){
     if (!table) return;
     if (attachTimer) clearTimeout(attachTimer);
-    attachTimer = setTimeout(()=> _attachForTable(table), 400);
+    attachTimer = setTimeout(()=> _attachForTable(table), 300);
   }
 
-  // boot theo LS
+  // boot
   if (lastGoodTable) _attachForTable(lastGoodTable);
 
-  // đổi tableId từ tab khác
   window.addEventListener('storage', (e)=>{
     if (e.key === 'tableId'){
       const t = e.newValue || null;
@@ -141,7 +126,6 @@
     }
   });
 
-  // theo DB: devices/<id>/table
   if (deviceId){
     const ref = db.ref('devices/'+deviceId+'/table');
     const cb = ref.on('value', s=>{
@@ -149,10 +133,8 @@
       if (t){
         if (t !== getLS('tableId')) setLS('tableId', t);
         attachForTableDebounced(t);
-      } else {
-        warn('DB table=null (ignore)');
       }
-    }, e=> warn('watchDeviceTable error:', e?.message||e));
+    });
     offFns.push(()=> ref.off('value', cb));
   }
 
