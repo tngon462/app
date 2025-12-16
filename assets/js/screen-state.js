@@ -1,90 +1,80 @@
-// screen-state.js — FINAL SAFE (stage + blackout sync cho admin, KHÔNG phá app)
-(function () {
-  "use strict";
-  const log = (...a) => console.log("[tngon][screen]", ...a);
+// screen-state.js
+// Ghi trạng thái blackout thực tế lên Firebase để Admin luôn thấy đúng
 
-  if (!window.firebase) return;
+(function () {
+  'use strict';
+  const log = (...a) => console.log('[tngon][screen]', ...a);
+
+  if (!window.firebase) { console.warn('[tngon][screen] firebase not ready'); return; }
 
   const db = firebase.database();
   const LS = localStorage;
+  const deviceId = LS.getItem('deviceId') || '';
+  function getTableId(){ return LS.getItem('tableId') || null; }
 
-  const deviceId = LS.getItem("deviceId") || "";
-  const getTableId = () => LS.getItem("tableId") || null;
-
-  let curStage = (LS.getItem("appState") || "select").toLowerCase(); // select|start|pos
-  let curBlack = "off"; // off = không che, on = đang che
-
-  function writeStatus(by) {
-    const tbl = getTableId();
-    curStage = (LS.getItem("appState") || curStage || "select").toLowerCase();
-
-    const payload = {
-      table: tbl,
-      stage: curStage,
-      blackout: curBlack,
-      by: by || "unknown",
-      at: firebase.database.ServerValue.TIMESTAMP,
-    };
-
-    // NOTE: nếu rules chặn /status/* thì sẽ warn permission_denied (không ảnh hưởng chạy app)
-    if (deviceId) {
-      db.ref("devices/" + deviceId)
-        .update({
-          table: tbl,
-          stage: curStage,
-          blackout: curBlack,
-          lastSeen: firebase.database.ServerValue.TIMESTAMP,
-        })
-        .catch(() => {});
-
-      db.ref("status/devices/" + deviceId).set(payload).catch(() => {});
-    }
-
-    if (tbl) {
-      db.ref("status/tables/" + tbl).set(payload).catch(() => {});
-    }
-
-    log("reported =>", payload);
-  }
-
-  // redirect-core gọi
-  window.reportStage = function (stage, by) {
-    const st = String(stage || "").toLowerCase();
-    if (!st) return;
-    curStage = st;
-    LS.setItem("appState", curStage);
-    writeStatus(by || "core");
-  };
-
-  // blackout sync bằng overlay DOM (an toàn nhất)
-  function hookOverlayObserver() {
-    const overlay = document.getElementById("screen-overlay");
-    if (!overlay) return;
-
-    const read = () => {
-      const isOn = getComputedStyle(overlay).display !== "none";
-      const next = isOn ? "on" : "off";
-      if (next !== curBlack) {
-        curBlack = next;
-        writeStatus("overlay");
+  // helper
+  function reportScreen(state, by) {
+    try {
+      const tbl = getTableId();
+      const payload = {
+        state, by: by || 'unknown',
+        at: firebase.database.ServerValue.TIMESTAMP,
+        table: tbl || null,
+      };
+      if (deviceId) {
+        db.ref('devices/' + deviceId).update({
+          screen: state,
+          lastSeen: firebase.database.ServerValue.TIMESTAMP
+        }).catch(()=>{});
+        db.ref('status/devices/' + deviceId + '/screen').set(payload).catch(()=>{});
       }
-    };
-
-    // đọc ngay 1 lần
-    read();
-
-    const obs = new MutationObserver(read);
-    obs.observe(overlay, { attributes: true, attributeFilter: ["style", "class"] });
-    log("overlay observer ready");
+      if (tbl) {
+        db.ref('status/tables/' + String(tbl) + '/screen').set(payload).catch(()=>{});
+      }
+      // cache để heartbeat có thể gửi kèm
+      try { window.__screenState = state; } catch {}
+      log('reported =>', state, by || '');
+    } catch (e) {
+      console.warn('[tngon][screen] report error', e?.message || e);
+    }
   }
 
-  if (document.readyState === "loading")
-    document.addEventListener("DOMContentLoaded", hookOverlayObserver, { once: true });
-  else hookOverlayObserver();
+  // expose cho các nơi khác gọi trực tiếp
+  window.reportScreenState = reportScreen;
 
-  // đổi bàn từ admin/bind
-  window.addEventListener("tngon:tableChanged", () => writeStatus("table-change"));
+  // Nếu có blackout API thì hook vào
+  function wireBlackout() {
+    const bo = window.blackout;
+    if (!bo) return;
 
-  // boot report
-  setTimeout(() => writeStatus("boot"), 300);
+    // giữ bản gốc
+    if (!bo.__origOn) { bo.__origOn  = bo.on;  }
+    if (!bo.__origOff){ bo.__origOff = bo.off; }
+
+    bo.on  = function(by){ try { reportScreen('off', by||'schedule'); } catch {} return bo.__origOn.call(bo); };
+    bo.off = function(by){ try { reportScreen('on',  by||'schedule'); } catch {} return bo.__origOff.call(bo); };
+
+    // cũng phát event nếu ai cần nghe
+    function emit(st, by){ window.dispatchEvent(new CustomEvent('tngon:blackout-change',{detail:{state:st, by:by||'unknown'}})); }
+    const oldOn  = bo.on,  oldOff = bo.off;
+    bo.on  = function(by){ const r = oldOn.call(bo, by);  emit('off', by||'schedule'); return r; };
+    bo.off = function(by){ const r = oldOff.call(bo, by); emit('on',  by||'schedule'); return r; };
+
+    log('hooked blackout.on/off');
+  }
+
+  // Hook sau khi DOM sẵn sàng (đảm bảo blackout.js đã load)
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', wireBlackout, { once: true });
+  } else {
+    wireBlackout();
+  }
+
+  // Lúc đổi bàn thì mirror sang status/tables/* cũng đổi theo lần kế tiếp on/off
+  window.addEventListener('tngon:tableChanged', (e)=>{
+    const st = (typeof window.__screenState === 'string') ? window.__screenState : 'on';
+    // phản ánh lại ngay vào status table mới
+    reportScreen(st, 'table-change');
+  });
+
 })();
