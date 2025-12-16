@@ -32,22 +32,19 @@
   }
 
   function lockIframeTo(url){
-    const iframe = document.getElementById('pos-frame');
-    if (!iframe || !url) return;
+  const iframe = document.getElementById('pos-frame');
+  if (!iframe || !url) return;
 
-    // ép nhiều nhịp (0ms, 50ms, 120ms, 250ms, 400ms, 600ms)
-    const times = [0, 50, 120, 250, 400, 600];
-    times.forEach((t)=> setTimeout(()=>{
-      try{
-        const cur = (iframe.getAttribute('src') || '').trim();
-        if (cur !== url){
-          iframe.setAttribute('src', url);
-          // log nhẹ thôi, khỏi spam
-          // log('lock iframe ->', t, 'ms');
-        }
-      }catch(_){}
-    }, t));
-  }
+  const times = [0, 50, 120, 250, 400, 600, 900, 1200, 1600];
+  times.forEach((t)=> setTimeout(()=>{
+    try{
+      const cur = (iframe.src || '').trim();
+      if (cur !== url){
+        iframe.src = url; // ✅ dùng property
+      }
+    }catch(_){}
+  }, t));
+}
 
   function handleStartClick(ev){
     const btn = ev.target && ev.target.closest ? ev.target.closest('#start-order') : null;
