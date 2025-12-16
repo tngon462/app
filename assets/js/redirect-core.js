@@ -1,22 +1,12 @@
 /**
- * assets/js/redirect-core.js (FINAL SAFE + AUTO-FIT + ADMIN CHANGE TABLE FIX)
- * - Giữ 3 màn: #select-table, #start-screen, #pos-container
- * - Auto-fit grid
- * - Load links.json: GitHub raw (QR/main) + local + LS cache + fallback 1..N
- * - FIX:
- *    + Đổi bàn / Home ăn NGAY nhiều lần: luôn clear posLink + reset iframe khi gotoStart/gotoSelect
- *    + Admin đổi bàn: nghe event 'tngon:tableChanged' => gotoStart()
- *    + Không còn mất số bàn: luôn sync #selected-table từ tableId
- *    + (NEW) Reload thủ công luôn về START (không tự nhảy POS)
- *    + (NEW) setPosLink chỉ LƯU link LIVE, không auto gotoPos
- *    + (NEW) Chặn gotoPos ngay sau gotoStart 1.5s
+ * assets/js/redirect-core.js (FINAL SAFE + AUTO-FIT + AD... mất số bàn: luôn sync #selected-table từ tableId
  * - Expose:
  *    window.gotoSelect(keepState?)
- *    window.gotoStart(tableId)
+ *    window.gotoStart(tableId, keepPosLink?)
  *    window.gotoPos(url)
  *    window.getLinkForTable(tableId)
  *    window.applyLinksMap(mapOrObj, source)
- *    window.setPosLink(url, source)
+ *    window.setPosLink(url, source)    // listener LIVE gọi vào đây
  *    window.getCurrentTable()
  */
 
@@ -35,6 +25,51 @@
   const elSelectedTable = $("selected-table");
   const iframe = $("pos-frame");
   const btnStart = $("start-order");
+
+
+  // ---------------------------
+  // IFRAME GUARD (chặn bị script khác set về link cũ)
+  // ---------------------------
+  function guardIframeSrc() {
+    if (!iframe) return;
+    const curState = getLS(LS.appState, "select");
+    const wanted = getLS(LS.posLink, "") || state.posLink || "";
+
+    const curSrc = (() => {
+      try {
+        return iframe.getAttribute("src") || iframe.src || "";
+      } catch (_) {
+        return "";
+      }
+    })();
+
+    // Nếu đang ở START/SELECT -> luôn ép about:blank
+    if (curState !== "pos") {
+      if (curSrc && curSrc !== "about:blank") {
+        try {
+          iframe.src = "about:blank";
+        } catch (_) {}
+      }
+      return;
+    }
+
+    // Nếu đang ở POS -> chỉ cho phép src = wanted (link mới nhất)
+    if (wanted && curSrc && curSrc !== wanted) {
+      // nếu ai đó set về link cũ -> sửa lại
+      try {
+        iframe.src = wanted;
+      } catch (_) {}
+    }
+  }
+
+  // theo dõi mọi thay đổi src
+  if (iframe) {
+    try {
+      const mo = new MutationObserver(() => guardIframeSrc());
+      mo.observe(iframe, { attributes: true, attributeFilter: ["src"] });
+    } catch (_) {}
+    setInterval(guardIframeSrc, 800);
+  }
 
   // ---------------------------
   // CONFIG
@@ -68,6 +103,7 @@
       else localStorage.setItem(k, String(v));
     } catch (_) {}
   }
+
   function getLS(k, d = null) {
     try {
       const v = localStorage.getItem(k);
@@ -78,48 +114,42 @@
   }
 
   // ---------------------------
-  // State (memory)
+  // State
   // ---------------------------
   const state = {
     tableId: null,
     posLink: null,
     linksMap: null,
     linksHash: null,
-
-    // (NEW) chống bị auto kéo vào POS ngay sau khi vừa gotoStart
     lastGotoStartAt: 0,
   };
 
   // ---------------------------
-  // Helpers
+  // Utils
   // ---------------------------
-  function safeText(el, text) {
+  function safeText(el, txt) {
     if (!el) return;
-    el.textContent = text == null ? "" : String(text);
+    el.textContent = String(txt ?? "");
   }
 
-  function showScreen(which) {
-    if (elSelect) elSelect.classList.toggle("hidden", which !== "select");
-    if (elStart) elStart.classList.toggle("hidden", which !== "start");
-    if (elPos) elPos.classList.toggle("hidden", which !== "pos");
-  }
-
-  // optional: admin status (nếu có screen-state.js)
-  function reportStageSafe(stage, by) {
-    try {
-      if (typeof window.reportStage === "function") window.reportStage(stage, by);
-    } catch (_) {}
+  function showScreen(name) {
+    if (!elSelect || !elStart || !elPos) return;
+    elSelect.style.display = name === "select" ? "block" : "none";
+    elStart.style.display = name === "start" ? "block" : "none";
+    elPos.style.display = name === "pos" ? "block" : "none";
+    setLS(LS.appState, name);
   }
 
   function resetIframe() {
+    if (!iframe) return;
     try {
-      if (iframe) iframe.src = "about:blank";
+      iframe.src = "about:blank";
     } catch (_) {}
   }
 
-  function clearPosLink(reason) {
+  function clearPosLink(reason, clearStored = true) {
     state.posLink = null;
-    setLS(LS.posLink, null);
+    if (clearStored) setLS(LS.posLink, null);
     resetIframe();
     if (reason) console.log("[redirect-core] clearPosLink:", reason);
   }
@@ -134,109 +164,64 @@
         if (aNum && bNum) return na - nb;
         return String(a).localeCompare(String(b));
       });
-      const obj = {};
-      for (const k of keys) obj[k] = map[k];
-      return JSON.stringify(obj);
+      let s = "";
+      for (const k of keys) s += `${k}=${String(map[k] || "")}|`;
+      // hash nhẹ
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+      return String(h);
     } catch (_) {
-      return null;
+      return "";
     }
   }
 
-  function normalizeLinksMap(data) {
-    const raw = data && data.links && typeof data.links === "object" ? data.links : data;
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  function normalizeLinksMap(mapOrObj) {
+    if (!mapOrObj) return null;
+    let obj = mapOrObj;
+    if (typeof mapOrObj === "string") {
+      try {
+        obj = JSON.parse(mapOrObj);
+      } catch (_) {
+        return null;
+      }
+    }
+    // hỗ trợ dạng {links:{...}} hoặc {...}
+    const links = obj.links && typeof obj.links === "object" ? obj.links : obj;
+    if (!links || typeof links !== "object") return null;
 
     const out = {};
-    for (const [k, v] of Object.entries(raw)) {
-      const key = String(k).trim();
-      const val = typeof v === "string" ? v.trim() : "";
-      if (!key || !val) continue;
-      if (!ACCEPT_URL.test(val)) continue;
-      out[key] = val;
+    for (const [k, v] of Object.entries(links)) {
+      const kk = String(k).trim();
+      const vv = String(v || "").trim();
+      if (!kk) continue;
+      if (vv && ACCEPT_URL.test(vv)) out[kk] = vv;
     }
     return Object.keys(out).length ? out : null;
   }
 
   async function fetchJson(url) {
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    return await res.json();
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
   }
 
-  // ---------------------------
-  // AUTO-FIT GRID
-  // ---------------------------
-  function setAutoFitGrid() {
+  function renderTablesFallback(n) {
     if (!elTableBox) return;
-
-    const w = Math.max(320, window.innerWidth || 0);
-    let minCell = 160;
-    if (w >= 768) minCell = 220;
-    if (w >= 1024) minCell = 260;
-
-    elTableBox.style.width = "min(1200px, 96vw)";
-    elTableBox.style.marginLeft = "auto";
-    elTableBox.style.marginRight = "auto";
-
-    elTableBox.style.display = "grid";
-    elTableBox.style.gridTemplateColumns = `repeat(auto-fit, minmax(${minCell}px, 1fr))`;
-    elTableBox.style.alignItems = "stretch";
-    elTableBox.style.justifyItems = "stretch";
-
-    elTableBox.style.gap = "24px";
-    elTableBox.style.paddingLeft = "16px";
-    elTableBox.style.paddingRight = "16px";
-  }
-
-  // ---------------------------
-  // Render tables
-  // ---------------------------
-  function makeTableButton(label) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.textContent = `Bàn ${String(label)}`;
-
-    btn.className = [
-      "w-full",
-      "rounded-2xl",
-      "bg-blue-600",
-      "text-white",
-      "font-extrabold",
-      "shadow-lg",
-      "hover:bg-blue-700",
-      "active:scale-[0.99]",
-      "transition",
-      "select-none",
-      "flex",
-      "items-center",
-      "justify-center",
-      "px-4",
-      "min-h-[clamp(90px,12vh,150px)]",
-      "text-[clamp(18px,2.2vw,34px)]",
-    ].join(" ");
-
-    btn.addEventListener("click", () => window.gotoStart(String(label)));
-    return btn;
-  }
-
-  function renderTablesFromKeys(keys) {
-    if (!elTableBox) return;
-    setAutoFitGrid();
     elTableBox.innerHTML = "";
-    for (const k of keys) elTableBox.appendChild(makeTableButton(k));
-  }
-
-  function renderTablesFallback(n = DEFAULT_TABLE_COUNT) {
-    const keys = [];
-    for (let i = 1; i <= n; i++) keys.push(String(i));
-    renderTablesFromKeys(keys);
+    for (let i = 1; i <= n; i++) {
+      const b = document.createElement("button");
+      b.className = "table-btn";
+      b.textContent = String(i);
+      b.addEventListener("click", () => window.gotoStart(String(i)));
+      elTableBox.appendChild(b);
+    }
+    setAutoFitGrid();
   }
 
   function renderTablesFromMap(map) {
-    const keys = Object.keys(map || {});
-    if (!keys.length) return renderTablesFallback(DEFAULT_TABLE_COUNT);
-
-    keys.sort((a, b) => {
+    if (!elTableBox) return;
+    elTableBox.innerHTML = "";
+    const keys = Object.keys(map || {}).sort((a, b) => {
       const na = Number(a),
         nb = Number(b);
       const aNum = Number.isFinite(na),
@@ -244,36 +229,75 @@
       if (aNum && bNum) return na - nb;
       return String(a).localeCompare(String(b));
     });
-
-    renderTablesFromKeys(keys);
+    for (const k of keys) {
+      const b = document.createElement("button");
+      b.className = "table-btn";
+      b.textContent = String(k);
+      b.addEventListener("click", () => window.gotoStart(String(k)));
+      elTableBox.appendChild(b);
+    }
+    setAutoFitGrid();
   }
 
   // ---------------------------
-  // Navigation APIs
+  // AUTO-FIT GRID (optional)
+  // ---------------------------
+  let _resizeTimer = null;
+
+  function setAutoFitGrid() {
+    if (!elTableBox) return;
+    // auto fit theo bề rộng container
+    const w = elTableBox.clientWidth || 1;
+    let col = 5;
+    if (w < 360) col = 3;
+    else if (w < 520) col = 4;
+    else if (w < 760) col = 5;
+    else col = 6;
+
+    elTableBox.style.display = "grid";
+    elTableBox.style.gridTemplateColumns = `repeat(${col}, minmax(0, 1fr))`;
+    elTableBox.style.gap = "10px";
+  }
+
+  function onResize() {
+    if (_resizeTimer) clearTimeout(_resizeTimer);
+    _resizeTimer = setTimeout(setAutoFitGrid, 120);
+  }
+
+  // ---------------------------
+  // Report (safe no-op if not exist)
+  // ---------------------------
+  function reportStageSafe(stage, by) {
+    try {
+      if (window.reportScreenStage) window.reportScreenStage(stage, by);
+    } catch (_) {}
+  }
+
+  // ---------------------------
+  // Core APIs
   // ---------------------------
   window.gotoSelect = function (keepState = false) {
-    if (!keepState) {
-      setLS(LS.appState, "select");
-      // QUAN TRỌNG: về home/chọn bàn => bỏ hẳn posLink để khỏi dính QR cũ
-      clearPosLink("gotoSelect");
-    }
     showScreen("select");
-    reportStageSafe("select", "gotoSelect");
+    if (!keepState) {
+      state.tableId = null;
+      setLS(LS.tableId, null);
+      clearPosLink("gotoSelect", true);
+      safeText(elSelectedTable, "");
+    }
   };
 
-  window.gotoStart = function (tableId) {
+  window.gotoStart = function (tableId, keepPosLink = false) {
     const id = String(tableId || "").trim();
     if (!id) return;
 
     state.tableId = id;
     setLS(LS.tableId, id);
     setLS(LS.appState, "start");
-
-    // (NEW) đánh dấu vừa gotoStart
     state.lastGotoStartAt = Date.now();
 
-    // QUAN TRỌNG: đổi bàn => bỏ hẳn posLink cũ + reset iframe để lần sau start ăn đúng
-    clearPosLink("gotoStart(" + id + ")");
+    // QUAN TRỌNG: đổi bàn => bỏ hẳn posLink cũ + reset iframe
+    // Nhưng: nếu gotoStart được gọi sau khi nhận LINK LIVE -> keepPosLink=true để GIỮ link mới
+    clearPosLink("gotoStart(" + id + ")", !keepPosLink);
 
     // QUAN TRỌNG: luôn hiện số bàn (fix “mất số bàn”)
     safeText(elSelectedTable, id);
@@ -286,14 +310,24 @@
     const u = String(url || "").trim();
     if (!u) return;
 
-    // (NEW) chặn auto nhảy POS ngay sau khi vừa gotoStart (tránh load link cũ / race)
-    if (Date.now() - (state.lastGotoStartAt || 0) < 1500) {
-      console.warn("[redirect-core] gotoPos blocked (recent gotoStart)");
+    // chặn bounce ngay sau gotoStart (tránh bị script khác đẩy vào link cũ)
+    const lastGS = state.lastGotoStartAt || 0;
+    if (Date.now() - lastGS < 2500) {
+      console.warn("[redirect-core] gotoPos blocked (recent gotoStart)", { u });
       return;
     }
 
-    state.posLink = u;
-    setLS(LS.posLink, u);
+    if (!ACCEPT_URL.test(u)) {
+      console.warn("[redirect-core] gotoPos: reject non-order url", u);
+      return;
+    }
+
+    // luôn ưu tiên link mới nhất (nếu LS đang có khác)
+    const latest = getLS(LS.posLink, u) || u;
+    const finalUrl = latest;
+
+    state.posLink = finalUrl;
+    setLS(LS.posLink, finalUrl);
     setLS(LS.appState, "pos");
 
     // giữ tableId hiện tại luôn đúng
@@ -303,28 +337,25 @@
     showScreen("pos");
     reportStageSafe("pos", "gotoPos");
 
-    // set iframe “chắc ăn” (không dựa vào src cũ)
+    // set iframe “chắc ăn”
     if (iframe) {
       try {
         iframe.src = "about:blank";
       } catch (_) {}
       setTimeout(() => {
         try {
-          iframe.src = u;
+          iframe.src = finalUrl;
         } catch (_) {}
       }, 30);
     }
   };
 
-  // ---------------------------
-  // Links APIs
-  // ---------------------------
   window.getLinkForTable = function (tableId) {
     const id = String(tableId || "").trim();
-    if (!id) return null;
-    const map = state.linksMap;
-    if (!map) return null;
-    return map[id] || null;
+    if (!id) return "";
+    const map = state.linksMap || null;
+    const v = map && map[id] ? String(map[id]).trim() : "";
+    return v && ACCEPT_URL.test(v) ? v : "";
   };
 
   window.getCurrentTable = function () {
@@ -338,9 +369,18 @@
 
     console.log("[redirect-core] setPosLink from", source, u);
 
-    // (NEW) CHỈ LƯU link LIVE, KHÔNG auto gotoPos
-    // => QRMASTER sẽ bắn gotoStart riêng, user bấm START thì vào POS bằng link mới.
+    // lưu link mới (ưu tiên)
+    state.posLink = u;
     setLS(LS.posLink, u);
+
+    // ✅ yêu cầu mới: mỗi lần nhận link LIVE -> về màn START (để không kẹt link cũ)
+    const tid = state.tableId || getLS(LS.tableId, "");
+    if (tid) {
+      window.gotoStart(tid, true);
+    } else {
+      // chưa có bàn -> chỉ lưu, không tự nhảy
+      setLS(LS.appState, "select");
+    }
   };
 
   window.applyLinksMap = function (mapOrObj, source = "unknown") {
@@ -383,41 +423,36 @@
       // 1) remote
       try {
         const data = await fetchJson(REMOTE_URL());
-        const map = normalizeLinksMap(data);
-        if (!map) throw new Error("remote invalid/empty links.json");
-        window.applyLinksMap(map, "QR_REMOTE");
-        return map;
-      } catch (e1) {
-        console.warn("[redirect-core] remote fail -> try local", e1);
-      }
+        const norm = normalizeLinksMap(data);
+        if (norm) {
+          window.applyLinksMap(norm, "REMOTE");
+          return norm;
+        }
+      } catch (_) {}
 
       // 2) local
       try {
-        const data2 = await fetchJson(LOCAL_URL());
-        const map2 = normalizeLinksMap(data2);
-        if (!map2) throw new Error("local invalid/empty links.json");
-        window.applyLinksMap(map2, "LOCAL");
-        return map2;
-      } catch (e2) {
-        console.warn("[redirect-core] local fail -> try LS cache", e2);
-      }
+        const data = await fetchJson(LOCAL_URL());
+        const norm = normalizeLinksMap(data);
+        if (norm) {
+          window.applyLinksMap(norm, "LOCAL");
+          return norm;
+        }
+      } catch (_) {}
 
-      // 3) LS cache
+      // 3) cache
       try {
         const cached = getLS(LS.linksCache, "");
         if (cached) {
           const obj = JSON.parse(cached);
-          const map3 = normalizeLinksMap(obj);
-          if (map3) {
-            window.applyLinksMap(map3, "LS_CACHE");
-            return map3;
+          const norm = normalizeLinksMap(obj);
+          if (norm) {
+            window.applyLinksMap(norm, "CACHE");
+            return norm;
           }
         }
       } catch (_) {}
 
-      // 4) fallback
-      state.linksMap = null;
-      state.linksHash = null;
       return null;
     } finally {
       isLoading = false;
@@ -425,49 +460,29 @@
   }
 
   // ---------------------------
-  // START button
+  // Start button
   // ---------------------------
   if (btnStart) {
     btnStart.addEventListener("click", () => {
-      const tableId = getLS(LS.tableId, "");
-      if (!tableId) return;
+      const tid = state.tableId || getLS(LS.tableId, "");
+      if (!tid) return;
 
-      // ưu tiên: posLink LIVE mới nhất (đã được clear khi đổi bàn)
-      const livePos = getLS(LS.posLink, "");
-      if (livePos) {
-        window.gotoPos(livePos);
+      // ưu tiên posLink LIVE (LS) trước
+      const live = getLS(LS.posLink, "") || "";
+      const fromMap = window.getLinkForTable(tid) || "";
+      const url = (live && ACCEPT_URL.test(live) ? live : fromMap) || "";
+
+      if (!url) {
+        console.warn("[redirect-core] START: no link for table", tid);
         return;
       }
-
-      // fallback: lấy từ linksMap theo bàn
-      const url = window.getLinkForTable(tableId);
-      if (url) window.gotoPos(url);
-      else console.warn("[redirect-core] No link for table", tableId);
+      window.gotoPos(url);
     });
   }
 
   // ---------------------------
-  // ADMIN: đổi bàn từ admin -> ăn ngay (nhiều lần)
-  // (admin/bind phải dispatch: window.dispatchEvent(new CustomEvent('tngon:tableChanged',{detail:{value:'12'}})))
+  // Boot
   // ---------------------------
-  window.addEventListener("tngon:tableChanged", (e) => {
-    try {
-      const t = String(
-        (e && e.detail && (e.detail.value || e.detail.table)) || getLS(LS.tableId, "")
-      ).trim();
-      if (t) window.gotoStart(t);
-    } catch (_) {}
-  });
-
-  // ---------------------------
-  // BOOT
-  // ---------------------------
-  let _resizeTimer = null;
-  function onResize() {
-    if (_resizeTimer) clearTimeout(_resizeTimer);
-    _resizeTimer = setTimeout(setAutoFitGrid, 120);
-  }
-
   async function boot() {
     console.log("[redirect-core] boot...");
 
@@ -480,13 +495,16 @@
     else renderTablesFallback(DEFAULT_TABLE_COUNT);
 
     // restore state
+    const appState = getLS(LS.appState, "select");
     const tableId = getLS(LS.tableId, "");
+    const posLink = getLS(LS.posLink, "");
 
     // luôn sync số bàn ra UI nếu có
     if (tableId) safeText(elSelectedTable, tableId);
 
-    // (NEW) Reload thủ công => luôn về START nếu đã có bàn
+    // ✅ yêu cầu mới: reload thủ công luôn về START (không tự nhảy vào POS)
     if (tableId) {
+      // giữ posLink để khi bấm START ORDER sẽ dùng link mới nhất
       window.gotoStart(tableId);
     } else {
       window.gotoSelect(true);
