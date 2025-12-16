@@ -110,15 +110,15 @@
   }
 
   function clearPosLink(reason) {
-    // Chỉ reset "pos hiện tại" (iframe + posLink global).
-    // KHÔNG xoá LIVE cache theo bàn, để tránh mất link mới vừa nhận từ Firebase.
+    const t = state.tableId || getLS(LS.tableId, "");
     state.posLink = null;
 
     setLS(LS.posLink, null);
 
-    resetIframe();
-    if (reason) console.log("[redirect-core] clearPosLink:", reason);
-  }
+    if (t) {
+      setLS(keyLiveUrl(t), null);
+      setLS(keyLiveAt(t), null);
+    }
 
     resetIframe();
     if (reason) console.log("[redirect-core] clearPosLink:", reason);
