@@ -166,7 +166,7 @@
   
 <!-- Cuối cùng: QRback listener (sau khi Firebase đã init) -->
 <script src="./assets/js/qrback-listener.js?v=1"></script>
-  <script src="./assets/js/links-live-listener.js?v=2"></script>
+
 
   <script>
 // /assets/js/debug-mark.js (có thể tách file)
@@ -212,47 +212,6 @@
 })();
 </script>
 
-
-  <script>
-(function(){
-  const iframe = document.getElementById('pos-frame');
-  if(!iframe){ console.warn('[iframe-watch] no #pos-frame'); return; }
-
-  function stack(){
-    try{ throw new Error('src-changed'); }catch(e){ return e.stack; }
-  }
-
-  // bắt mọi thay đổi attribute src
-  const mo = new MutationObserver((ms)=>{
-    ms.forEach(m=>{
-      if(m.type==='attributes' && m.attributeName==='src'){
-        console.warn('[iframe-watch] attr src =>', iframe.getAttribute('src'));
-        console.warn(stack());
-      }
-    });
-  });
-  mo.observe(iframe, { attributes:true, attributeFilter:['src'] });
-
-  // bắt set iframe.src (property)
-  try{
-    const desc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'src');
-    if(desc && desc.set){
-      Object.defineProperty(iframe, 'src', {
-        get(){ return desc.get.call(iframe); },
-        set(v){
-          console.warn('[iframe-watch] prop src =>', v);
-          console.warn(stack());
-          return desc.set.call(iframe, v);
-        }
-      });
-    }
-  }catch(e){
-    console.warn('[iframe-watch] patch failed', e);
-  }
-
-  console.log('[iframe-watch] armed');
-})();
-</script>
 
   
   
