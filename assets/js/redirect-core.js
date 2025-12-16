@@ -32,10 +32,14 @@
   function getState(){ return LS.getItem(LS_STATE) || 'select'; }
 
   function setTable(id, url){
-    if (id!=null) LS.setItem(LS_TID, String(id));
-    if (url!=null) LS.setItem(LS_TURL, String(url));
-    window.tableId = String(id || '');
-  }
+  if (id!=null) LS.setItem(LS_TID, String(id));
+
+  // ✅ nếu url null/undefined -> xóa tableUrl để không dính link cũ
+  if (url==null) LS.removeItem(LS_TURL);
+  else LS.setItem(LS_TURL, String(url));
+
+  window.tableId = String(id || '');
+}
   function getTable(){ return { id:LS.getItem(LS_TID), url:LS.getItem(LS_TURL) }; }
   function clearTable(){
     LS.removeItem(LS_TID); LS.removeItem(LS_TURL); delete window.tableId;
@@ -300,12 +304,16 @@ function gotoStart(tableId){
 
   // Admin đổi bàn từ xa (giữ như cũ)
   window.addEventListener('tngon:tableChanged', (ev)=>{
-    const { table, url } = ev.detail || {};
-    if (!table) return;
-    setTable(table, url ?? window.getLinkForTable?.(table) ?? LS.getItem(LS_TURL) ?? null);
-    if (elTable) elTable.textContent = String(table).replace('+','');
-    gotoStart();
-  });
+  const { table, url } = ev.detail || {};
+  if (!table) return;
+
+  // ✅ Đổi bàn: KHÔNG dùng lại tableUrl cũ
+  const nextUrl = url ?? window.getLinkForTable?.(table) ?? null;
+  setTable(table, nextUrl);
+
+  if (elTable) elTable.textContent = String(table).replace('+','');
+  gotoStart(table); // cho chắc tương thích admin
+});
 
   // Boot
   (async function(){
