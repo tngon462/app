@@ -28,9 +28,6 @@
 (function () {
   "use strict";
 
-  // ---------------------------
-  // DOM
-  // ---------------------------
   const $ = (id) => document.getElementById(id);
 
   const elSelect = $("select-table");
@@ -41,9 +38,6 @@
   const iframe = $("pos-frame");
   const btnStart = $("start-order");
 
-  // ---------------------------
-  // CONFIG
-  // ---------------------------
   const DEFAULT_TABLE_COUNT = 15;
 
   const REMOTE_URL = () =>
@@ -54,24 +48,14 @@
   const REFRESH_MS = 60_000;
 
   const ACCEPT_URL = /^https?:\/\/order\.atpos\.net\//i;
-
-  // Nếu sếp muốn strict hơn: LIVE quá cũ thì không tin (ms)
   const LIVE_TTL_MS = 10 * 60 * 1000; // 10 phút
 
-  // ---------------------------
-  // LocalStorage keys
-  // ---------------------------
   const LS = {
     tableId: "tableId",
     appState: "appState", // select | start | pos
-
-    // legacy/global (giữ tương thích)
-    posLink: "posLink",
-
-    // per-table LIVE
+    posLink: "posLink",   // legacy/global
     liveUrlPrefix: "posLiveUrl:",
     liveAtPrefix: "posLiveAt:",
-
     linksCache: "linksCache",
     linksCacheAt: "linksCacheAt",
     linksCacheHash: "linksCacheHash",
@@ -95,9 +79,6 @@
     }
   }
 
-  // ---------------------------
-  // State (memory)
-  // ---------------------------
   const state = {
     tableId: null,
     posLink: null,
@@ -105,9 +86,6 @@
     linksHash: null,
   };
 
-  // ---------------------------
-  // Helpers
-  // ---------------------------
   function safeText(el, text) {
     if (!el) return;
     el.textContent = text == null ? "" : String(text);
@@ -135,10 +113,8 @@
     const t = state.tableId || getLS(LS.tableId, "");
     state.posLink = null;
 
-    // clear legacy/global
     setLS(LS.posLink, null);
 
-    // clear per-table live (rất quan trọng: đổi bàn không được dính live cũ)
     if (t) {
       setLS(keyLiveUrl(t), null);
       setLS(keyLiveAt(t), null);
@@ -185,9 +161,7 @@
     return await res.json();
   }
 
-  function now() {
-    return Date.now();
-  }
+  const now = () => Date.now();
 
   function getCurrentTableId() {
     return state.tableId || getLS(LS.tableId, null);
@@ -201,9 +175,20 @@
   }
 
   function isLiveFresh(at) {
-    if (!at) return false;
-    return now() - at <= LIVE_TTL_MS;
+    return !!at && (now() - at <= LIVE_TTL_MS);
   }
+
+  window.getLinkForTable = function (tableId) {
+    const id = String(tableId || "").trim();
+    if (!id) return null;
+    const map = state.linksMap;
+    if (!map) return null;
+    return map[id] || null;
+  };
+
+  window.getCurrentTable = function () {
+    return getCurrentTableId();
+  };
 
   function isAllowedPosUrlForCurrentTable(u) {
     const t = getCurrentTableId();
@@ -212,34 +197,16 @@
     const { url: liveUrl, at: liveAt } = getLiveForTable(t);
     const mapUrl = window.getLinkForTable(t) || "";
 
-    // ưu tiên tuyệt đối LIVE mới nhất (nếu có)
     if (liveUrl) {
       if (u === liveUrl) return { ok: true, why: "match-live" };
-      return {
-        ok: false,
-        why: "stale-not-live",
-        table: t,
-        want: liveUrl,
-        wantAt: liveAt,
-        got: u,
-      };
+      return { ok: false, why: "stale-not-live", table: t, want: liveUrl, wantAt: liveAt, got: u };
     }
 
-    // chưa có LIVE -> cho phép fallback map
     if (mapUrl && u === mapUrl) return { ok: true, why: "match-map" };
 
-    return {
-      ok: false,
-      why: "no-live-and-not-map",
-      table: t,
-      want: mapUrl || "(none)",
-      got: u,
-    };
+    return { ok: false, why: "no-live-and-not-map", table: t, want: mapUrl || "(none)", got: u };
   }
 
-  // ---------------------------
-  // AUTO-FIT GRID
-  // ---------------------------
   function setAutoFitGrid() {
     if (!elTableBox) return;
 
@@ -251,44 +218,25 @@
     elTableBox.style.width = "min(1200px, 96vw)";
     elTableBox.style.marginLeft = "auto";
     elTableBox.style.marginRight = "auto";
-
     elTableBox.style.display = "grid";
     elTableBox.style.gridTemplateColumns = `repeat(auto-fit, minmax(${minCell}px, 1fr))`;
     elTableBox.style.alignItems = "stretch";
     elTableBox.style.justifyItems = "stretch";
-
     elTableBox.style.gap = "24px";
     elTableBox.style.paddingLeft = "16px";
     elTableBox.style.paddingRight = "16px";
   }
 
-  // ---------------------------
-  // Render tables
-  // ---------------------------
   function makeTableButton(label) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.textContent = `Bàn ${String(label)}`;
-
     btn.className = [
-      "w-full",
-      "rounded-2xl",
-      "bg-blue-600",
-      "text-white",
-      "font-extrabold",
-      "shadow-lg",
-      "hover:bg-blue-700",
-      "active:scale-[0.99]",
-      "transition",
-      "select-none",
-      "flex",
-      "items-center",
-      "justify-center",
-      "px-4",
-      "min-h-[clamp(90px,12vh,150px)]",
-      "text-[clamp(18px,2.2vw,34px)]",
+      "w-full","rounded-2xl","bg-blue-600","text-white","font-extrabold","shadow-lg",
+      "hover:bg-blue-700","active:scale-[0.99]","transition","select-none",
+      "flex","items-center","justify-center","px-4",
+      "min-h-[clamp(90px,12vh,150px)]","text-[clamp(18px,2.2vw,34px)]",
     ].join(" ");
-
     btn.addEventListener("click", () => window.gotoStart(String(label)));
     return btn;
   }
@@ -320,9 +268,6 @@
     renderTablesFromKeys(keys);
   }
 
-  // ---------------------------
-  // Navigation APIs
-  // ---------------------------
   window.gotoSelect = function (keepState = false) {
     if (!keepState) {
       setLS(LS.appState, "select");
@@ -340,17 +285,13 @@
     setLS(LS.tableId, id);
     setLS(LS.appState, "start");
 
-    // đổi bàn => clear LIVE/posLink cũ + reset iframe
     clearPosLink("gotoStart(" + id + ")");
-
-    // luôn hiện số bàn
     safeText(elSelectedTable, id);
 
     showScreen("start");
     reportStageSafe("start", "gotoStart");
   };
 
-  // meta: {by:'manual'|'auto'|'unknown', source:'xxx'}
   window.gotoPos = function (url, meta = null) {
     const u = String(url || "").trim();
     if (!u) return;
@@ -384,22 +325,6 @@
     }
   };
 
-  // ---------------------------
-  // Links APIs
-  // ---------------------------
-  window.getLinkForTable = function (tableId) {
-    const id = String(tableId || "").trim();
-    if (!id) return null;
-    const map = state.linksMap;
-    if (!map) return null;
-    return map[id] || null;
-  };
-
-  window.getCurrentTable = function () {
-    return getCurrentTableId();
-  };
-
-  // LIVE listener gọi: set link ngay (theo bàn)
   window.setPosLink = function (url, source = "LIVE", tableId = null) {
     const u = String(url || "").trim();
     if (!u) return;
@@ -407,10 +332,8 @@
     const t = String(tableId || getCurrentTableId() || "").trim();
     console.log("[redirect-core] setPosLink from", source, "table=", t || "(unknown)", u);
 
-    // legacy/global (giữ tương thích)
     setLS(LS.posLink, u);
 
-    // per-table live
     if (t) {
       setLS(keyLiveUrl(t), u);
       setLS(keyLiveAt(t), String(now()));
@@ -443,17 +366,12 @@
     return true;
   };
 
-  // ---------------------------
-  // Load links.json (NO LOOP)
-  // ---------------------------
   let isLoading = false;
-
   async function loadLinksOnce() {
     if (isLoading) return null;
     isLoading = true;
 
     try {
-      // 1) remote
       try {
         const data = await fetchJson(REMOTE_URL());
         const map = normalizeLinksMap(data);
@@ -464,7 +382,6 @@
         console.warn("[redirect-core] remote fail -> try local", e1);
       }
 
-      // 2) local
       try {
         const data2 = await fetchJson(LOCAL_URL());
         const map2 = normalizeLinksMap(data2);
@@ -475,7 +392,6 @@
         console.warn("[redirect-core] local fail -> try LS cache", e2);
       }
 
-      // 3) LS cache
       try {
         const cached = getLS(LS.linksCache, "");
         if (cached) {
@@ -488,7 +404,6 @@
         }
       } catch (_) {}
 
-      // 4) fallback
       state.linksMap = null;
       state.linksHash = null;
       return null;
@@ -497,36 +412,27 @@
     }
   }
 
-  // ---------------------------
-  // START button
-  // ---------------------------
   if (btnStart) {
     btnStart.addEventListener("click", () => {
       const tableId = getCurrentTableId();
       if (!tableId) return;
 
-      // ưu tiên: LIVE mới nhất của bàn
       const { url: liveUrl, at: liveAt } = getLiveForTable(tableId);
       if (liveUrl && isLiveFresh(liveAt)) {
         window.gotoPos(liveUrl, { by: "manual", source: "btnStart", why: "liveFresh" });
         return;
       }
       if (liveUrl) {
-        // có live nhưng hơi cũ vẫn cho (tùy sếp). Nếu sếp muốn strict, đổi thành return;
         window.gotoPos(liveUrl, { by: "manual", source: "btnStart", why: "liveOldButUse" });
         return;
       }
 
-      // fallback: links.json
       const url = window.getLinkForTable(tableId);
       if (url) window.gotoPos(url, { by: "manual", source: "btnStart", why: "mapFallback" });
       else console.warn("[redirect-core] No link for table", tableId);
     });
   }
 
-  // ---------------------------
-  // ADMIN: đổi bàn từ admin -> ăn ngay
-  // ---------------------------
   window.addEventListener("tngon:tableChanged", (e) => {
     try {
       const t = String(
@@ -536,9 +442,6 @@
     } catch (_) {}
   });
 
-  // ---------------------------
-  // BOOT
-  // ---------------------------
   let _resizeTimer = null;
   function onResize() {
     if (_resizeTimer) clearTimeout(_resizeTimer);
@@ -558,16 +461,10 @@
     const tableId = getLS(LS.tableId, "");
     if (tableId) safeText(elSelectedTable, tableId);
 
-    // Reload thủ công => luôn về START nếu đã có bàn
-    if (tableId) {
-      window.gotoStart(tableId);
-    } else {
-      window.gotoSelect(true);
-    }
+    if (tableId) window.gotoStart(tableId);
+    else window.gotoSelect(true);
 
-    setInterval(() => {
-      loadLinksOnce().catch(() => {});
-    }, REFRESH_MS);
+    setInterval(() => { loadLinksOnce().catch(() => {}); }, REFRESH_MS);
 
     console.log("[redirect-core] boot OK");
   }
