@@ -1,8 +1,9 @@
-// assets/js/pos-link-fix.js (WINDOW-CAPTURE + LIVE URL QQQQQQQQ
+// assets/js/pos-link-fix.js (FORCE IFRAME LOCK)
 // Mục tiêu:
-// - Chặn click START sớm nhất (window capture) để không bị listener khác override
-// - Luôn ưu tiên link LIVE (getLinkForTable) rồi mới fallback tableUrl
-// - Gọi gotoPos(url) có truyền url để khỏi dính tableUrl cũ
+// - Chặn click START sớm nhất (window capture)
+// - Resolve URL ưu tiên LIVE
+// - Gọi gotoPos(url)
+// - Sau đó "khóa" iframe 0.6s để không bị script khác overwrite
 
 (function(){
   'use strict';
@@ -14,31 +15,45 @@
   function lsSet(k,v){ try{ localStorage.setItem(k, v); }catch{} }
 
   function clearPosCache(){
-    // giữ nguyên logic cũ
     ['posUrl','posLink','lastPosUrl','lastPosHref'].forEach(lsDel);
   }
 
   function resolveBestUrl(){
     const tid = lsGet('tableId');
-    if (!tid) return null;
+    if (!tid) return { tid:null, live:null, ls:null, final:null };
 
-    // ưu tiên LIVE
     const liveUrl = (typeof window.getLinkForTable === 'function')
       ? (window.getLinkForTable(tid) || null)
       : null;
 
-    // fallback LS tableUrl
-    const lsUrl = lsGet('tableUrl');
+    const lsUrl = lsGet('tableUrl') || null;
+    const finalUrl = liveUrl || lsUrl || null;
+    return { tid, live: liveUrl, ls: lsUrl, final: finalUrl };
+  }
 
-    return liveUrl || lsUrl || null;
+  function lockIframeTo(url){
+    const iframe = document.getElementById('pos-frame');
+    if (!iframe || !url) return;
+
+    // ép nhiều nhịp (0ms, 50ms, 120ms, 250ms, 400ms, 600ms)
+    const times = [0, 50, 120, 250, 400, 600];
+    times.forEach((t)=> setTimeout(()=>{
+      try{
+        const cur = (iframe.getAttribute('src') || '').trim();
+        if (cur !== url){
+          iframe.setAttribute('src', url);
+          // log nhẹ thôi, khỏi spam
+          // log('lock iframe ->', t, 'ms');
+        }
+      }catch(_){}
+    }, t));
   }
 
   function handleStartClick(ev){
-    // target có thể là span/icon bên trong button -> dùng closest
     const btn = ev.target && ev.target.closest ? ev.target.closest('#start-order') : null;
     if (!btn) return;
 
-    // CHẶN SỚM NHẤT: chặn toàn bộ listeners khác
+    // chặn sớm nhất
     ev.preventDefault?.();
     ev.stopPropagation?.();
     ev.stopImmediatePropagation?.();
@@ -46,19 +61,24 @@
     try{
       clearPosCache();
 
-      const url = resolveBestUrl();
-      if (!url){
-        warn('no url resolved (missing tableId / live / tableUrl)');
+      const { tid, live, ls, final } = resolveBestUrl();
+      log('resolve', { tid, liveTail: live ? live.slice(-8) : null, lsTail: ls ? ls.slice(-8) : null });
+
+      if (!final){
+        warn('no url resolved');
         alert('Chưa có link POS của bàn này.');
         return false;
       }
 
-      // cập nhật tableUrl cho sạch (để redirect-core / các chỗ khác dùng cũng đúng)
-      lsSet('tableUrl', url);
+      // cập nhật tableUrl chuẩn (để redirect-core dùng cũng đúng)
+      lsSet('tableUrl', final);
 
       if (typeof window.gotoPos === 'function'){
-        log('start -> gotoPos(url) via redirect-core', { url: url.slice(0, 60) + '...' });
-        window.gotoPos(url); // ✅ truyền url cho chắc
+        log('start -> gotoPos(url) via redirect-core', { url: final });
+        window.gotoPos(final);
+
+        // ✅ khóa iframe chống overwrite
+        lockIframeTo(final);
         return false;
       }
 
@@ -81,11 +101,9 @@
   }
 
   function boot(){
-    // ✅ Gắn ở window capture để chạy trước mọi thứ
-    window.addEventListener('click', handleStartClick, true);
-
+    window.addEventListener('click', handleStartClick, true); // window capture
     wrapGotoStart();
-    log('patch ready (window-capture + live url)');
+    log('patch ready (force iframe lock)');
   }
 
   if (document.readyState==='loading') {
