@@ -1,4 +1,4 @@
-// /assets/js/qrback-listener.js ccc
+// /assets/js/qrback-listener.js
 (function () {
   'use strict';
   const log  = (...a)=> console.log('[qrback]', ...a);
@@ -47,10 +47,16 @@
     const r = reasonObj || {};
     const reason = String(r.reason || '').toLowerCase();
 
-if (reason === 'links_live_update' || reason === 'links-live-update' || reason === 'link_live_update'){
-  log('accept gotoStart from links_live_update.', r);
-  return false; // ✅ cho phép về START
-}
+    if (reason === 'links_live_update' || reason === 'links-live-update' || reason === 'link_live_update'){
+      // Nếu live đang fresh thì bỏ qua chắc chắn
+      if (_isLiveFresh()){
+        log('ignore gotoStart from links_live_update (live fresh).', r);
+        return true;
+      }
+      // Nếu live không chắc fresh: vẫn bỏ qua để tránh rung (sếp đang muốn ưu tiên live)
+      log('ignore gotoStart from links_live_update (force).', r);
+      return true;
+    }
 
     return false;
   }
