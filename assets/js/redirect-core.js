@@ -1,13 +1,20 @@
 /**
- * assets/js/redirect-core.js (CLEAN SAFE + AUTO-FIT) — PATCHED
+ * assets/js/redirect-core.js (FINAL SAFE + AUTO-FIT + ADMIN CHANGE TABLE FIX)
  * - Giữ 3 màn: #select-table, #start-screen, #pos-container
  * - Auto-fit grid
- * - Load links.json: remote + local + LS cache + fallback 1..N
+ * - Load links.json: GitHub raw (QR/main) + local + LS cache + fallback 1..N
  * - FIX:
- *    1) Đổi bàn ăn NGAY (tngon:tableChanged -> gotoStart)
- *    2) setPosLink FORCE reload iframe (dù URL giống)
- *    3) Clear posLink/iframe khi gotoStart (khỏi kẹt lần 2)
- *    4) Report stage (select/start/pos) cho admin nếu có screen-state.js (window.reportStage)
+ *    + Đổi bàn / Home ăn NGAY nhiều lần: luôn clear posLink + reset iframe khi gotoStart/gotoSelect
+ *    + Admin đổi bàn: nghe event 'tngon:tableChanged' => gotoStart()
+ *    + Không còn mất số bàn: luôn sync #selected-table từ tableId
+ * - Expose:
+ *    window.gotoSelect(keepState?)
+ *    window.gotoStart(tableId)
+ *    window.gotoPos(url)
+ *    window.getLinkForTable(tableId)
+ *    window.applyLinksMap(mapOrObj, source)
+ *    window.setPosLink(url, source)
+ *    window.getCurrentTable()
  */
 
 (function () {
@@ -33,7 +40,9 @@
 
   const REMOTE_URL = () =>
     `https://raw.githubusercontent.com/tngon462/QR/main/links.json?cb=${Date.now()}`;
+
   const LOCAL_URL = () => `./links.json?cb=${Date.now()}`;
+
   const REFRESH_MS = 60_000;
 
   const ACCEPT_URL = /^https?:\/\/order\.atpos\.net\//i;
@@ -66,7 +75,7 @@
   }
 
   // ---------------------------
-  // State in-memory
+  // State (memory)
   // ---------------------------
   const state = {
     tableId: null,
@@ -83,34 +92,37 @@
     el.textContent = text == null ? "" : String(text);
   }
 
-  function reportStageSafe(stage, by) {
-    try {
-      if (typeof window.reportStage === "function") window.reportStage(stage, by);
-    } catch (_) {}
-  }
-
   function showScreen(which) {
     if (elSelect) elSelect.classList.toggle("hidden", which !== "select");
     if (elStart) elStart.classList.toggle("hidden", which !== "start");
     if (elPos) elPos.classList.toggle("hidden", which !== "pos");
   }
 
-  function clearPos(reason) {
-    state.posLink = null;
-    setLS(LS.posLink, "");
+  // optional: admin status (nếu có screen-state.js)
+  function reportStageSafe(stage, by) {
+    try {
+      if (typeof window.reportStage === "function") window.reportStage(stage, by);
+    } catch (_) {}
+  }
+
+  function resetIframe() {
     try {
       if (iframe) iframe.src = "about:blank";
     } catch (_) {}
-    if (reason) console.log("[redirect-core] clearPos:", reason);
+  }
+
+  function clearPosLink(reason) {
+    state.posLink = null;
+    setLS(LS.posLink, null);
+    resetIframe();
+    if (reason) console.log("[redirect-core] clearPosLink:", reason);
   }
 
   function stableHashFromMap(map) {
     try {
       const keys = Object.keys(map || {}).sort((a, b) => {
-        const na = Number(a),
-          nb = Number(b);
-        const aNum = Number.isFinite(na),
-          bNum = Number.isFinite(nb);
+        const na = Number(a), nb = Number(b);
+        const aNum = Number.isFinite(na), bNum = Number.isFinite(nb);
         if (aNum && bNum) return na - nb;
         return String(a).localeCompare(String(b));
       });
@@ -150,7 +162,6 @@
     if (!elTableBox) return;
 
     const w = Math.max(320, window.innerWidth || 0);
-
     let minCell = 160;
     if (w >= 768) minCell = 220;
     if (w >= 1024) minCell = 260;
@@ -170,7 +181,7 @@
   }
 
   // ---------------------------
-  // Render buttons
+  // Render tables
   // ---------------------------
   function makeTableButton(label) {
     const btn = document.createElement("button");
@@ -218,10 +229,8 @@
     if (!keys.length) return renderTablesFallback(DEFAULT_TABLE_COUNT);
 
     keys.sort((a, b) => {
-      const na = Number(a),
-        nb = Number(b);
-      const aNum = Number.isFinite(na),
-        bNum = Number.isFinite(nb);
+      const na = Number(a), nb = Number(b);
+      const aNum = Number.isFinite(na), bNum = Number.isFinite(nb);
       if (aNum && bNum) return na - nb;
       return String(a).localeCompare(String(b));
     });
@@ -230,10 +239,14 @@
   }
 
   // ---------------------------
-  // Public APIs: navigation
+  // Navigation APIs
   // ---------------------------
   window.gotoSelect = function (keepState = false) {
-    if (!keepState) setLS(LS.appState, "select");
+    if (!keepState) {
+      setLS(LS.appState, "select");
+      // QUAN TRỌNG: về home/chọn bàn => bỏ hẳn posLink để khỏi dính QR cũ
+      clearPosLink("gotoSelect");
+    }
     showScreen("select");
     reportStageSafe("select", "gotoSelect");
   };
@@ -242,14 +255,16 @@
     const id = String(tableId || "").trim();
     if (!id) return;
 
-    // ✅ đổi bàn: clear pos để lần 2 không kẹt
-    clearPos("gotoStart(" + id + ")");
-
     state.tableId = id;
     setLS(LS.tableId, id);
     setLS(LS.appState, "start");
 
+    // QUAN TRỌNG: đổi bàn => bỏ hẳn posLink cũ + reset iframe để lần sau start ăn đúng
+    clearPosLink("gotoStart(" + id + ")");
+
+    // QUAN TRỌNG: luôn hiện số bàn (fix “mất số bàn”)
     safeText(elSelectedTable, id);
+
     showScreen("start");
     reportStageSafe("start", "gotoStart");
   };
@@ -262,22 +277,28 @@
     setLS(LS.posLink, u);
     setLS(LS.appState, "pos");
 
+    // giữ tableId hiện tại luôn đúng
+    const curTable = state.tableId || getLS(LS.tableId, "");
+    if (curTable) safeText(elSelectedTable, curTable);
+
     showScreen("pos");
     reportStageSafe("pos", "gotoPos");
 
-    // ✅ force reload iframe (ATPos cần)
+    // set iframe “chắc ăn” (không dựa vào src cũ)
     if (iframe) {
       try {
         iframe.src = "about:blank";
-        setTimeout(() => {
-          iframe.src = u;
-        }, 30);
       } catch (_) {}
+      setTimeout(() => {
+        try {
+          iframe.src = u;
+        } catch (_) {}
+      }, 30);
     }
   };
 
   // ---------------------------
-  // Public APIs: links
+  // Links APIs
   // ---------------------------
   window.getLinkForTable = function (tableId) {
     const id = String(tableId || "").trim();
@@ -291,12 +312,14 @@
     return state.tableId || getLS(LS.tableId, null);
   };
 
-  // Listener LIVE gọi vào đây: set link ngay (FORCE, dù giống)
+  // LIVE listener gọi: set link ngay
   window.setPosLink = function (url, source = "LIVE") {
     const u = String(url || "").trim();
     if (!u) return;
 
-    console.log("[redirect-core] setPosLink FORCE from", source, u);
+    console.log("[redirect-core] setPosLink from", source, u);
+
+    // luôn lưu vào LS để nút START ORDER ưu tiên link mới nhất
     setLS(LS.posLink, u);
     window.gotoPos(u);
   };
@@ -320,6 +343,7 @@
       if (newHash) setLS(LS.linksCacheHash, newHash);
     } catch (_) {}
 
+    // chỉ render list bàn khi đang ở màn chọn bàn
     const curState = getLS(LS.appState, "select");
     if (curState === "select") renderTablesFromMap(norm);
 
@@ -328,7 +352,7 @@
   };
 
   // ---------------------------
-  // Load links.json with fallback (NO LOOP)
+  // Load links.json (NO LOOP)
   // ---------------------------
   let isLoading = false;
 
@@ -372,6 +396,7 @@
         }
       } catch (_) {}
 
+      // 4) fallback
       state.linksMap = null;
       state.linksHash = null;
       return null;
@@ -388,13 +413,14 @@
       const tableId = getLS(LS.tableId, "");
       if (!tableId) return;
 
-      // ưu tiên: link hiện tại (posLink) nếu có
+      // ưu tiên: posLink LIVE mới nhất (đã được clear khi đổi bàn)
       const livePos = getLS(LS.posLink, "");
       if (livePos) {
         window.gotoPos(livePos);
         return;
       }
 
+      // fallback: lấy từ linksMap theo bàn
       const url = window.getLinkForTable(tableId);
       if (url) window.gotoPos(url);
       else console.warn("[redirect-core] No link for table", tableId);
@@ -402,13 +428,14 @@
   }
 
   // ---------------------------
-  // ✅ Admin đổi bàn -> ăn ngay
+  // ADMIN: đổi bàn từ admin -> ăn ngay (nhiều lần)
+  // (admin/bind phải dispatch: window.dispatchEvent(new CustomEvent('tngon:tableChanged',{detail:{value:'12'}})))
   // ---------------------------
   window.addEventListener("tngon:tableChanged", (e) => {
     try {
-      const t =
-        (e && e.detail && (e.detail.value || e.detail.table)) ? String(e.detail.value || e.detail.table)
-        : getLS(LS.tableId, "");
+      const t = String(
+        (e && e.detail && (e.detail.value || e.detail.table)) || getLS(LS.tableId, "")
+      ).trim();
       if (t) window.gotoStart(t);
     } catch (_) {}
   });
@@ -419,9 +446,7 @@
   let _resizeTimer = null;
   function onResize() {
     if (_resizeTimer) clearTimeout(_resizeTimer);
-    _resizeTimer = setTimeout(() => {
-      setAutoFitGrid();
-    }, 120);
+    _resizeTimer = setTimeout(setAutoFitGrid, 120);
   }
 
   async function boot() {
@@ -430,13 +455,18 @@
     setAutoFitGrid();
     window.addEventListener("resize", onResize, { passive: true });
 
+    // load links rồi render list bàn
     const map = await loadLinksOnce();
     if (map) renderTablesFromMap(map);
     else renderTablesFallback(DEFAULT_TABLE_COUNT);
 
+    // restore state
     const appState = getLS(LS.appState, "select");
     const tableId = getLS(LS.tableId, "");
     const posLink = getLS(LS.posLink, "");
+
+    // luôn sync số bàn ra UI nếu có
+    if (tableId) safeText(elSelectedTable, tableId);
 
     if (appState === "pos" && posLink) {
       window.gotoPos(posLink);
@@ -446,6 +476,7 @@
       window.gotoSelect(true);
     }
 
+    // periodic refresh links
     setInterval(() => {
       loadLinksOnce().catch(() => {});
     }, REFRESH_MS);
