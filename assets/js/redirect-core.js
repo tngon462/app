@@ -39,7 +39,14 @@
     linksMap: null,
     linksHash: null,
   };
-
+  // ---------------------------
+  // Report stage to Admin (if screen-state.js provides it)
+  // ---------------------------
+  function reportStageSafe(stage, by) {
+    try {
+      if (typeof window.reportStage === 'function') window.reportStage(stage, by);
+    } catch (_) {}
+  }
   const setLS = (k, v) => {
     try {
       if (v == null || v === "") localStorage.removeItem(k);
@@ -155,7 +162,20 @@
     window.gotoPos(u);
   };
 
+    // ---------------------------
+  // Admin đổi bàn -> ép gotoStart ngay (khỏi reload)
+  // bind module sẽ dispatch event 'tngon:tableChanged'
+  // ---------------------------
+  window.addEventListener('tngon:tableChanged', (e) => {
+    try {
+      const t = (e && e.detail && (e.detail.value || e.detail.table))
+        ? String(e.detail.value || e.detail.table)
+        : getLS(LS.tableId, "");
+      if (t) window.gotoStart(t);
+    } catch (_) {}
+  });
   // ===== BOOT =====
+  
   async function boot() {
     const appState = getLS(LS.appState, "select");
     const tableId = getLS(LS.tableId, "");
