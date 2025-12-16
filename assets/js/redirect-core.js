@@ -1,5 +1,5 @@
 /**
- * assets/js/redirect-core.js (LIVE-FIRST)
+ * assets/js/redirect-core.js (LIVE-FIRST)aaaa
  * - Giữ nguyên 3 màn: #select-table, #start-screen, #pos-container
  * - PRIMARY: nhận link realtime từ Firebase: links_live/{updated_at, links}
  * - FALLBACK: links.json (local) rồi mới tới GitHub raw (tuỳ chọn)
