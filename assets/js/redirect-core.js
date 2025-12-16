@@ -71,7 +71,7 @@ function gotoStart(tableId){
   show(elStart);
   setState('start');
 }
-  }
+  
   function gotoPos(url){
     const t = getTable();
     const finalUrl = url || t.url;
