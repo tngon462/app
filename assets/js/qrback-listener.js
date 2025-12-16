@@ -27,8 +27,46 @@
     offFns = [];
   }
 
+  function _isLiveFresh(){
+    // redirect-core (bản LIVE-FIRST) có LIVE_UPDATED_AT nội bộ, nhưng không expose.
+    // Ta dùng cache LS do redirect-core đã set: linksLiveCacheAt / linksLiveCache (nếu có).
+    // Nếu không có thì coi như chưa chắc live fresh.
+    try{
+      const at = Number(localStorage.getItem('linksLiveCacheAt') || 0);
+      if (!at) return false;
+      const age = Math.floor(Date.now()/1000) - at;
+      return age <= 120; // đồng bộ với LIVE_STALE_SECONDS
+    }catch(_){
+      return false;
+    }
+  }
+
+  function _shouldIgnoreGotoStart(reasonObj){
+    // ✅ BỎ QUA các signal “expired” mà chỉ nhằm báo “links_live_update”
+    // vì redirect-core đã tự update link live rồi.
+    const r = reasonObj || {};
+    const reason = String(r.reason || '').toLowerCase();
+
+    if (reason === 'links_live_update' || reason === 'links-live-update' || reason === 'link_live_update'){
+      // Nếu live đang fresh thì bỏ qua chắc chắn
+      if (_isLiveFresh()){
+        log('ignore gotoStart from links_live_update (live fresh).', r);
+        return true;
+      }
+      // Nếu live không chắc fresh: vẫn bỏ qua để tránh rung (sếp đang muốn ưu tiên live)
+      log('ignore gotoStart from links_live_update (force).', r);
+      return true;
+    }
+
+    return false;
+  }
+
   function triggerGotoStart(reason){
     log('signals trigger', reason);
+
+    // ✅ chặn các case không cần đá về Start
+    if (_shouldIgnoreGotoStart(reason)) return;
+
     try { localStorage.setItem('appState', 'start'); } catch {}
     if (typeof window.gotoStart === 'function'){
       log('→ gotoStart()');
