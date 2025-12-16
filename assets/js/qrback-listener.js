@@ -17,10 +17,14 @@
   log('QRback listener ready.', { deviceId });
 
   // ===== state =====
-  let currentTable = null;          // bàn đang gắn listener
-  let lastGoodTable = getLS('tableId') || null;  // bàn hợp lệ cuối cùng
-  let offFns = [];                  // hàm tháo listener hiện tại
-  let attachTimer = null;           // debounce
+  let currentTable = null;
+  let lastGoodTable = getLS('tableId') || null;
+  let offFns = [];
+  let attachTimer = null;
+
+  // 🔑 baseline guard
+  let signalsBaselineReady = false;
+  let ignoreSignalsBeforeTs = 0;
 
   function offAll(){
     offFns.forEach(fn => { try{ fn(); }catch(_){} });
@@ -40,18 +44,24 @@
   }
 
   function _attachForTable(table){
-    // Gắn thật (không debounce). Chỉ gọi từ attachForTableDebounced.
     if (!table){
-      warn('Bỏ qua attach vì table rỗng (giữ nguyên listener cũ).');
+      warn('Bỏ qua attach vì table rỗng.');
       return;
     }
     if (table === currentTable){
-      return; // không đổi
+      return;
     }
+
     offAll();
+
     currentTable = table;
     lastGoodTable = table;
     setLS('tableId', table);
+
+    // 🔑 reset baseline mỗi lần đổi bàn
+    signalsBaselineReady = false;
+    ignoreSignalsBeforeTs = Date.now();
+
     log('device table =', table);
 
     // 1) signals/<table>
@@ -59,6 +69,24 @@
     const onSig = refSig.on('value', s=>{
       const v = s.val();
       if (!v) return;
+
+      // Lấy ts (chấp nhận giây hoặc ms)
+      const tsMs =
+        typeof v.ts === 'number'
+          ? (v.ts < 2e10 ? v.ts * 1000 : v.ts)
+          : 0;
+
+      // ✅ Snapshot đầu tiên = baseline → bỏ qua
+      if (!signalsBaselineReady){
+        signalsBaselineReady = true;
+        return;
+      }
+
+      // ✅ Bỏ qua expired cũ
+      if (tsMs && tsMs <= ignoreSignalsBeforeTs){
+        return;
+      }
+
       if (String(v.status||'').toLowerCase()==='expired'){
         triggerGotoStart(v);
       }
@@ -68,18 +96,30 @@
     // 2) control/tables/<table>/qrbackAt
     const refCtrl = db.ref(`control/tables/${table}/qrbackAt`);
     const onCtrl = refCtrl.on('value', s=>{
-      if (s.exists()){
-        triggerGotoStart({status:'expired', ts:s.val()});
-      }
+      if (!s.exists()) return;
+
+      const tsMs = typeof s.val() === 'number'
+        ? (s.val() < 2e10 ? s.val() * 1000 : s.val())
+        : 0;
+
+      if (tsMs && tsMs <= ignoreSignalsBeforeTs) return;
+
+      triggerGotoStart({status:'expired', ts:s.val()});
     }, e=> warn('control/tables error:', e?.message||e));
     offFns.push(()=> refCtrl.off('value', onCtrl));
 
     // 3) broadcast/qrbackAt
     const refBc = db.ref('broadcast/qrbackAt');
     const onBc = refBc.on('value', s=>{
-      if (s.exists()){
-        triggerGotoStart({status:'expired', ts:s.val(), global:true});
-      }
+      if (!s.exists()) return;
+
+      const tsMs = typeof s.val() === 'number'
+        ? (s.val() < 2e10 ? s.val() * 1000 : s.val())
+        : 0;
+
+      if (tsMs && tsMs <= ignoreSignalsBeforeTs) return;
+
+      triggerGotoStart({status:'expired', ts:s.val(), global:true});
     }, e=> warn('broadcast error:', e?.message||e));
     offFns.push(()=> refBc.off('value', onBc));
 
@@ -89,31 +129,23 @@
   }
 
   function attachForTableDebounced(table){
-    // Debounce 400ms để tránh rung khi DB/LS nhấp nháy.
-    if (!table){
-      // không detach khi nhận null; cứ giữ nguyên currentTable
-      return;
-    }
+    if (!table) return;
     if (attachTimer) clearTimeout(attachTimer);
     attachTimer = setTimeout(()=> _attachForTable(table), 400);
   }
 
   // ===== nguồn bàn =====
-  // A) localStorage ngay khi boot
   if (lastGoodTable){
     _attachForTable(lastGoodTable);
   }
 
-  // B) thay đổi localStorage (khác tab)
   window.addEventListener('storage', (e)=>{
     if (e.key === 'tableId'){
       const t = e.newValue || null;
       if (t) attachForTableDebounced(String(t));
-      // nếu t=null: bỏ qua (sticky)
     }
   });
 
-  // C) DB: devices/<id>/table – KHÔNG xóa LS khi DB null
   if (deviceId){
     const ref = db.ref('devices/'+deviceId+'/table');
     const cb = ref.on('value', s=>{
@@ -122,8 +154,7 @@
         if (t !== getLS('tableId')) setLS('tableId', t);
         attachForTableDebounced(t);
       } else {
-        // DB báo null -> coi như nhiễu, giữ lastGoodTable, không tháo listener
-        warn('DB table=null (ignore, keep current=', currentTable, ')');
+        warn('DB table=null (ignore)');
       }
     }, e=> warn('watchDeviceTable error:', e?.message||e));
     offFns.push(()=> ref.off('value', cb));
