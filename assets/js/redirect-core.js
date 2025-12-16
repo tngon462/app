@@ -1,23 +1,28 @@
 /**
- * assets/js/redirect-core.js (FINAL SAFE + AUTO-FIT + ADMIN CHANGE TABLE FIX)
+ * assets/js/redirect-core.js (FINAL SAFE + AUTO-FIT + ANTI-OLD-LINK)
  * - Giữ 3 màn: #select-table, #start-screen, #pos-container
  * - Auto-fit grid
  * - Load links.json: GitHub raw (QR/main) + local + LS cache + fallback 1..N
- * - FIX:
- *    + Đổi bàn / Home ăn NGAY nhiều lần: luôn clear posLink + reset iframe khi gotoStart/gotoSelect
- *    + Admin đổi bàn: nghe event 'tngon:tableChanged' => gotoStart()
- *    + Không còn mất số bàn: luôn sync #selected-table từ tableId
- *    + (NEW) Reload thủ công luôn về START (không tự nhảy POS)
- *    + (NEW) setPosLink chỉ LƯU link LIVE, không auto gotoPos
- *    + (NEW) Chặn gotoPos ngay sau gotoStart 1.5s
- * - Expose:
- *    window.gotoSelect(keepState?)
- *    window.gotoStart(tableId)
- *    window.gotoPos(url)
- *    window.getLinkForTable(tableId)
- *    window.applyLinksMap(mapOrObj, source)
- *    window.setPosLink(url, source)
- *    window.getCurrentTable()
+ *
+ * FIX trọng tâm:
+ *  1) KHÔNG chặn theo thời gian (không block 1.5s/2.5s nữa) => tránh màn START bị trắng khi thao tác thủ công
+ *  2) Chặn "link cũ" bằng allowlist:
+ *      - gotoPos(url) chỉ được phép nếu url === LIVE mới nhất của bàn hiện tại
+ *      - hoặc chưa có LIVE thì fallback bằng link từ links.json
+ *      - mọi url khác => reject + console.trace để biết script nào gọi
+ *  3) Đổi bàn / Home: luôn clear posLink + reset iframe
+ *  4) Admin đổi bàn: nghe event 'tngon:tableChanged' => gotoStart()
+ *  5) Không còn mất số bàn: luôn sync #selected-table từ tableId
+ *  6) Reload thủ công: nếu có bàn => về START
+ *
+ * Expose:
+ *   window.gotoSelect(keepState?)
+ *   window.gotoStart(tableId)
+ *   window.gotoPos(url, meta?)
+ *   window.getLinkForTable(tableId)
+ *   window.applyLinksMap(mapOrObj, source)
+ *   window.setPosLink(url, source, tableId?)
+ *   window.getCurrentTable()
  */
 
 (function () {
@@ -50,17 +55,30 @@
 
   const ACCEPT_URL = /^https?:\/\/order\.atpos\.net\//i;
 
+  // Nếu sếp muốn strict hơn: LIVE quá cũ thì không tin (ms)
+  const LIVE_TTL_MS = 10 * 60 * 1000; // 10 phút
+
   // ---------------------------
   // LocalStorage keys
   // ---------------------------
   const LS = {
     tableId: "tableId",
-    posLink: "posLink",
     appState: "appState", // select | start | pos
+
+    // legacy/global (giữ tương thích)
+    posLink: "posLink",
+
+    // per-table LIVE
+    liveUrlPrefix: "posLiveUrl:",
+    liveAtPrefix: "posLiveAt:",
+
     linksCache: "linksCache",
     linksCacheAt: "linksCacheAt",
     linksCacheHash: "linksCacheHash",
   };
+
+  const keyLiveUrl = (t) => LS.liveUrlPrefix + String(t);
+  const keyLiveAt = (t) => LS.liveAtPrefix + String(t);
 
   function setLS(k, v) {
     try {
@@ -85,9 +103,6 @@
     posLink: null,
     linksMap: null,
     linksHash: null,
-
-    // (NEW) chống bị auto kéo vào POS ngay sau khi vừa gotoStart
-    lastGotoStartAt: 0,
   };
 
   // ---------------------------
@@ -104,7 +119,6 @@
     if (elPos) elPos.classList.toggle("hidden", which !== "pos");
   }
 
-  // optional: admin status (nếu có screen-state.js)
   function reportStageSafe(stage, by) {
     try {
       if (typeof window.reportStage === "function") window.reportStage(stage, by);
@@ -118,8 +132,18 @@
   }
 
   function clearPosLink(reason) {
+    const t = state.tableId || getLS(LS.tableId, "");
     state.posLink = null;
+
+    // clear legacy/global
     setLS(LS.posLink, null);
+
+    // clear per-table live (rất quan trọng: đổi bàn không được dính live cũ)
+    if (t) {
+      setLS(keyLiveUrl(t), null);
+      setLS(keyLiveAt(t), null);
+    }
+
     resetIframe();
     if (reason) console.log("[redirect-core] clearPosLink:", reason);
   }
@@ -127,10 +151,8 @@
   function stableHashFromMap(map) {
     try {
       const keys = Object.keys(map || {}).sort((a, b) => {
-        const na = Number(a),
-          nb = Number(b);
-        const aNum = Number.isFinite(na),
-          bNum = Number.isFinite(nb);
+        const na = Number(a), nb = Number(b);
+        const aNum = Number.isFinite(na), bNum = Number.isFinite(nb);
         if (aNum && bNum) return na - nb;
         return String(a).localeCompare(String(b));
       });
@@ -161,6 +183,58 @@
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) throw new Error("HTTP " + res.status);
     return await res.json();
+  }
+
+  function now() {
+    return Date.now();
+  }
+
+  function getCurrentTableId() {
+    return state.tableId || getLS(LS.tableId, null);
+  }
+
+  function getLiveForTable(t) {
+    if (!t) return { url: "", at: 0 };
+    const url = getLS(keyLiveUrl(t), "") || "";
+    const at = Number(getLS(keyLiveAt(t), "0")) || 0;
+    return { url, at };
+  }
+
+  function isLiveFresh(at) {
+    if (!at) return false;
+    return now() - at <= LIVE_TTL_MS;
+  }
+
+  function isAllowedPosUrlForCurrentTable(u) {
+    const t = getCurrentTableId();
+    if (!t) return { ok: false, why: "no-table" };
+
+    const { url: liveUrl, at: liveAt } = getLiveForTable(t);
+    const mapUrl = window.getLinkForTable(t) || "";
+
+    // ưu tiên tuyệt đối LIVE mới nhất (nếu có)
+    if (liveUrl) {
+      if (u === liveUrl) return { ok: true, why: "match-live" };
+      return {
+        ok: false,
+        why: "stale-not-live",
+        table: t,
+        want: liveUrl,
+        wantAt: liveAt,
+        got: u,
+      };
+    }
+
+    // chưa có LIVE -> cho phép fallback map
+    if (mapUrl && u === mapUrl) return { ok: true, why: "match-map" };
+
+    return {
+      ok: false,
+      why: "no-live-and-not-map",
+      table: t,
+      want: mapUrl || "(none)",
+      got: u,
+    };
   }
 
   // ---------------------------
@@ -237,10 +311,8 @@
     if (!keys.length) return renderTablesFallback(DEFAULT_TABLE_COUNT);
 
     keys.sort((a, b) => {
-      const na = Number(a),
-        nb = Number(b);
-      const aNum = Number.isFinite(na),
-        bNum = Number.isFinite(nb);
+      const na = Number(a), nb = Number(b);
+      const aNum = Number.isFinite(na), bNum = Number.isFinite(nb);
       if (aNum && bNum) return na - nb;
       return String(a).localeCompare(String(b));
     });
@@ -254,7 +326,6 @@
   window.gotoSelect = function (keepState = false) {
     if (!keepState) {
       setLS(LS.appState, "select");
-      // QUAN TRỌNG: về home/chọn bàn => bỏ hẳn posLink để khỏi dính QR cũ
       clearPosLink("gotoSelect");
     }
     showScreen("select");
@@ -269,26 +340,29 @@
     setLS(LS.tableId, id);
     setLS(LS.appState, "start");
 
-    // (NEW) đánh dấu vừa gotoStart
-    state.lastGotoStartAt = Date.now();
-
-    // QUAN TRỌNG: đổi bàn => bỏ hẳn posLink cũ + reset iframe để lần sau start ăn đúng
+    // đổi bàn => clear LIVE/posLink cũ + reset iframe
     clearPosLink("gotoStart(" + id + ")");
 
-    // QUAN TRỌNG: luôn hiện số bàn (fix “mất số bàn”)
+    // luôn hiện số bàn
     safeText(elSelectedTable, id);
 
     showScreen("start");
     reportStageSafe("start", "gotoStart");
   };
 
-  window.gotoPos = function (url) {
+  // meta: {by:'manual'|'auto'|'unknown', source:'xxx'}
+  window.gotoPos = function (url, meta = null) {
     const u = String(url || "").trim();
     if (!u) return;
 
-    // (NEW) chặn auto nhảy POS ngay sau khi vừa gotoStart (tránh load link cũ / race)
-    if (Date.now() - (state.lastGotoStartAt || 0) < 1500) {
-      console.warn("[redirect-core] gotoPos blocked (recent gotoStart)");
+    const check = isAllowedPosUrlForCurrentTable(u);
+    if (!check.ok) {
+      console.warn("[redirect-core] REJECT gotoPos (blocked old/wrong link)", check, meta);
+      try {
+        console.groupCollapsed("%c[TRACE] rejected gotoPos caller", "color:#ff4d4f;font-weight:bold");
+        console.trace();
+        console.groupEnd();
+      } catch (_) {}
       return;
     }
 
@@ -296,22 +370,16 @@
     setLS(LS.posLink, u);
     setLS(LS.appState, "pos");
 
-    // giữ tableId hiện tại luôn đúng
-    const curTable = state.tableId || getLS(LS.tableId, "");
+    const curTable = getCurrentTableId();
     if (curTable) safeText(elSelectedTable, curTable);
 
     showScreen("pos");
     reportStageSafe("pos", "gotoPos");
 
-    // set iframe “chắc ăn” (không dựa vào src cũ)
     if (iframe) {
-      try {
-        iframe.src = "about:blank";
-      } catch (_) {}
+      try { iframe.src = "about:blank"; } catch (_) {}
       setTimeout(() => {
-        try {
-          iframe.src = u;
-        } catch (_) {}
+        try { iframe.src = u; } catch (_) {}
       }, 30);
     }
   };
@@ -328,19 +396,25 @@
   };
 
   window.getCurrentTable = function () {
-    return state.tableId || getLS(LS.tableId, null);
+    return getCurrentTableId();
   };
 
-  // LIVE listener gọi: set link ngay
-  window.setPosLink = function (url, source = "LIVE") {
+  // LIVE listener gọi: set link ngay (theo bàn)
+  window.setPosLink = function (url, source = "LIVE", tableId = null) {
     const u = String(url || "").trim();
     if (!u) return;
 
-    console.log("[redirect-core] setPosLink from", source, u);
+    const t = String(tableId || getCurrentTableId() || "").trim();
+    console.log("[redirect-core] setPosLink from", source, "table=", t || "(unknown)", u);
 
-    // (NEW) CHỈ LƯU link LIVE, KHÔNG auto gotoPos
-    // => QRMASTER sẽ bắn gotoStart riêng, user bấm START thì vào POS bằng link mới.
+    // legacy/global (giữ tương thích)
     setLS(LS.posLink, u);
+
+    // per-table live
+    if (t) {
+      setLS(keyLiveUrl(t), u);
+      setLS(keyLiveAt(t), String(now()));
+    }
   };
 
   window.applyLinksMap = function (mapOrObj, source = "unknown") {
@@ -362,7 +436,6 @@
       if (newHash) setLS(LS.linksCacheHash, newHash);
     } catch (_) {}
 
-    // chỉ render list bàn khi đang ở màn chọn bàn
     const curState = getLS(LS.appState, "select");
     if (curState === "select") renderTablesFromMap(norm);
 
@@ -429,26 +502,30 @@
   // ---------------------------
   if (btnStart) {
     btnStart.addEventListener("click", () => {
-      const tableId = getLS(LS.tableId, "");
+      const tableId = getCurrentTableId();
       if (!tableId) return;
 
-      // ưu tiên: posLink LIVE mới nhất (đã được clear khi đổi bàn)
-      const livePos = getLS(LS.posLink, "");
-      if (livePos) {
-        window.gotoPos(livePos);
+      // ưu tiên: LIVE mới nhất của bàn
+      const { url: liveUrl, at: liveAt } = getLiveForTable(tableId);
+      if (liveUrl && isLiveFresh(liveAt)) {
+        window.gotoPos(liveUrl, { by: "manual", source: "btnStart", why: "liveFresh" });
+        return;
+      }
+      if (liveUrl) {
+        // có live nhưng hơi cũ vẫn cho (tùy sếp). Nếu sếp muốn strict, đổi thành return;
+        window.gotoPos(liveUrl, { by: "manual", source: "btnStart", why: "liveOldButUse" });
         return;
       }
 
-      // fallback: lấy từ linksMap theo bàn
+      // fallback: links.json
       const url = window.getLinkForTable(tableId);
-      if (url) window.gotoPos(url);
+      if (url) window.gotoPos(url, { by: "manual", source: "btnStart", why: "mapFallback" });
       else console.warn("[redirect-core] No link for table", tableId);
     });
   }
 
   // ---------------------------
-  // ADMIN: đổi bàn từ admin -> ăn ngay (nhiều lần)
-  // (admin/bind phải dispatch: window.dispatchEvent(new CustomEvent('tngon:tableChanged',{detail:{value:'12'}})))
+  // ADMIN: đổi bàn từ admin -> ăn ngay
   // ---------------------------
   window.addEventListener("tngon:tableChanged", (e) => {
     try {
@@ -474,25 +551,20 @@
     setAutoFitGrid();
     window.addEventListener("resize", onResize, { passive: true });
 
-    // load links rồi render list bàn
     const map = await loadLinksOnce();
     if (map) renderTablesFromMap(map);
     else renderTablesFallback(DEFAULT_TABLE_COUNT);
 
-    // restore state
     const tableId = getLS(LS.tableId, "");
-
-    // luôn sync số bàn ra UI nếu có
     if (tableId) safeText(elSelectedTable, tableId);
 
-    // (NEW) Reload thủ công => luôn về START nếu đã có bàn
+    // Reload thủ công => luôn về START nếu đã có bàn
     if (tableId) {
       window.gotoStart(tableId);
     } else {
       window.gotoSelect(true);
     }
 
-    // periodic refresh links
     setInterval(() => {
       loadLinksOnce().catch(() => {});
     }, REFRESH_MS);
