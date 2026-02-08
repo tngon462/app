@@ -344,7 +344,7 @@
       const keys = LINKS_MAP ? Object.keys(LINKS_MAP).sort((a,b)=>Number(a)-Number(b))
                              : Array.from({length:15},(_,i)=> String(i+1));
       const wrap = document.createElement('div');
-      wrap.className = 'modal-overlay-ios fixed inset-0 z-[9600] bg-black/50 p-4';
+      wrap.className = 'modal-overlay-ios fixed inset-0 z-[10500] bg-black/50 p-4';
       wrap.innerHTML = `
         <div class="modal-inner modal-inner-xl">
           <div class="bg-white rounded-xl shadow-lg w-full p-4">
@@ -400,7 +400,6 @@
             </div>
 
             <div class="text-sm text-gray-600 mb-3">
-              <div>ID đầy đủ: <span class="font-mono break-all">${id}</span></div>
               <div>Tên hiện tại: <strong>${name || '(chưa đặt)'}</strong>
                 <button id="act-rename" class="ml-1 px-2 py-0.5 text-xs rounded border hover:bg-gray-50">Đổi tên</button>
               </div>
@@ -411,7 +410,7 @@
             <div class="grid grid-cols-2 gap-2">
               <button id="act-reload"  class="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Làm mới</button>
               <button id="act-settbl" class="px-3 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700">Đổi bàn</button>
-              <button id="act-unbind" class="px-3 py-2 rounded bg-amber-600 text-white hover:bg-amber-700" ${code?'':'disabled'}>Gỡ mã</button>
+              <button id="act-unbind" class="px-3 py-2 rounded bg-orange-500 text-white hover:bg-orange-600" ${code?'':'disabled'}>Gỡ mã</button>
               <button id="act-delete" class="px-3 py-2 rounded ${code?'bg-gray-100 opacity-50 cursor-not-allowed':'bg-red-600 text-white hover:bg-red-700'}" ${code?'disabled':''}>Xoá device</button>
             </div>
           </div>
