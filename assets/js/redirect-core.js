@@ -168,8 +168,25 @@
     return (key in LINKS_MAP) ? LINKS_MAP[key] : null;
   };
 
+  // ---- Loading & Connection status ----
+  function setLinksLoading(loading) {
+    const el = $('links-loading');
+    if (!el) return;
+    el.classList.toggle('hidden', !loading);
+  }
+  function setConnectionStatus(connected) {
+    const el = $('conn-status');
+    if (!el) return;
+    el.textContent = connected ? 'Đã kết nối' : 'Đang mất kết nối';
+    el.className = connected ? 'text-xs text-emerald-600 mb-2' : 'text-xs text-amber-600 mb-2';
+    el.classList.remove('hidden');
+  }
+  window.setLinksLoading = setLinksLoading;
+  window.setConnectionStatus = setConnectionStatus;
+
   function renderTablesFromMap(map) {
     if (!tableWrap) return;
+    setLinksLoading(false);
     tableWrap.innerHTML = '';
     tableWrap.classList.add('place-items-center', 'justify-center');
 
@@ -196,6 +213,7 @@
 
   function renderTablesFallback(count = 15) {
     if (!tableWrap) return;
+    setLinksLoading(false);
     tableWrap.innerHTML = '';
     tableWrap.classList.add('place-items-center', 'justify-center');
 
@@ -274,6 +292,7 @@
   async function startLiveListener() {
     if (!window.firebase || !firebase.apps?.length) {
       console.warn('[redirect-core] Firebase chưa init → bỏ live, chỉ fallback links.json');
+      setConnectionStatus(false);
       return;
     }
 
@@ -289,6 +308,7 @@
     } catch (_) { }
 
     const db = firebase.database();
+    db.ref('.info/connected').on('value', (s) => setConnectionStatus(!!s.val()));
     const ref = db.ref('links_live');
 
     ref.on('value', async (snap) => {
@@ -378,6 +398,7 @@
   // BOOT
   // =========================
   (async function boot() {
+    setLinksLoading(true);
     const restored = tryRestoreLiveCache();
     if (LINKS_MAP) renderTablesFromMap(LINKS_MAP);
 

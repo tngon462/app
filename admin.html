@@ -87,9 +87,26 @@
   .modal-overlay-ios .modal-inner.modal-inner-xl {
     max-width: 36rem !important;
   }
+  @keyframes fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .animate-fade-in { animation: fade-in 0.2s ease-out; }
 </style>
 </head>
 <body class="bg-gray-50">
+  <!-- Admin Auth Gate (hiển thị trước khi đăng nhập) -->
+  <div id="admin-auth-gate" class="fixed inset-0 z-[9999] bg-gray-100 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
+      <h2 class="text-xl font-bold text-gray-800 mb-2">Đăng nhập Admin</h2>
+      <p class="text-sm text-gray-500 mb-4">Nhập mật khẩu để tiếp tục</p>
+      <input id="admin-auth-input" type="password" placeholder="Mật khẩu"
+        class="w-full border rounded-lg px-4 py-3 mb-2" autocomplete="current-password" />
+      <p id="admin-auth-error" class="text-red-600 text-sm mb-3 hidden"></p>
+      <button id="admin-auth-btn" class="w-full py-3 rounded-lg bg-[#da251d] text-white font-semibold hover:bg-red-700">Đăng nhập</button>
+      <p class="text-xs text-gray-400 mt-3">Mật khẩu cấu hình tại Firebase: config/adminPassword</p>
+    </div>
+  </div>
+
+  <!-- Main content (ẩn cho đến khi đăng nhập) -->
+  <div id="admin-main" class="h-full flex flex-col hidden">
   <!-- Topbar -->
   <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-3 md:px-6">
     <div class="flex items-center gap-3">
@@ -208,7 +225,10 @@
 
   <!-- Modal root -->
   <div id="modal-root"></div>
+  </div><!-- /admin-main -->
 
+  <script src="./assets/js/admin-auth.js?v=1"></script>
+  <script src="./assets/js/admin-toast.js?v=1"></script>
   <script>
     // ===== App version =====
     const APP_VERSION = "1.3.3";
@@ -255,8 +275,8 @@
         const db = firebase.database();
         db.ref('.info/connected').on('value', s=>{
           const ok = !!s.val();
-          connBadge.textContent = ok ? 'Đã kết nối Firebase' : 'Mất kết nối Firebase';
-          connBadge.className = ok ? 'text-xs text-emerald-600' : 'text-xs text-red-600';
+          connBadge.textContent = ok ? 'Đã kết nối Firebase' : 'Đang mất kết nối Firebase';
+          connBadge.className = ok ? 'text-xs text-emerald-600' : 'text-xs text-amber-600';
         });
       } catch(e) {
         connBadge.textContent = 'Firebase init lỗi';
@@ -429,7 +449,7 @@
           if (newName) await db.ref(`devices/${id}/name`).set(newName);
           else await db.ref(`devices/${id}/name`).remove();
           safeRemove(wrap);
-        }catch(e){ alert('Đặt tên lỗi: '+(e?.message||e)); }
+        }catch(e){ (window.adminToast?.showError||alert)('Đặt tên lỗi: '+(e?.message||e)); }
       });
 
       // Reload
@@ -437,7 +457,7 @@
         try{
           await db.ref(`devices/${id}/commands/reloadAt`).set(firebase.database.ServerValue.TIMESTAMP);
           safeRemove(wrap);
-        }catch(e){ alert('Gửi reload lỗi: '+(e?.message||e)); }
+        }catch(e){ (window.adminToast?.showError||alert)('Gửi reload lỗi: '+(e?.message||e)); }
       });
 
       // Đổi bàn
@@ -446,7 +466,7 @@
           try{
             await db.ref(`devices/${id}/commands/setTable`).set({ value: label, at: firebase.database.ServerValue.TIMESTAMP });
             await db.ref(`devices/${id}`).update({ table: label, stage:'start' });
-          }catch(e){ alert('Đổi bàn lỗi: '+(e?.message||e)); }
+          }catch(e){ (window.adminToast?.showError||alert)('Đổi bàn lỗi: '+(e?.message||e)); }
           safeRemove(wrap);
         });
       });
@@ -468,7 +488,7 @@
           await db.ref(`devices/${id}/commands/unbindAt`).set(firebase.database.ServerValue.TIMESTAMP);
           await db.ref(`devices/${id}`).update({ code:null, table:null, stage:'select' });
           safeRemove(wrap);
-        }catch(e){ alert('Gỡ liên kết lỗi: '+(e?.message||e)); }
+        }catch(e){ (window.adminToast?.showError||alert)('Gỡ liên kết lỗi: '+(e?.message||e)); }
       });
 
       // Xoá device
@@ -476,7 +496,7 @@
         if (code) return;
         if (!confirm('Xoá thiết bị khỏi danh sách?')) return;
         try{ await db.ref(`devices/${id}`).remove(); safeRemove(wrap); }
-        catch(e){ alert('Xoá device lỗi: '+(e?.message||e)); }
+        catch(e){ (window.adminToast?.showError||alert)('Xoá device lỗi: '+(e?.message||e)); }
       });
     }
 function renderGrid(grid, db, devices) {
@@ -556,7 +576,7 @@ function renderGrid(grid, db, devices) {
         tableScreen[String(table)] = wantOn ? 'on' : 'off';
         card.className = cardClass(wantOn) + ' aspect-[4/3] p-2 md:p-3 flex';
       }catch(err){
-        alert('Ghi trạng thái bàn lỗi: ' + (err?.message || err));
+        (window.adminToast?.showError||alert)('Ghi trạng thái bàn lỗi: ' + (err?.message || err));
         sw.checked = !sw.checked;
       }
     });
@@ -591,8 +611,8 @@ function renderGrid(grid, db, devices) {
         });
 
         document.getElementById('btnReloadAll')?.addEventListener('click', async ()=>{
-          try{ await db.ref('broadcast/reloadAt').set(firebase.database.ServerValue.TIMESTAMP); }
-          catch(e){ alert('Reload toàn bộ lỗi: '+(e?.message||e)); }
+          try{ await (window.adminToast?.withRetry||(f=>f()))(()=> db.ref('broadcast/reloadAt').set(firebase.database.ServerValue.TIMESTAMP)); (window.adminToast?.showSuccess||(()=>{}))('Đã gửi reload'); }
+          catch(e){ (window.adminToast?.showError||alert)('Reload toàn bộ lỗi: '+(e?.message||e)); }
         });
         document.getElementById('btnToggleAll')?.addEventListener('click', async ()=>{
           const snap = await refScreen.get();
@@ -610,14 +630,14 @@ function renderGrid(grid, db, devices) {
               await db.ref().update(updates);
             }
             if (grid && devicesCache) renderGrid(grid, db, devicesCache);
-          }catch(e){ alert('Ghi trạng thái toàn bộ lỗi: '+(e?.message||e)); }
+          }catch(e){ (window.adminToast?.showError||alert)('Ghi trạng thái toàn bộ lỗi (có thể thử lại): '+(e?.message||e)); }
         });
 
         // Subscribe devices
         db.ref('devices').on('value', s=>{
           devicesCache = s.val() || {};
           renderGrid(grid, db, devicesCache);
-        }, e=> alert('Lỗi subscribe devices: '+(e?.message||e)));
+        }, e=> (window.adminToast?.showError||alert)('Lỗi subscribe devices: '+(e?.message||e)));
 
         // 1) Ý định (cũ): control/tables  -> on|off (fallback)
 db.ref('control/tables').on('value', s=>{
@@ -651,7 +671,7 @@ db.ref('status/tables').on('value', s=>{
         log('Devices tab ready.');
       }catch(e){
         console.error(e);
-        alert('Lỗi khởi chạy tab Thiết bị: '+(e?.message||e));
+        (window.adminToast?.showError||alert)('Lỗi khởi chạy tab Thiết bị: '+(e?.message||e));
       }
     });
   })();

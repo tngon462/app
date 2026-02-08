@@ -1,69 +1,78 @@
-const CACHE_NAME = "tngon-admin-v3"; // tăng số mỗi lần sửa lớn
+const CACHE_NAME = "tngon-admin-v4";
 const CACHE_ASSETS = [
   "./",
+  "./admin.html",
+  "./redirect.html",
   "./index.html",
-  "./assets/js/redirect.js",
+  "./links.json",
+  "./assets/js/firebase.js",
+  "./assets/js/redirect-core.js",
   "./assets/js/blackout.js",
+  "./assets/js/device-bind.js",
   "./icons/icon-192.png",
   "./icons/icon-72.png",
   "./icons/icon-512.png",
   "./redirect.webmanifest",
-  "./admin.webmanifest"
+  "./admin.webmanifest",
 ];
 
-// Cài đặt service worker
 self.addEventListener("install", (e) => {
   e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(CACHE_ASSETS);
-    })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(CACHE_ASSETS).then(() => self.skipWaiting()))
   );
 });
 
-// Kích hoạt và dọn cache cũ
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys().then((names) =>
-      Promise.all(
-        names.map((name) => {
-          if (name !== CACHE_NAME) {
-            return caches.delete(name);
-          }
-        })
-      )
-    )
+      Promise.all(names.map((name) => (name !== CACHE_NAME ? caches.delete(name) : Promise.resolve())))
+    ).then(() => self.clients.claim())
   );
 });
 
-// Fetch handler
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
+  const path = url.pathname;
 
-  // Luôn fetch bản mới của redirect.html
-  if (url.pathname.endsWith("/redirect.html")) {
-    e.respondWith(fetch(e.request).catch(() => caches.match("./redirect.html")));
-    return;
-  }
-
-  // Luôn fetch mới links.json (không cache)
-  if (url.pathname.endsWith("/links.json")) {
+  // Không cache Firebase / API
+  if (path.includes("firebasedatabase.app") || path.includes("gstatic.com")) {
     e.respondWith(fetch(e.request));
     return;
   }
 
-  // Cache-first cho các file khác
+  // links.json: Network-first, fallback cache
+  if (path.endsWith("/links.json")) {
+    e.respondWith(
+      fetch(e.request).catch(() => caches.match(e.request).then((r) => r || new Response('{"links":{}}', { headers: { "Content-Type": "application/json" } })))
+    );
+    return;
+  }
+
+  // HTML: Network-first, fallback cache khi mất mạng
+  if (path.endsWith(".html") || path === "/" || path.endsWith("/")) {
+    e.respondWith(
+      fetch(e.request).catch(() => caches.match(e.request).then((r) => r || caches.match("./redirect.html")))
+    );
+    return;
+  }
+
+  // Static assets: Cache-first, fallback network
   e.respondWith(
-    caches.match(e.request).then((res) => {
-      return (
-        res ||
-        fetch(e.request).catch(
-          () =>
-            new Response("Offline", {
-              status: 503,
-              statusText: "Offline",
-            })
-        )
-      );
-    })
+    caches.match(e.request).then((res) =>
+      res ||
+      fetch(e.request).then((resp) => {
+        if (resp.ok) {
+          const clone = resp.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(e.request, clone));
+        }
+        return resp;
+      }).catch(() =>
+        new Response("<h1>Đang offline</h1><p>Vui lòng kiểm tra kết nối mạng.</p>", {
+          status: 503,
+          statusText: "Service Unavailable",
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        })
+      )
+    )
   );
 });
