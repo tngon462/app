@@ -51,6 +51,42 @@
   .toggle--sm input:checked + label::after{ transform:translateX(18px); }
 
   #devicesHeaderActions{ display:none !important; }
+
+  /* Popup/modal fix cho iOS Safari (iPhone 17+) - dùng absolute + transform thay flexbox */
+  .modal-overlay-ios {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 100vh !important;
+    min-height: 100dvh !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    -webkit-transform: translateZ(0) !important;
+    transform: translateZ(0) !important;
+  }
+  .modal-overlay-ios .modal-inner {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    margin: auto !important;
+    width: calc(100% - 2rem) !important;
+    max-width: 24rem !important;
+    height: fit-content !important;
+    max-height: calc(100vh - 2rem) !important;
+    max-height: calc(100dvh - 2rem) !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    z-index: 1 !important;
+  }
+  .modal-overlay-ios .modal-inner.modal-inner-xl {
+    max-width: 36rem !important;
+  }
 </style>
 </head>
 <body class="bg-gray-50">
@@ -274,7 +310,12 @@
     const log= (...a)=> console.log('[devices-tab]', ...a);
     const warn=(...a)=> console.warn('[devices-tab]', ...a);
     const mask= (id)=> (!id ? '—' : (id.length<=4 ? id : id.slice(0,4)+'…'));
-    const safeRemove = (n)=>{ if (n && n.isConnected && n.parentNode) n.parentNode.removeChild(n); };
+    const safeRemove = (n)=>{ 
+      if (n && n.isConnected && n.parentNode) {
+        n.parentNode.removeChild(n); 
+        if (!document.querySelector('.modal-overlay-ios')) document.body.style.overflow = '';
+      }
+    };
 
     const view = document.getElementById('viewDevices');
     if (!view) return;
@@ -303,16 +344,20 @@
       const keys = LINKS_MAP ? Object.keys(LINKS_MAP).sort((a,b)=>Number(a)-Number(b))
                              : Array.from({length:15},(_,i)=> String(i+1));
       const wrap = document.createElement('div');
-      wrap.className = 'fixed inset-0 z-[9600] bg-black/50 flex items-center justify-center p-4';
+      wrap.className = 'modal-overlay-ios fixed inset-0 z-[9600] bg-black/50 p-4';
       wrap.innerHTML = `
-        <div class="bg-white rounded-xl shadow-lg w-full max-w-xl p-4">
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="text-lg font-semibold">Chọn bàn</h3>
-            <button id="tp-close" class="px-2 py-1 text-sm rounded border hover:bg-gray-50">Đóng</button>
+        <div class="modal-inner modal-inner-xl">
+          <div class="bg-white rounded-xl shadow-lg w-full p-4">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-lg font-semibold">Chọn bàn</h3>
+              <button id="tp-close" class="px-2 py-1 text-sm rounded border hover:bg-gray-50">Đóng</button>
+            </div>
+            <div id="tp-grid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-[70vh] overflow-auto"></div>
           </div>
-          <div id="tp-grid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-[70vh] overflow-auto"></div>
         </div>`;
       document.body.appendChild(wrap);
+      document.body.style.overflow = 'hidden';
+      window.scrollTo(0, 0);
       const grid = wrap.querySelector('#tp-grid');
       keys.forEach(k=>{
         const b=document.createElement('button');
@@ -345,31 +390,35 @@
       const table = data?.table || '';
 
       const wrap = document.createElement('div');
-      wrap.className = 'fixed inset-0 z-[9700] bg-black/50 flex items-center justify-center p-4';
+      wrap.className = 'modal-overlay-ios fixed inset-0 z-[9700] bg-black/50 p-4';
       wrap.innerHTML = `
-        <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5">
-          <div class="flex items-center justify-between mb-3">
-            <div class="font-semibold">Thiết bị ${mask(id)}</div>
-            <button id="devact-close" class="px-2 py-1 text-sm rounded border hover:bg-gray-50">Đóng</button>
-          </div>
-
-          <div class="text-sm text-gray-600 mb-3">
-            <div>ID đầy đủ: <span class="font-mono break-all">${id}</span></div>
-            <div>Tên hiện tại: <strong>${name || '(chưa đặt)'}</strong>
-              <button id="act-rename" class="ml-1 px-2 py-0.5 text-xs rounded border hover:bg-gray-50">Đổi tên</button>
+        <div class="modal-inner">
+          <div class="bg-white rounded-2xl shadow-xl w-full p-5">
+            <div class="flex items-center justify-between mb-3">
+              <div class="font-semibold">Thiết bị ${mask(id)}</div>
+              <button id="devact-close" class="px-2 py-1 text-sm rounded border hover:bg-gray-50">Đóng</button>
             </div>
-            <div>Mã đang gắn: <span class="font-mono">${code || '—'}</span></div>
-            <div>Bàn: <strong>${stage==='pos' ? ('+'+(table||'?')) : (stage==='start'? (table||'—') : '—')}</strong></div>
-          </div>
 
-          <div class="grid grid-cols-2 gap-2">
-            <button id="act-reload"  class="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Làm mới</button>
-            <button id="act-settbl" class="px-3 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700">Đổi bàn</button>
-            <button id="act-unbind" class="px-3 py-2 rounded bg-amber-600 text-white hover:bg-amber-700" ${code?'':'disabled'}>Gỡ mã</button>
-            <button id="act-delete" class="px-3 py-2 rounded ${code?'bg-gray-100 opacity-50 cursor-not-allowed':'bg-red-600 text-white hover:bg-red-700'}" ${code?'disabled':''}>Xoá device</button>
+            <div class="text-sm text-gray-600 mb-3">
+              <div>ID đầy đủ: <span class="font-mono break-all">${id}</span></div>
+              <div>Tên hiện tại: <strong>${name || '(chưa đặt)'}</strong>
+                <button id="act-rename" class="ml-1 px-2 py-0.5 text-xs rounded border hover:bg-gray-50">Đổi tên</button>
+              </div>
+              <div>Mã đang gắn: <span class="font-mono">${code || '—'}</span></div>
+              <div>Bàn: <strong>${stage==='pos' ? ('+'+(table||'?')) : (stage==='start'? (table||'—') : '—')}</strong></div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <button id="act-reload"  class="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Làm mới</button>
+              <button id="act-settbl" class="px-3 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700">Đổi bàn</button>
+              <button id="act-unbind" class="px-3 py-2 rounded bg-amber-600 text-white hover:bg-amber-700" ${code?'':'disabled'}>Gỡ mã</button>
+              <button id="act-delete" class="px-3 py-2 rounded ${code?'bg-gray-100 opacity-50 cursor-not-allowed':'bg-red-600 text-white hover:bg-red-700'}" ${code?'disabled':''}>Xoá device</button>
+            </div>
           </div>
         </div>`;
       document.body.appendChild(wrap);
+      document.body.style.overflow = 'hidden';
+      window.scrollTo(0, 0);
       $('#devact-close', wrap).addEventListener('click', ()=> safeRemove(wrap));
 
       // Đổi tên
