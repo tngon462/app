@@ -1,90 +1,99 @@
 <!doctype html>
 <html>
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>TNGON Customer Display [CD1]</title>
-<style>
-  body{font-family:sans-serif;background:#111;color:#fff;margin:0;padding:20px}
-  .total{font-size:72px;font-weight:800;line-height:1.05}
-  .sub{font-size:28px;opacity:.9;margin-top:10px}
-  .row{display:flex;justify-content:space-between;gap:16px;font-size:28px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.08)}
-  .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .price{min-width:160px;text-align:right}
-  .dbg{margin-top:14px;font-size:18px;opacity:.75;line-height:1.5}
-  .badge{display:inline-block;padding:2px 8px;border:1px solid rgba(255,255,255,.25);border-radius:999px;margin-right:8px}
-</style>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>T-NGON Customer Display</title>
+  <style>
+    body{font-family:system-ui;background:#111;color:#fff;margin:0;padding:22px}
+    .big{font-size:78px;font-weight:900;line-height:1.05;margin:10px 0 6px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
+    .card{background:#181818;border:1px solid #2b2b2b;border-radius:14px;padding:14px}
+    .k{opacity:.75;font-size:16px}
+    .v{font-size:28px;font-weight:800;margin-top:6px}
+    .items{margin-top:14px}
+    .row{display:flex;justify-content:space-between;border-bottom:1px solid #2b2b2b;padding:8px 0;font-size:26px}
+    .name{flex:1;padding-right:14px}
+    .price{min-width:170px;text-align:right;font-weight:800}
+    .dbg{margin-top:10px;opacity:.65;font-size:13px;white-space:pre-wrap}
+  </style>
 </head>
 <body>
+  <div style="opacity:.85">T-NGON • Customer Display</div>
 
-<div id="needPay" class="total">¥0</div>
-<div id="remain" class="sub"></div>
-<div id="items"></div>
+  <div class="big" id="needPay">¥0</div>
+  <div style="opacity:.75;margin-bottom:8px">Khách cần trả</div>
 
-<div class="dbg" id="dbg"></div>
+  <div class="grid">
+    <div class="card"><div class="k">Tổng tiền hàng</div><div class="v" id="totalGoods">—</div></div>
+    <div class="card"><div class="k">Giảm giá</div><div class="v" id="discount">—</div></div>
+    <div class="card"><div class="k">Khách đưa</div><div class="v" id="paid">—</div></div>
+    <div class="card"><div class="k">Tiền thừa</div><div class="v" id="change">—</div></div>
+    <div class="card" style="grid-column:1 / -1"><div class="k">Còn lại</div><div class="v" id="remain">—</div></div>
+  </div>
 
-<script>
-  // ✅ QUAN TRỌNG: đặt window.name NGAY LẬP TỨC để bên KiotViet tìm thấy
-  window.name = "TNGON_SUBSCREEN";
+  <div class="items" id="items"></div>
+  <div class="dbg" id="debug"></div>
 
-  const NEED_PAY = document.getElementById("needPay");
-  const REMAIN   = document.getElementById("remain");
-  const ITEMS    = document.getElementById("items");
-  const DBG      = document.getElementById("dbg");
+  <script type="module">
+    // ====== SỬA 3 CHỖ NÀY ======
+    const DATABASE_URL = "https://tngon-b37d6-default-rtdb.asia-southeast1.firebasedatabase.app";
+    const CHANNEL_ID   = "tngon_main_01";
+    const TOKEN_SECRET = "6868-XYZ-2026";
+    // ===========================
 
-  let recvCount = 0;
-  let lastOrigin = "";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
 
-  function esc(s){
-    return String(s)
-      .replaceAll("&","&amp;")
-      .replaceAll("<","&lt;")
-      .replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;")
-      .replaceAll("'","&#039;");
-  }
+    // Firebase config tối thiểu: chỉ cần databaseURL là đủ để đọc RTDB public
+    const app = initializeApp({ databaseURL: DATABASE_URL });
+    const db  = getDatabase(app);
 
-  function renderDbg(status){
-    DBG.innerHTML =
-      `<div><span class="badge">STATUS</span>${esc(status)}</div>` +
-      `<div><span class="badge">THIS ORIGIN</span>${esc(location.origin)}</div>` +
-      `<div><span class="badge">window.name</span>${esc(window.name)}</div>` +
-      `<div><span class="badge">RECV COUNT</span>${recvCount}</div>` +
-      `<div><span class="badge">LAST ev.origin</span>${esc(lastOrigin || "(none)")}</div>`;
-  }
+    const $ = (id)=>document.getElementById(id);
+    const esc = (s)=> (s??"").toString()
+      .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;").replaceAll("'","&#039;");
 
-  renderDbg("READY (waiting messages)");
+    function parseMoney(m){ return Number((m||"").toString().replace(/[^\d]/g,"")||0); }
+    function fmt(n){ try{return "¥"+Number(n||0).toLocaleString("en-US");}catch{return "¥0";} }
 
-  window.addEventListener("message", (ev) => {
-    lastOrigin = ev.origin;
+    function render(d){
+      const t = d?.totals || {};
+      const items = Array.isArray(d?.items) ? d.items : [];
 
-    // ✅ để debug: nếu bị chặn origin, nó sẽ hiện BLOCKED
-    const allowed = (ev.origin === "https://tngon.kiotviet.vn");
-    if (!allowed) {
-      renderDbg("BLOCKED (origin not allowed)");
-      return;
+      const needPay = t.needPay || "¥0";
+      const paid    = t.paid || "¥0";
+      const changeN = Math.max(0, parseMoney(paid) - parseMoney(needPay));
+
+      $("needPay").textContent    = needPay;
+      $("totalGoods").textContent = t.totalGoods || "—";
+      $("discount").textContent   = t.discount || "—";
+      $("paid").textContent       = paid || "—";
+      $("change").textContent     = fmt(changeN);
+      $("remain").textContent     = t.remain || "—";
+
+      $("items").innerHTML = items.map(x=>`
+        <div class="row">
+          <div class="name">${esc(x.name)}</div>
+          <div class="price">${esc(x.price)}</div>
+        </div>
+      `).join("");
+
+      const age = d?.ts ? Math.round((Date.now()-d.ts)/100)/10 : "?";
+      $("debug").textContent = `Last: ${d?.ts ? new Date(d.ts).toLocaleTimeString() : "—"} (${age}s) • items: ${items.length}`;
     }
 
-    const d = ev.data || {};
-    if (!d || d.__tngon_type__ !== "POS_BROADCAST") {
-      renderDbg("IGNORED (wrong message type)");
-      return;
-    }
+    const node = ref(db, `posDisplay/${CHANNEL_ID}`);
 
-    recvCount++;
-
-    NEED_PAY.innerText = d.totals?.needPay || "¥0";
-    REMAIN.innerText = "Còn lại: " + (d.totals?.remain || "");
-    ITEMS.innerHTML = (d.items || []).map(x =>
-      `<div class="row">
-         <div class="name">${esc(x.name||"")}</div>
-         <div class="price">${esc(x.price||"")}</div>
-       </div>`
-    ).join("");
-
-    renderDbg("OK (received POS_BROADCAST)");
-  });
-</script>
-
+    onValue(node, (snap)=>{
+      const d = snap.val();
+      // check token (để tránh data rác nếu ai ghi bậy)
+      if (!d || d.token !== TOKEN_SECRET) return;
+      render(d);
+    }, (err)=>{
+      $("debug").textContent = "Firebase error: " + (err?.message || err);
+      console.error(err);
+    });
+  </script>
 </body>
 </html>
