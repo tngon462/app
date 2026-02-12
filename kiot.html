@@ -3,35 +3,62 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>TNGON Customer Display [CD1]</title>
 <style>
 body{font-family:sans-serif;background:#111;color:#fff;margin:0;padding:20px}
 .total{font-size:72px;font-weight:bold}
-.row{display:flex;justify-content:space-between;font-size:28px;padding:6px 0}
+.row{display:flex;justify-content:space-between;font-size:28px;padding:6px 0;gap:16px;border-bottom:1px solid rgba(255,255,255,.08)}
+.name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.price{min-width:160px;text-align:right}
+.sub{font-size:28px;opacity:.9;margin-top:10px}
+.muted{opacity:.6;font-size:18px;margin-top:12px}
 </style>
 </head>
 <body>
 
 <div id="needPay" class="total">¥0</div>
-<div id="remain"></div>
+<div id="remain" class="sub"></div>
 <div id="items"></div>
+<div id="status" class="muted"></div>
 
 <script>
-const ch = new BroadcastChannel("tngon_customer_display");
+  // ✅ CỐ ĐỊNH window.name để bên KiotViet gọi đúng cửa sổ này
+  window.name = "TNGON_SUBSCREEN";
 
-ch.onmessage = ev=>{
-  const d = ev.data || {};
+  const NEED_PAY = document.getElementById("needPay");
+  const REMAIN   = document.getElementById("remain");
+  const ITEMS    = document.getElementById("items");
+  const STATUS   = document.getElementById("status");
 
-  document.getElementById("needPay").innerText =
-    d.totals?.needPay || "¥0";
+  function escapeHtml(s){
+    return String(s)
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
 
-  document.getElementById("remain").innerText =
-    "Còn lại: " + (d.totals?.remain || "");
+  // ✅ Nhận data từ KiotViet qua postMessage
+  window.addEventListener("message", (ev) => {
+    // Chỉ nhận từ domain KiotViet của sếp
+    if (ev.origin !== "https://tngon.kiotviet.vn") return;
 
-  document.getElementById("items").innerHTML =
-    (d.items||[]).map(x=>
-      `<div class="row"><div>${x.name}</div><div>${x.price}</div></div>`
+    const d = ev.data || {};
+    if (!d || d.__tngon_type__ !== "POS_BROADCAST") return;
+
+    NEED_PAY.innerText = d.totals?.needPay || "¥0";
+    REMAIN.innerText = "Còn lại: " + (d.totals?.remain || "");
+
+    ITEMS.innerHTML = (d.items || []).map(x =>
+      `<div class="row">
+         <div class="name">${escapeHtml(x.name||"")}</div>
+         <div class="price">${escapeHtml(x.price||"")}</div>
+       </div>`
     ).join("");
-};
+
+    STATUS.innerText = "Last update: " + new Date(d.ts || Date.now()).toLocaleTimeString();
+  });
 </script>
 
 </body>
