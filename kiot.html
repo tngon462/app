@@ -5,13 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>TNGON Customer Display [CD1]</title>
 <style>
-body{font-family:sans-serif;background:#111;color:#fff;margin:0;padding:20px}
-.total{font-size:72px;font-weight:bold}
-.row{display:flex;justify-content:space-between;font-size:28px;padding:6px 0;gap:16px;border-bottom:1px solid rgba(255,255,255,.08)}
-.name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.price{min-width:160px;text-align:right}
-.sub{font-size:28px;opacity:.9;margin-top:10px}
-.muted{opacity:.6;font-size:18px;margin-top:12px}
+  body{font-family:sans-serif;background:#111;color:#fff;margin:0;padding:20px}
+  .total{font-size:72px;font-weight:800;line-height:1.05}
+  .sub{font-size:28px;opacity:.9;margin-top:10px}
+  .row{display:flex;justify-content:space-between;gap:16px;font-size:28px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.08)}
+  .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .price{min-width:160px;text-align:right}
+  .dbg{margin-top:14px;font-size:18px;opacity:.75;line-height:1.5}
+  .badge{display:inline-block;padding:2px 8px;border:1px solid rgba(255,255,255,.25);border-radius:999px;margin-right:8px}
 </style>
 </head>
 <body>
@@ -19,18 +20,22 @@ body{font-family:sans-serif;background:#111;color:#fff;margin:0;padding:20px}
 <div id="needPay" class="total">¥0</div>
 <div id="remain" class="sub"></div>
 <div id="items"></div>
-<div id="status" class="muted"></div>
+
+<div class="dbg" id="dbg"></div>
 
 <script>
-  // ✅ CỐ ĐỊNH window.name để bên KiotViet gọi đúng cửa sổ này
+  // ✅ QUAN TRỌNG: đặt window.name NGAY LẬP TỨC để bên KiotViet tìm thấy
   window.name = "TNGON_SUBSCREEN";
 
   const NEED_PAY = document.getElementById("needPay");
   const REMAIN   = document.getElementById("remain");
   const ITEMS    = document.getElementById("items");
-  const STATUS   = document.getElementById("status");
+  const DBG      = document.getElementById("dbg");
 
-  function escapeHtml(s){
+  let recvCount = 0;
+  let lastOrigin = "";
+
+  function esc(s){
     return String(s)
       .replaceAll("&","&amp;")
       .replaceAll("<","&lt;")
@@ -39,25 +44,45 @@ body{font-family:sans-serif;background:#111;color:#fff;margin:0;padding:20px}
       .replaceAll("'","&#039;");
   }
 
-  // ✅ Nhận data từ KiotViet qua postMessage
+  function renderDbg(status){
+    DBG.innerHTML =
+      `<div><span class="badge">STATUS</span>${esc(status)}</div>` +
+      `<div><span class="badge">THIS ORIGIN</span>${esc(location.origin)}</div>` +
+      `<div><span class="badge">window.name</span>${esc(window.name)}</div>` +
+      `<div><span class="badge">RECV COUNT</span>${recvCount}</div>` +
+      `<div><span class="badge">LAST ev.origin</span>${esc(lastOrigin || "(none)")}</div>`;
+  }
+
+  renderDbg("READY (waiting messages)");
+
   window.addEventListener("message", (ev) => {
-    // Chỉ nhận từ domain KiotViet của sếp
-    if (ev.origin !== "https://tngon.kiotviet.vn") return;
+    lastOrigin = ev.origin;
+
+    // ✅ để debug: nếu bị chặn origin, nó sẽ hiện BLOCKED
+    const allowed = (ev.origin === "https://tngon.kiotviet.vn");
+    if (!allowed) {
+      renderDbg("BLOCKED (origin not allowed)");
+      return;
+    }
 
     const d = ev.data || {};
-    if (!d || d.__tngon_type__ !== "POS_BROADCAST") return;
+    if (!d || d.__tngon_type__ !== "POS_BROADCAST") {
+      renderDbg("IGNORED (wrong message type)");
+      return;
+    }
+
+    recvCount++;
 
     NEED_PAY.innerText = d.totals?.needPay || "¥0";
     REMAIN.innerText = "Còn lại: " + (d.totals?.remain || "");
-
     ITEMS.innerHTML = (d.items || []).map(x =>
       `<div class="row">
-         <div class="name">${escapeHtml(x.name||"")}</div>
-         <div class="price">${escapeHtml(x.price||"")}</div>
+         <div class="name">${esc(x.name||"")}</div>
+         <div class="price">${esc(x.price||"")}</div>
        </div>`
     ).join("");
 
-    STATUS.innerText = "Last update: " + new Date(d.ts || Date.now()).toLocaleTimeString();
+    renderDbg("OK (received POS_BROADCAST)");
   });
 </script>
 
