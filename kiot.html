@@ -11,10 +11,30 @@
     .card{background:#181818;border:1px solid #2b2b2b;border-radius:14px;padding:14px}
     .k{opacity:.75;font-size:16px}
     .v{font-size:28px;font-weight:800;margin-top:6px}
-    .items{margin-top:14px}
-    .row{display:flex;justify-content:space-between;border-bottom:1px solid #2b2b2b;padding:8px 0;font-size:26px}
-    .name{flex:1;padding-right:14px}
-    .price{min-width:170px;text-align:right;font-weight:800}
+
+    .items{margin-top:14px;border-top:1px solid #2b2b2b;padding-top:10px;max-height:55vh;overflow:auto}
+    .hdr{display:flex;gap:10px;opacity:.8;font-weight:800;padding:6px 0}
+    .col-name{flex:1;min-width:0}
+    .col-qty{width:70px;text-align:right}
+    .col-unit{width:140px;text-align:right}
+    .col-total{width:160px;text-align:right}
+
+    .row{
+      display:flex;gap:10px;align-items:center;
+      border-top:1px solid #2b2b2b;
+      padding:10px 0;
+      font-size:24px
+    }
+    .name{
+      flex:1;min-width:0;padding-right:6px;
+      font-weight:800;line-height:1.15;
+      overflow:hidden;white-space:nowrap;text-overflow:ellipsis
+    }
+    .qty{width:70px;text-align:right;font-weight:900}
+    .unit{width:140px;text-align:right;font-weight:800;opacity:.9}
+    .total{width:160px;text-align:right;font-weight:950}
+    .row.last{background:rgba(255,255,255,.06);border-radius:10px;padding-left:10px;padding-right:10px}
+
     .dbg{margin-top:10px;opacity:.65;font-size:13px;white-space:pre-wrap}
   </style>
 </head>
@@ -32,7 +52,16 @@
     <div class="card" style="grid-column:1 / -1"><div class="k">Còn lại</div><div class="v" id="remain">—</div></div>
   </div>
 
-  <div class="items" id="items"></div>
+  <div class="items">
+    <div class="hdr">
+      <div class="col-name">Món</div>
+      <div class="col-qty">SL</div>
+      <div class="col-unit">Đơn giá</div>
+      <div class="col-total">Thành tiền</div>
+    </div>
+    <div id="items"></div>
+  </div>
+
   <div class="dbg" id="debug"></div>
 
   <script type="module">
@@ -45,7 +74,6 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
     import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
 
-    // Firebase config tối thiểu: chỉ cần databaseURL là đủ để đọc RTDB public
     const app = initializeApp({ databaseURL: DATABASE_URL });
     const db  = getDatabase(app);
 
@@ -72,12 +100,20 @@
       $("change").textContent     = fmt(changeN);
       $("remain").textContent     = t.remain || "—";
 
-      $("items").innerHTML = items.map(x=>`
-        <div class="row">
-          <div class="name">${esc(x.name)}</div>
-          <div class="price">${esc(x.price)}</div>
+      // render items
+      const show = items.slice(-30);
+      $("items").innerHTML = show.map((x, i)=>`
+        <div class="row ${i===show.length-1 ? "last" : ""}">
+          <div class="name" title="${esc(x.name)}">${esc(x.name)}</div>
+          <div class="qty">x${esc(x.qty ?? 0)}</div>
+          <div class="unit">${esc(x.unitPrice || "—")}</div>
+          <div class="total">${esc(x.lineTotal || "—")}</div>
         </div>
       `).join("");
+
+      // auto scroll xuống cuối
+      const wrap = document.querySelector(".items");
+      if (wrap) wrap.scrollTop = wrap.scrollHeight;
 
       const age = d?.ts ? Math.round((Date.now()-d.ts)/100)/10 : "?";
       $("debug").textContent = `Last: ${d?.ts ? new Date(d.ts).toLocaleTimeString() : "—"} (${age}s) • items: ${items.length}`;
@@ -87,7 +123,6 @@
 
     onValue(node, (snap)=>{
       const d = snap.val();
-      // check token (để tránh data rác nếu ai ghi bậy)
       if (!d || d.token !== TOKEN_SECRET) return;
       render(d);
     }, (err)=>{
