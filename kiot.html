@@ -1,135 +1,232 @@
 <!doctype html>
 <html>
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>T-NGON Customer Display</title>
-  <style>
-    body{font-family:system-ui;background:#111;color:#fff;margin:0;padding:22px}
-    .big{font-size:78px;font-weight:900;line-height:1.05;margin:10px 0 6px}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
-    .card{background:#181818;border:1px solid #2b2b2b;border-radius:14px;padding:14px}
-    .k{opacity:.75;font-size:16px}
-    .v{font-size:28px;font-weight:800;margin-top:6px}
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>T-NGON Customer Display</title>
 
-    .items{margin-top:14px;border-top:1px solid #2b2b2b;padding-top:10px;max-height:55vh;overflow:auto}
-    .hdr{display:flex;gap:10px;opacity:.8;font-weight:800;padding:6px 0}
-    .col-name{flex:1;min-width:0}
-    .col-qty{width:70px;text-align:right}
-    .col-unit{width:140px;text-align:right}
-    .col-total{width:160px;text-align:right}
+<style>
+body{
+  font-family:system-ui;
+  background:#111;
+  color:#fff;
+  margin:0;
+  padding:14px;
+}
 
-    .row{
-      display:flex;gap:10px;align-items:center;
-      border-top:1px solid #2b2b2b;
-      padding:10px 0;
-      font-size:24px
-    }
-    .name{
-      flex:1;min-width:0;padding-right:6px;
-      font-weight:800;line-height:1.15;
-      overflow:hidden;white-space:nowrap;text-overflow:ellipsis
-    }
-    .qty{width:70px;text-align:right;font-weight:900}
-    .unit{width:140px;text-align:right;font-weight:800;opacity:.9}
-    .total{width:160px;text-align:right;font-weight:950}
-    .row.last{background:rgba(255,255,255,.06);border-radius:10px;padding-left:10px;padding-right:10px}
+/* ===== LAYOUT 2 CỘT ===== */
+.main{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:16px;
+  height:calc(100vh - 28px);
+}
 
-    .dbg{margin-top:10px;opacity:.65;font-size:13px;white-space:pre-wrap}
-  </style>
+/* ===== LEFT - ITEMS ===== */
+.left{
+  background:#181818;
+  border:1px solid #2b2b2b;
+  border-radius:14px;
+  padding:14px;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+
+.items{
+  flex:1;
+  overflow:auto;
+}
+
+.hdr{
+  display:flex;
+  gap:10px;
+  font-weight:800;
+  opacity:.85;
+  padding-bottom:6px;
+  border-bottom:1px solid #2b2b2b;
+}
+
+.col-name{flex:1}
+.col-qty{width:70px;text-align:right}
+.col-unit{width:120px;text-align:right}
+.col-total{width:150px;text-align:right}
+
+.row{
+  display:flex;
+  gap:10px;
+  padding:10px 0;
+  border-bottom:1px solid #2b2b2b;
+  font-size:26px;
+}
+
+.name{
+  flex:1;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-weight:900;
+}
+
+.qty{width:70px;text-align:right;font-weight:900}
+.unit{width:120px;text-align:right}
+.total{width:150px;text-align:right;font-weight:900}
+
+.row.last{
+  background:rgba(255,255,255,.07);
+  border-radius:10px;
+  padding-left:8px;
+  padding-right:8px;
+}
+
+/* ===== RIGHT - TOTALS ===== */
+.right{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+
+.big{
+  font-size:96px;
+  font-weight:900;
+  line-height:1.05;
+}
+
+.card{
+  background:#181818;
+  border:1px solid #2b2b2b;
+  border-radius:14px;
+  padding:16px;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:14px;
+}
+
+.k{opacity:.75;font-size:18px}
+.v{font-size:36px;font-weight:900;margin-top:6px}
+
+.dbg{
+  margin-top:8px;
+  opacity:.6;
+  font-size:13px;
+}
+</style>
 </head>
+
 <body>
-  <div style="opacity:.85">T-NGON • Customer Display</div>
 
-  <div class="big" id="needPay">¥0</div>
-  <div style="opacity:.75;margin-bottom:8px">Khách cần trả</div>
+<div class="main">
 
-  <div class="grid">
-    <div class="card"><div class="k">Tổng tiền hàng</div><div class="v" id="totalGoods">—</div></div>
-    <div class="card"><div class="k">Giảm giá</div><div class="v" id="discount">—</div></div>
-    <div class="card"><div class="k">Khách đưa</div><div class="v" id="paid">—</div></div>
-    <div class="card"><div class="k">Tiền thừa</div><div class="v" id="change">—</div></div>
-    <div class="card" style="grid-column:1 / -1"><div class="k">Còn lại</div><div class="v" id="remain">—</div></div>
-  </div>
+  <!-- ================= LEFT ================= -->
+  <div class="left">
+    <div style="opacity:.85;margin-bottom:6px">Danh sách món</div>
 
-  <div class="items">
     <div class="hdr">
       <div class="col-name">Món</div>
       <div class="col-qty">SL</div>
       <div class="col-unit">Đơn giá</div>
       <div class="col-total">Thành tiền</div>
     </div>
-    <div id="items"></div>
+
+    <div class="items" id="items"></div>
   </div>
 
-  <div class="dbg" id="debug"></div>
+  <!-- ================= RIGHT ================= -->
+  <div class="right">
 
-  <script type="module">
-    // ====== SỬA 3 CHỖ NÀY ======
-    const DATABASE_URL = "https://tngon-b37d6-default-rtdb.asia-southeast1.firebasedatabase.app";
-    const CHANNEL_ID   = "tngon_main_01";
-    const TOKEN_SECRET = "6868-XYZ-2026";
-    // ===========================
+    <div>
+      <div style="opacity:.75">Khách cần trả</div>
+      <div class="big" id="needPay">¥0</div>
+    </div>
 
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
+    <div class="grid">
+      <div class="card"><div class="k">Tổng tiền hàng</div><div class="v" id="totalGoods">—</div></div>
+      <div class="card"><div class="k">Giảm giá</div><div class="v" id="discount">—</div></div>
+      <div class="card"><div class="k">Khách đưa</div><div class="v" id="paid">—</div></div>
+      <div class="card"><div class="k">Tiền thừa</div><div class="v" id="change">—</div></div>
+      <div class="card" style="grid-column:1/-1"><div class="k">Còn lại</div><div class="v" id="remain">—</div></div>
+    </div>
 
-    const app = initializeApp({ databaseURL: DATABASE_URL });
-    const db  = getDatabase(app);
+    <div class="dbg" id="debug"></div>
+  </div>
 
-    const $ = (id)=>document.getElementById(id);
-    const esc = (s)=> (s??"").toString()
-      .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+</div>
 
-    function parseMoney(m){ return Number((m||"").toString().replace(/[^\d]/g,"")||0); }
-    function fmt(n){ try{return "¥"+Number(n||0).toLocaleString("en-US");}catch{return "¥0";} }
+<script type="module">
 
-    function render(d){
-      const t = d?.totals || {};
-      const items = Array.isArray(d?.items) ? d.items : [];
+const DATABASE_URL = "https://tngon-b37d6-default-rtdb.asia-southeast1.firebasedatabase.app";
+const CHANNEL_ID   = "tngon_main_01";
+const TOKEN_SECRET = "6868-XYZ-2026";
 
-      const needPay = t.needPay || "¥0";
-      const paid    = t.paid || "¥0";
-      const changeN = Math.max(0, parseMoney(paid) - parseMoney(needPay));
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
 
-      $("needPay").textContent    = needPay;
-      $("totalGoods").textContent = t.totalGoods || "—";
-      $("discount").textContent   = t.discount || "—";
-      $("paid").textContent       = paid || "—";
-      $("change").textContent     = fmt(changeN);
-      $("remain").textContent     = t.remain || "—";
+const app = initializeApp({ databaseURL: DATABASE_URL });
+const db  = getDatabase(app);
 
-      // render items
-      const show = items.slice(-30);
-      $("items").innerHTML = show.map((x, i)=>`
-        <div class="row ${i===show.length-1 ? "last" : ""}">
-          <div class="name" title="${esc(x.name)}">${esc(x.name)}</div>
-          <div class="qty">x${esc(x.qty ?? 0)}</div>
-          <div class="unit">${esc(x.unitPrice || "—")}</div>
-          <div class="total">${esc(x.lineTotal || "—")}</div>
-        </div>
-      `).join("");
+const $ = id=>document.getElementById(id);
 
-      // auto scroll xuống cuối
-      const wrap = document.querySelector(".items");
-      if (wrap) wrap.scrollTop = wrap.scrollHeight;
+const esc = s=>(s??"").toString()
+.replaceAll("&","&amp;")
+.replaceAll("<","&lt;")
+.replaceAll(">","&gt;")
+.replaceAll('"',"&quot;")
+.replaceAll("'","&#039;");
 
-      const age = d?.ts ? Math.round((Date.now()-d.ts)/100)/10 : "?";
-      $("debug").textContent = `Last: ${d?.ts ? new Date(d.ts).toLocaleTimeString() : "—"} (${age}s) • items: ${items.length}`;
-    }
+function parseMoney(m){
+  return Number((m||"").toString().replace(/[^\d]/g,"")||0);
+}
+function fmt(n){
+  try{return "¥"+Number(n||0).toLocaleString("en-US");}
+  catch{return "¥0";}
+}
 
-    const node = ref(db, `posDisplay/${CHANNEL_ID}`);
+function render(d){
+  const t = d?.totals || {};
+  const items = Array.isArray(d?.items) ? d.items : [];
 
-    onValue(node, (snap)=>{
-      const d = snap.val();
-      if (!d || d.token !== TOKEN_SECRET) return;
-      render(d);
-    }, (err)=>{
-      $("debug").textContent = "Firebase error: " + (err?.message || err);
-      console.error(err);
-    });
-  </script>
+  const needPay = t.needPay || "¥0";
+  const paid    = t.paid || "¥0";
+  const changeN = Math.max(0, parseMoney(paid) - parseMoney(needPay));
+
+  $("needPay").textContent    = needPay;
+  $("totalGoods").textContent = t.totalGoods || "—";
+  $("discount").textContent   = t.discount || "—";
+  $("paid").textContent       = paid || "—";
+  $("change").textContent     = fmt(changeN);
+  $("remain").textContent     = t.remain || "—";
+
+  // ===== FULL LIST CUỘN (slice -120) =====
+  const show = items.slice(-120);
+
+  $("items").innerHTML = show.map((x,i)=>`
+    <div class="row ${i===show.length-1?"last":""}">
+      <div class="name">${esc(x.name)}</div>
+      <div class="qty">x${esc(x.qty??0)}</div>
+      <div class="unit">${esc(x.unitPrice||"")}</div>
+      <div class="total">${esc(x.lineTotal||"")}</div>
+    </div>
+  `).join("");
+
+  const wrap = document.querySelector(".items");
+  if(wrap) wrap.scrollTop = wrap.scrollHeight;
+
+  const age = d?.ts ? Math.round((Date.now()-d.ts)/100)/10 : "?";
+  $("debug").textContent =
+    `Last: ${d?.ts ? new Date(d.ts).toLocaleTimeString() : "—"} (${age}s) • items: ${items.length}`;
+}
+
+const node = ref(db, `posDisplay/${CHANNEL_ID}`);
+
+onValue(node, snap=>{
+  const d = snap.val();
+  if(!d || d.token !== TOKEN_SECRET) return;
+  render(d);
+});
+
+</script>
 </body>
 </html>
-
