@@ -6,140 +6,54 @@
 <title>T-NGON Customer Display</title>
 
 <style>
-body{
-  font-family:system-ui;
-  background:#111;
-  color:#fff;
-  margin:0;
-  padding:14px;
-}
+body{font-family:system-ui;background:#111;color:#fff;margin:0;padding:14px}
+.main{display:grid;grid-template-columns:1fr 1fr;gap:16px;height:calc(100vh - 28px)}
 
-/* ===== LAYOUT 2 CỘT ===== */
-.main{
-  display:grid;
-  grid-template-columns: 1fr 1fr;
-  gap:16px;
-  height:calc(100vh - 28px);
-}
-
-/* ===== LEFT - ITEMS ===== */
-.left{
-  background:#181818;
-  border:1px solid #2b2b2b;
-  border-radius:14px;
-  padding:14px;
-  display:flex;
-  flex-direction:column;
-  overflow:hidden;
-}
-
-.items{
-  flex:1;
-  overflow:auto;
-}
-
-.hdr{
-  display:flex;
-  gap:10px;
-  font-weight:800;
-  opacity:.85;
-  padding-bottom:6px;
-  border-bottom:1px solid #2b2b2b;
-}
-
+/* LEFT */
+.left{background:#181818;border:1px solid #2b2b2b;border-radius:14px;padding:14px;display:flex;flex-direction:column;overflow:hidden}
+.items{flex:1;overflow:auto}
+.hdr{display:flex;gap:10px;font-weight:800;opacity:.85;padding-bottom:6px;border-bottom:1px solid #2b2b2b}
 .col-name{flex:1}
 .col-qty{width:70px;text-align:right}
 .col-unit{width:120px;text-align:right}
 .col-total{width:150px;text-align:right}
-
-.row{
-  display:flex;
-  gap:10px;
-  padding:10px 0;
-  border-bottom:1px solid #2b2b2b;
-  font-size:26px;
-}
-
-.name{
-  flex:1;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap;
-  font-weight:900;
-}
-
+.row{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid #2b2b2b;font-size:26px}
+.name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:900}
 .qty{width:70px;text-align:right;font-weight:900}
 .unit{width:120px;text-align:right}
 .total{width:150px;text-align:right;font-weight:900}
+.row.last{background:rgba(255,255,255,.07);border-radius:10px;padding-left:8px;padding-right:8px}
 
-.row.last{
-  background:rgba(255,255,255,.07);
-  border-radius:10px;
-  padding-left:8px;
-  padding-right:8px;
-}
-
-/* ===== RIGHT - TOTALS ===== */
-.right{
-  display:flex;
-  flex-direction:column;
-  gap:14px;
-}
-
-.big{
-  font-size:96px;
-  font-weight:900;
-  line-height:1.05;
-}
-
-.card{
-  background:#181818;
-  border:1px solid #2b2b2b;
-  border-radius:14px;
-  padding:16px;
-}
-
-.grid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:14px;
-}
-
+/* RIGHT */
+.right{display:flex;flex-direction:column;gap:14px}
+.big{font-size:96px;font-weight:900;line-height:1.05}
+.card{background:#181818;border:1px solid #2b2b2b;border-radius:14px;padding:16px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .k{opacity:.75;font-size:18px}
 .v{font-size:36px;font-weight:900;margin-top:6px}
-
-.dbg{
-  margin-top:8px;
-  opacity:.6;
-  font-size:13px;
-}
 </style>
 </head>
 
 <body>
-
 <div class="main">
 
-  <!-- ================= LEFT ================= -->
+  <!-- LEFT -->
   <div class="left">
     <div style="opacity:.85;margin-bottom:6px">Danh sách món</div>
-
     <div class="hdr">
       <div class="col-name">Món</div>
       <div class="col-qty">SL</div>
       <div class="col-unit">Đơn giá</div>
       <div class="col-total">Thành tiền</div>
     </div>
-
     <div class="items" id="items"></div>
   </div>
 
-  <!-- ================= RIGHT ================= -->
+  <!-- RIGHT -->
   <div class="right">
-
     <div>
-      <div style="opacity:.75">Khách cần trả</div>
       <div class="big" id="needPay">¥0</div>
+      <div style="opacity:.75;margin-top:6px">Khách cần trả</div>
     </div>
 
     <div class="grid">
@@ -147,16 +61,12 @@ body{
       <div class="card"><div class="k">Giảm giá</div><div class="v" id="discount">—</div></div>
       <div class="card"><div class="k">Khách đưa</div><div class="v" id="paid">—</div></div>
       <div class="card"><div class="k">Tiền thừa</div><div class="v" id="change">—</div></div>
-      <div class="card" style="grid-column:1/-1"><div class="k">Còn lại</div><div class="v" id="remain">—</div></div>
     </div>
-
-    <div class="dbg" id="debug"></div>
   </div>
 
 </div>
 
 <script type="module">
-
 const DATABASE_URL = "https://tngon-b37d6-default-rtdb.asia-southeast1.firebasedatabase.app";
 const CHANNEL_ID   = "tngon_main_01";
 const TOKEN_SECRET = "6868-XYZ-2026";
@@ -166,23 +76,14 @@ import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10
 
 const app = initializeApp({ databaseURL: DATABASE_URL });
 const db  = getDatabase(app);
-
 const $ = id=>document.getElementById(id);
 
 const esc = s=>(s??"").toString()
-.replaceAll("&","&amp;")
-.replaceAll("<","&lt;")
-.replaceAll(">","&gt;")
-.replaceAll('"',"&quot;")
-.replaceAll("'","&#039;");
+.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+.replaceAll('"',"&quot;").replaceAll("'","&#039;");
 
-function parseMoney(m){
-  return Number((m||"").toString().replace(/[^\d]/g,"")||0);
-}
-function fmt(n){
-  try{return "¥"+Number(n||0).toLocaleString("en-US");}
-  catch{return "¥0";}
-}
+function parseMoney(m){ return Number((m||"").toString().replace(/[^\d]/g,"")||0); }
+function fmt(n){ try{return "¥"+Number(n||0).toLocaleString("en-US");}catch{return "¥0";} }
 
 function render(d){
   const t = d?.totals || {};
@@ -197,14 +98,13 @@ function render(d){
   $("discount").textContent   = t.discount || "—";
   $("paid").textContent       = paid || "—";
   $("change").textContent     = fmt(changeN);
-  $("remain").textContent     = t.remain || "—";
 
-  // ===== FULL LIST CUỘN (slice -120) =====
+  // slice(-120)
   const show = items.slice(-120);
 
   $("items").innerHTML = show.map((x,i)=>`
     <div class="row ${i===show.length-1?"last":""}">
-      <div class="name">${esc(x.name)}</div>
+      <div class="name" title="${esc(x.name)}">${esc(x.name)}</div>
       <div class="qty">x${esc(x.qty??0)}</div>
       <div class="unit">${esc(x.unitPrice||"")}</div>
       <div class="total">${esc(x.lineTotal||"")}</div>
@@ -213,10 +113,6 @@ function render(d){
 
   const wrap = document.querySelector(".items");
   if(wrap) wrap.scrollTop = wrap.scrollHeight;
-
-  const age = d?.ts ? Math.round((Date.now()-d.ts)/100)/10 : "?";
-  $("debug").textContent =
-    `Last: ${d?.ts ? new Date(d.ts).toLocaleTimeString() : "—"} (${age}s) • items: ${items.length}`;
 }
 
 const node = ref(db, `posDisplay/${CHANNEL_ID}`);
@@ -226,7 +122,6 @@ onValue(node, snap=>{
   if(!d || d.token !== TOKEN_SECRET) return;
   render(d);
 });
-
 </script>
 </body>
 </html>
