@@ -26,11 +26,13 @@ body{font-family:system-ui;background:#111;color:#fff;margin:0;padding:14px}
 
 /* RIGHT */
 .right{display:flex;flex-direction:column;gap:14px}
-.big{font-size:96px;font-weight:900;line-height:1.05}
 .card{background:#181818;border:1px solid #2b2b2b;border-radius:14px;padding:16px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .k{opacity:.75;font-size:18px}
 .v{font-size:36px;font-weight:900;margin-top:6px}
+.bigWrap{background:#181818;border:1px solid #2b2b2b;border-radius:14px;padding:18px}
+.big{font-size:96px;font-weight:900;line-height:1.05}
+.sub{opacity:.75;margin-top:6px;font-size:18px}
 </style>
 </head>
 
@@ -51,17 +53,21 @@ body{font-family:system-ui;background:#111;color:#fff;margin:0;padding:14px}
 
   <!-- RIGHT -->
   <div class="right">
-    <div>
-      <div class="big" id="needPay">¥0</div>
-      <div style="opacity:.75;margin-top:6px">Khách cần trả</div>
-    </div>
 
+    <!-- 1) GRID THÔNG TIN TRƯỚC -->
     <div class="grid">
       <div class="card"><div class="k">Tổng tiền hàng</div><div class="v" id="totalGoods">—</div></div>
       <div class="card"><div class="k">Giảm giá</div><div class="v" id="discount">—</div></div>
       <div class="card"><div class="k">Khách đưa</div><div class="v" id="paid">—</div></div>
       <div class="card"><div class="k">Tiền thừa</div><div class="v" id="change">—</div></div>
     </div>
+
+    <!-- 2) CỤM KHÁCH CẦN TRẢ ĐƯA XUỐNG DƯỚI -->
+    <div class="bigWrap">
+      <div class="big" id="needPay">¥0</div>
+      <div class="sub">Khách cần trả</div>
+    </div>
+
   </div>
 
 </div>
@@ -97,7 +103,7 @@ function render(d){
   $("totalGoods").textContent = t.totalGoods || "—";
   $("discount").textContent   = t.discount || "—";
   $("paid").textContent       = paid || "—";
-  $("change").textContent     = fmt(changeN);
+  $("change").textContent     = t.change || fmt(changeN);
 
   // slice(-120)
   const show = items.slice(-120);
