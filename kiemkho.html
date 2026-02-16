@@ -1,101 +1,1860 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inventory Management Application</title>
-    <style>
-        body { font-family: Arial, sans-serif; }
-        #inventoryTable { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        #inventoryTable th, #inventoryTable td { border: 1px solid #ddd; padding: 8px; }
-        #inventoryTable th { background-color: #f2f2f2; }
-        .button { padding: 10px 15px; margin: 5px; cursor: pointer; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>📦 Kiểm Kho - Quản Lý Hàng Hóa</title>
+  <style>
+    :root{
+      --bg:#0b1220;
+      --panel:#0f1a2e;
+      --card:#0f1a2e;
+      --card2:#101f36;
+      --text:#eaf0ff;
+      --muted:#a7b3d2;
+      --line:rgba(255,255,255,.08);
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius:14px;
+
+      --primary:#4f8cff;
+      --primary2:#2b6bff;
+      --success:#2ed573;
+      --danger:#ff4757;
+      --warning:#ffa502;
+      --ghost:rgba(255,255,255,.08);
+      --focus: 0 0 0 4px rgba(79,140,255,.25);
+    }
+
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background: radial-gradient(1200px 600px at 30% -10%, rgba(79,140,255,.25), transparent 60%),
+                  radial-gradient(900px 500px at 95% 0%, rgba(46,213,115,.14), transparent 60%),
+                  var(--bg);
+      color:var(--text);
+      padding:18px;
+    }
+
+    .app{
+      max-width: 1480px;
+      margin: 0 auto;
+    }
+
+    /* Top bar */
+    .topbar{
+      display:flex;
+      gap:12px;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:14px;
+      padding:14px 16px;
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border:1px solid var(--line);
+      box-shadow: var(--shadow);
+      position: sticky;
+      top: 12px;
+      z-index: 50;
+      backdrop-filter: blur(10px);
+    }
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      min-width: 240px;
+    }
+    .logo{
+      width:42px;height:42px;border-radius:12px;
+      background: linear-gradient(135deg, rgba(79,140,255,.95), rgba(46,213,115,.85));
+      box-shadow: 0 10px 25px rgba(79,140,255,.25);
+      display:flex;align-items:center;justify-content:center;
+      font-size:20px;
+    }
+    .brand h1{
+      margin:0;
+      font-size:16px;
+      line-height:1.2;
+      letter-spacing:.2px;
+    }
+    .brand p{
+      margin:2px 0 0 0;
+      font-size:12px;
+      color:var(--muted);
+    }
+
+    .top-actions{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+
+    .pill{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      padding:8px 10px;
+      border-radius: 999px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      color: var(--muted);
+      font-size:12px;
+      white-space:nowrap;
+    }
+    .pill b{color:var(--text); font-weight:700}
+
+    /* Layout */
+    .grid{
+      display:grid;
+      grid-template-columns: 420px 1fr;
+      gap: 14px;
+      align-items:start;
+    }
+    @media (max-width: 1100px){
+      .grid{grid-template-columns: 1fr}
+      .brand{min-width:auto}
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .card-head{
+      padding: 14px 14px 10px 14px;
+      border-bottom:1px solid var(--line);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .card-head h2{
+      margin:0;
+      font-size:14px;
+      letter-spacing:.2px;
+    }
+    .card-head .sub{
+      margin:0;
+      color:var(--muted);
+      font-size:12px;
+    }
+    .card-body{padding:14px}
+
+    /* Form */
+    .form{
+      display:grid;
+      gap: 10px;
+    }
+    .row{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    @media (max-width: 520px){
+      .row{grid-template-columns:1fr}
+    }
+    label{
+      display:block;
+      font-size:12px;
+      color:var(--muted);
+      margin-bottom:6px;
+    }
+    .field{
+      position:relative;
+    }
+    input, select{
+      width:100%;
+      border-radius:12px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      color: var(--text);
+      padding: 11px 12px;
+      outline:none;
+      font-size:14px;
+      transition: .15s ease;
+    }
+    input:focus, select:focus{
+      box-shadow: var(--focus);
+      border-color: rgba(79,140,255,.55);
+    }
+    input::placeholder{color: rgba(167,179,210,.6)}
+    input[type="number"]{appearance:textfield}
+    input::-webkit-outer-spin-button, input::-webkit-inner-spin-button{appearance: none; margin:0;}
+
+    .inline{
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+    .inline > * {flex:1}
+    .inline .btn{flex: 0 0 auto}
+
+    /* Buttons */
+    .btn{
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      color:var(--text);
+      padding: 10px 12px;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:700;
+      font-size:13px;
+      transition:.15s ease;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .btn:hover{transform: translateY(-1px); background: rgba(255,255,255,.06)}
+    .btn:active{transform: translateY(0px)}
+    .btn.primary{background: rgba(79,140,255,.15); border-color: rgba(79,140,255,.35)}
+    .btn.primary:hover{background: rgba(79,140,255,.22)}
+    .btn.success{background: rgba(46,213,115,.14); border-color: rgba(46,213,115,.35)}
+    .btn.success:hover{background: rgba(46,213,115,.20)}
+    .btn.danger{background: rgba(255,71,87,.14); border-color: rgba(255,71,87,.38)}
+    .btn.danger:hover{background: rgba(255,71,87,.20)}
+    .btn.warning{background: rgba(255,165,2,.14); border-color: rgba(255,165,2,.38)}
+    .btn.warning:hover{background: rgba(255,165,2,.20)}
+    .btn.small{padding:8px 10px; border-radius:10px; font-size:12px}
+    .btn.icon{
+      display:flex; align-items:center; gap:8px;
+    }
+
+    .actions{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+      margin-top: 8px;
+    }
+    .actions2{
+      display:grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap:10px;
+      margin-top: 10px;
+    }
+    @media (max-width: 520px){
+      .actions{grid-template-columns:1fr}
+      .actions2{grid-template-columns:1fr}
+    }
+
+    .hint{
+      margin-top:6px;
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.4;
+    }
+
+    .error{
+      margin-top:6px;
+      color: #ffd1d5;
+      font-size:12px;
+      display:none;
+    }
+    .error.show{display:block}
+    .chip{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding: 6px 10px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .chip b{color: var(--text)}
+
+    /* Image preview */
+    .preview-wrap{
+      display:flex; gap:10px; align-items:center;
+    }
+    .img-preview{
+      width:64px; height:64px;
+      border-radius: 14px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      object-fit: cover;
+      display:none;
+    }
+
+    /* Suggestions dropdown */
+    .suggest{
+      position:absolute;
+      top: calc(100% + 6px);
+      left:0; right:0;
+      background: rgba(15,26,46,.98);
+      border:1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      max-height: 240px;
+      overflow:auto;
+      display:none;
+      z-index: 20;
+    }
+    .suggest.show{display:block}
+    .suggest .item{
+      padding: 10px 12px;
+      border-bottom:1px solid var(--line);
+      cursor:pointer;
+      font-size:13px;
+      color: var(--text);
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .suggest .item:last-child{border-bottom:none}
+    .suggest .item small{color: var(--muted); font-size:12px}
+    .suggest .item.active{background: rgba(79,140,255,.15)}
+    .suggest .item:hover{background: rgba(255,255,255,.05)}
+
+    /* Table */
+    .table-tools{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      padding: 12px 14px;
+      border-bottom:1px solid var(--line);
+      background: rgba(255,255,255,.02);
+    }
+    .table-tools .grow{flex:1; min-width: 240px}
+    .table-wrap{
+      overflow:auto;
+      max-height: calc(100vh - 210px);
+    }
+    table{
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0;
+      min-width: 920px;
+    }
+    thead th{
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: rgba(16,31,54,.98);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--line);
+      padding: 12px 10px;
+      font-size:12px;
+      color: var(--muted);
+      text-align:left;
+      cursor:pointer;
+      user-select:none;
+      white-space:nowrap;
+    }
+    thead th.sort::after{
+      content:" ⇅";
+      opacity:.6;
+      font-weight:900;
+    }
+    thead th.asc::after{content:" ↑"; opacity:1}
+    thead th.desc::after{content:" ↓"; opacity:1}
+
+    tbody td{
+      padding: 12px 10px;
+      border-bottom: 1px solid var(--line);
+      font-size: 13px;
+      vertical-align: middle;
+      white-space:nowrap;
+    }
+    tbody tr:hover{background: rgba(255,255,255,.03)}
+    tbody tr.selected{background: rgba(79,140,255,.10)}
+    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;}
+    .thumb{
+      width:46px;height:46px;border-radius:12px;
+      border:1px solid var(--line);
+      object-fit: cover;
+      cursor:pointer;
+      background: rgba(255,255,255,.03);
+    }
+    .td-actions{
+      display:flex; gap:8px; align-items:center;
+    }
+    .cell-input{
+      width: 140px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.15);
+      color: var(--text);
+      font-size:13px;
+    }
+    .cell-input.small{width:110px}
+    .cell-input.wide{width: 260px}
+    .td-actions .btn{padding:8px 10px; border-radius:10px; font-size:12px}
+
+    /* Modal + Toast */
+    .backdrop{
+      position:fixed; inset:0;
+      background: rgba(0,0,0,.55);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index: 200;
+      padding: 16px;
+    }
+    .backdrop.show{display:flex}
+    .modal{
+      width:min(520px, 100%);
+      background: rgba(15,26,46,.98);
+      border:1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .modal header{
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      display:flex; justify-content:space-between; align-items:center;
+      gap:10px;
+    }
+    .modal header h3{margin:0; font-size:14px}
+    .modal .content{padding: 14px 16px; color: var(--muted); font-size: 13px; line-height: 1.5}
+    .modal footer{
+      padding: 12px 16px;
+      border-top:1px solid var(--line);
+      display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap;
+    }
+
+    .toast{
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 300;
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
+      pointer-events:none;
+    }
+    .toast .t{
+      pointer-events:auto;
+      min-width: 260px;
+      max-width: 360px;
+      padding: 12px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(15,26,46,.98);
+      box-shadow: var(--shadow);
+      display:flex; gap:10px; align-items:flex-start;
+      animation: in .18s ease-out;
+    }
+    .toast .dot{
+      width:10px;height:10px;border-radius:999px; margin-top:4px;
+      background: var(--success);
+      box-shadow: 0 0 0 4px rgba(46,213,115,.15);
+    }
+    .toast .t.warn .dot{background: var(--warning); box-shadow:0 0 0 4px rgba(255,165,2,.15)}
+    .toast .t.err .dot{background: var(--danger); box-shadow:0 0 0 4px rgba(255,71,87,.15)}
+    .toast .msg{font-size:13px; color: var(--text)}
+    .toast .msg small{display:block; color: var(--muted); margin-top:2px}
+
+    @keyframes in{
+      from{transform: translateY(10px); opacity: 0}
+      to{transform: translateY(0); opacity: 1}
+    }
+
+    .kbd{
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      color: var(--muted);
+      padding: 2px 6px;
+      border-radius: 8px;
+      font-size: 11px;
+      margin-left: 6px;
+      white-space:nowrap;
+    }
+  </style>
 </head>
 <body>
-    <h1>Inventory Management</h1>
-    <input type="text" id="barcodeInput" placeholder="Scan Barcode" />
-    <input type="text" id="itemNameInput" placeholder="Item Name" />
-    <input type="number" id="quantityInput" placeholder="Quantity" />
-    <button class="button" id="addItemButton">Add Item</button>
-    <button class="button" id="importButton">Import</button>
-    <button class="button" id="exportButton">Export</button>
-    <button class="button" id="syncButton">Sync with GitHub</button>
+<div class="app">
 
-    <table id="inventoryTable">
-        <thead>
-            <tr>
-                <th>Barcode</th>
-                <th>Item Name</th>
-                <th>Quantity</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody id="inventoryBody">
-        </tbody>
-    </table>
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">📦</div>
+      <div>
+        <h1>Kiểm Kho - Quản Lý Hàng Hóa</h1>
+        <p>Quét mã vạch → tự load / thêm mới • Lưu localStorage • Import/Export • GitHub Sync</p>
+      </div>
+    </div>
 
-    <script>
-        const inventory = [];
-        document.getElementById('addItemButton').onclick = function () {
-            const barcode = document.getElementById('barcodeInput').value;
-            const itemName = document.getElementById('itemNameInput').value;
-            const quantity = parseInt(document.getElementById('quantityInput').value);
-            inventory.push({ barcode, itemName, quantity });
-            displayInventory();
-            clearInputs();
-        };
+    <div class="top-actions">
+      <div class="pill">Tổng mặt hàng: <b id="statItems">0</b></div>
+      <div class="pill">Tổng SL: <b id="statQty">0</b></div>
+      <div class="pill">Giá trị nhập: <b id="statIn">0</b></div>
+      <div class="pill">Giá trị bán: <b id="statOut">0</b></div>
+    </div>
+  </div>
 
-        function displayInventory() {
-            const inventoryBody = document.getElementById('inventoryBody');
-            inventoryBody.innerHTML = '';
-            inventory.forEach((item, index) => {
-                const row = document.createElement('tr');
-                row.innerHTML = `<td>${item.barcode}</td><td>${item.itemName}</td><td>${item.quantity}</td><td><button onclick="editItem(${index})">Edit</button> <button onclick="deleteItem(${index})">Delete</button></td>`;
-                inventoryBody.appendChild(row);
-            });
-        }
+  <div class="grid">
 
-        function clearInputs() {
-            document.getElementById('barcodeInput').value = '';
-            document.getElementById('itemNameInput').value = '';
-            document.getElementById('quantityInput').value = '';
-        }
+    <!-- LEFT: Form -->
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <h2>🧾 Thông tin hàng</h2>
+          <p class="sub">Phím tắt: <span class="kbd">Enter</span> (sau khi quét) • <span class="kbd">Ctrl + S</span> (lưu)</p>
+        </div>
+        <div class="chip">Chế độ: <b id="modeLabel">Form</b></div>
+      </div>
 
-        function editItem(index) {
-            // Logic for direct edit mode
-            const item = inventory[index];
-            document.getElementById('barcodeInput').value = item.barcode;
-            document.getElementById('itemNameInput').value = item.itemName;
-            document.getElementById('quantityInput').value = item.quantity;
-            deleteItem(index);
-        }
+      <div class="card-body">
+        <div class="form">
 
-        function deleteItem(index) {
-            inventory.splice(index, 1);
-            displayInventory();
-        }
+          <div class="row">
+            <div class="field">
+              <label>Mã Vạch</label>
+              <div class="inline">
+                <input id="barcode" class="mono" placeholder="Quét mã vạch..." autocomplete="off" />
+                <button class="btn primary small" id="focusBarcodeBtn">Quét</button>
+              </div>
+              <div class="suggest" id="barcodeSuggest"></div>
+              <div class="error" id="barcodeError"></div>
+            </div>
 
-        document.getElementById('importButton').onclick = function () {
-            // Logic for import functionality
-            alert('Import functionality is not implemented yet.');
-        };
+            <div class="field">
+              <label>Mã Hàng (nội bộ)</label>
+              <input id="productCode" placeholder="VD: SP_001..." autocomplete="off" />
+              <div class="hint">Không bắt buộc. Dùng khi sếp muốn tự đặt mã.</div>
+            </div>
+          </div>
 
-        document.getElementById('exportButton').onclick = function () {
-            // Logic for export functionality
-            alert('Export functionality is not implemented yet.');
-        };
+          <div class="field">
+            <label>Tên Hàng Hóa</label>
+            <div class="inline">
+              <input id="productName" placeholder="Tên hàng..." autocomplete="off" />
+              <button class="btn primary small" id="pickNameBtn">Tìm</button>
+              <button class="btn warning small" id="printLabelBtn">In tem</button>
+            </div>
+            <div class="suggest" id="nameSuggest"></div>
+            <div class="error" id="productNameError"></div>
+          </div>
 
-        document.getElementById('syncButton').onclick = function () {
-            // Logic for GitHub sync
-            alert('GitHub sync functionality is not implemented yet.');
-        };
+          <div class="row">
+            <div class="field">
+              <label>Nhóm Hàng</label>
+              <select id="category"></select>
+              <div class="error" id="categoryError"></div>
+            </div>
 
-        document.getElementById('barcodeInput').addEventListener('keydown', function (event) {
-            if (event.key === 'Enter') {
-                document.getElementById('addItemButton').click();
+            <div class="field">
+              <label>Số Lượng</label>
+              <input id="quantity" type="number" step="0.01" placeholder="0" />
+              <div class="error" id="quantityError"></div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label>Giá Nhập</label>
+              <input id="importPrice" type="number" step="0.01" min="0" placeholder="0" />
+              <div class="error" id="importPriceError"></div>
+            </div>
+
+            <div class="field">
+              <label>Giá Bán</label>
+              <input id="sellPrice" type="number" step="0.01" min="0" placeholder="0" />
+              <div class="error" id="sellPriceError"></div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Ảnh sản phẩm</label>
+            <div class="preview-wrap">
+              <input id="imageFile" type="file" accept="image/*" />
+              <img id="imgPreview" class="img-preview" alt="preview" />
+              <button class="btn danger small" id="removeImgBtn" type="button">Bỏ ảnh</button>
+            </div>
+            <div class="hint">Tip: ảnh lưu dạng base64 trong localStorage → nếu nhiều ảnh thì file sẽ nặng. (Cần thì em tối ưu lưu ảnh sang GitHub/Drive.)</div>
+          </div>
+
+          <div class="actions">
+            <button class="btn success icon" id="saveBtn">💾 Lưu / Cập nhật</button>
+            <button class="btn danger icon" id="clearBtn">🧹 Xóa form</button>
+          </div>
+
+          <div class="actions2">
+            <button class="btn icon" id="toggleEditBtn">✏️ Sửa trực tiếp: OFF</button>
+            <button class="btn icon" id="importBtn">📥 Import (JSON/CSV)</button>
+            <button class="btn icon" id="exportBtn">📤 Export (JSON/CSV)</button>
+          </div>
+
+          <div class="actions2">
+            <button class="btn warning icon" id="githubToggleBtn">🔗 GitHub Sync</button>
+            <button class="btn warning icon" id="githubLoadBtn">⬇️ Load GitHub</button>
+            <button class="btn warning icon" id="githubUploadBtn">⬆️ Upload GitHub</button>
+          </div>
+
+          <div class="card" id="githubCard" style="display:none; margin-top:10px;">
+            <div class="card-head">
+              <div>
+                <h2>🔐 Cấu hình GitHub</h2>
+                <p class="sub">Token chỉ lưu local (trên máy sếp). Không gửi đi đâu ngoài GitHub API.</p>
+              </div>
+              <button class="btn small" id="githubHideBtn">Ẩn</button>
+            </div>
+            <div class="card-body">
+              <div class="row">
+                <div class="field">
+                  <label>Token</label>
+                  <input id="ghToken" type="password" placeholder="ghp_..." />
+                </div>
+                <div class="field">
+                  <label>Owner</label>
+                  <input id="ghOwner" placeholder="username" />
+                </div>
+              </div>
+              <div class="row">
+                <div class="field">
+                  <label>Repo</label>
+                  <input id="ghRepo" placeholder="repo-name" />
+                </div>
+                <div class="field">
+                  <label>Branch</label>
+                  <input id="ghBranch" placeholder="main" />
+                </div>
+              </div>
+              <div class="field">
+                <label>File path (JSON)</label>
+                <input id="ghPath" placeholder="data/inventory.json" />
+                <div class="hint">Em khuyên: <span class="mono">data/inventory.json</span></div>
+              </div>
+              <div class="actions">
+                <button class="btn primary" id="ghSaveCfgBtn">💾 Lưu cấu hình</button>
+                <button class="btn" id="ghClearCfgBtn">🗑️ Xóa cấu hình</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Table -->
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <h2>📋 Danh sách hàng hóa</h2>
+          <p class="sub">Click 1 dòng để load vào form • Ảnh click để xem lớn</p>
+        </div>
+        <div class="chip">Đang hiển thị: <b id="statShown">0</b></div>
+      </div>
+
+      <div class="table-tools">
+        <input id="tableFilter" class="grow" placeholder="🔍 Tìm theo mã vạch / tên / nhóm..." />
+        <select id="filterCategory" style="max-width:220px;">
+          <option value="">Tất cả nhóm</option>
+        </select>
+        <button class="btn small" id="clearFilterBtn">Xóa lọc</button>
+        <button class="btn small danger" id="deleteSelectedBtn">Xóa dòng chọn</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+          <tr>
+            <th style="width:60px;">STT</th>
+            <th class="sort" data-sort="barcode">Mã vạch</th>
+            <th class="sort" data-sort="productName">Tên hàng</th>
+            <th class="sort" data-sort="category">Nhóm</th>
+            <th class="sort" data-sort="quantity">SL</th>
+            <th class="sort" data-sort="importPrice">Giá nhập</th>
+            <th class="sort" data-sort="sellPrice">Giá bán</th>
+            <th style="width:72px;">Ảnh</th>
+            <th style="width:220px;">Hành động</th>
+          </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="backdrop" id="modalBackdrop" role="dialog" aria-modal="true">
+  <div class="modal">
+    <header>
+      <h3 id="modalTitle">Xác nhận</h3>
+      <button class="btn small" id="modalCloseBtn">Đóng</button>
+    </header>
+    <div class="content" id="modalContent">...</div>
+    <footer id="modalFooter"></footer>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ==========================
+   Kiểm Kho v2 (UI + Features)
+   - localStorage items + categories + cfg
+   - Import/Export JSON/CSV
+   - Suggest dropdown + keyboard nav
+   - Direct edit mode in table
+   - GitHub sync (content base64)
+========================== */
+
+let items = [];
+let categories = [];
+let selectedIndex = -1;           // index in items
+let directEdit = false;
+let sortCol = "productName";
+let sortAsc = true;
+
+// Suggest state
+let sugState = {
+  barcode: { open:false, idx:-1, list:[] },
+  name: { open:false, idx:-1, list:[] }
+};
+
+const LS_ITEMS = "inv_items_v2";
+const LS_CATS  = "inv_cats_v2";
+const LS_CFG   = "inv_gh_cfg_v2";
+
+const el = (id)=>document.getElementById(id);
+const $ = (q)=>document.querySelector(q);
+const $$ = (q)=>document.querySelectorAll(q);
+
+function init(){
+  loadLocal();
+  bind();
+  refreshCategoryUI();
+  render();
+  focusBarcode();
+  toast("Đã sẵn sàng", "Tip: quét mã rồi Enter để load/lưu nhanh.", "ok");
+}
+
+function loadLocal(){
+  try{
+    items = JSON.parse(localStorage.getItem(LS_ITEMS) || "[]");
+    categories = JSON.parse(localStorage.getItem(LS_CATS) || "[]");
+  }catch(e){
+    items = [];
+    categories = [];
+  }
+  if(!Array.isArray(categories) || categories.length===0){
+    categories = ["Gia vị", "Thực phẩm", "Đồ uống", "Hàng khô", "Khác"];
+  }
+
+  // load GitHub config
+  try{
+    const cfg = JSON.parse(localStorage.getItem(LS_CFG) || "null");
+    if(cfg){
+      el("ghToken").value = cfg.token || "";
+      el("ghOwner").value = cfg.owner || "";
+      el("ghRepo").value = cfg.repo || "";
+      el("ghBranch").value = cfg.branch || "main";
+      el("ghPath").value = cfg.path || "data/inventory.json";
+    }else{
+      el("ghBranch").value = "main";
+      el("ghPath").value = "data/inventory.json";
+    }
+  }catch(e){}
+}
+
+function saveLocal(){
+  localStorage.setItem(LS_ITEMS, JSON.stringify(items));
+  localStorage.setItem(LS_CATS, JSON.stringify(categories));
+}
+
+function bind(){
+  // form events
+  el("focusBarcodeBtn").addEventListener("click", focusBarcode);
+  el("barcode").addEventListener("keydown", onBarcodeKeydown);
+  el("barcode").addEventListener("input", ()=>showSuggest("barcode"));
+  el("productName").addEventListener("input", ()=>showSuggest("name"));
+  el("productName").addEventListener("keydown", onNameKeydown);
+
+  el("category").addEventListener("change", onCategoryChange);
+  el("imageFile").addEventListener("change", onImagePick);
+  el("removeImgBtn").addEventListener("click", removeImage);
+
+  el("saveBtn").addEventListener("click", saveItem);
+  el("clearBtn").addEventListener("click", clearForm);
+
+  el("toggleEditBtn").addEventListener("click", toggleDirectEdit);
+
+  el("importBtn").addEventListener("click", importDialog);
+  el("exportBtn").addEventListener("click", exportDialog);
+
+  // table tools
+  el("tableFilter").addEventListener("input", render);
+  el("filterCategory").addEventListener("change", render);
+  el("clearFilterBtn").addEventListener("click", ()=>{
+    el("tableFilter").value = "";
+    el("filterCategory").value = "";
+    render();
+  });
+  el("deleteSelectedBtn").addEventListener("click", ()=>{
+    if(selectedIndex<0) return toast("Chưa chọn dòng nào để xóa", "Click vào 1 dòng trong bảng trước.", "warn");
+    confirmModal("Xóa hàng", "Xóa hàng đang chọn? Không thể hoàn tác.", [
+      {text:"Hủy", cls:"btn", onClick: closeModal},
+      {text:"Xóa", cls:"btn danger", onClick: ()=>{ deleteItem(selectedIndex); closeModal(); }}
+    ]);
+  });
+
+  // table sort
+  $$("thead th[data-sort]").forEach(th=>{
+    th.addEventListener("click", ()=>{
+      const c = th.dataset.sort;
+      if(sortCol===c) sortAsc = !sortAsc; else { sortCol=c; sortAsc=true; }
+      updateSortHead();
+      render();
+    });
+  });
+  updateSortHead();
+
+  // GitHub
+  el("githubToggleBtn").addEventListener("click", ()=>toggle(el("githubCard")));
+  el("githubHideBtn").addEventListener("click", ()=>toggle(el("githubCard"), false));
+  el("githubLoadBtn").addEventListener("click", githubLoad);
+  el("githubUploadBtn").addEventListener("click", githubUpload);
+  el("ghSaveCfgBtn").addEventListener("click", saveGhCfg);
+  el("ghClearCfgBtn").addEventListener("click", clearGhCfg);
+
+  // modal close
+  el("modalCloseBtn").addEventListener("click", closeModal);
+  el("modalBackdrop").addEventListener("click", (e)=>{ if(e.target===el("modalBackdrop")) closeModal(); });
+
+  // global click to close suggest
+  document.addEventListener("click", (e)=>{
+    if(!e.target.closest("#barcode") && !e.target.closest("#barcodeSuggest")) hideSuggest("barcode");
+    if(!e.target.closest("#productName") && !e.target.closest("#nameSuggest")) hideSuggest("name");
+  });
+
+  // Ctrl+S save
+  document.addEventListener("keydown",(e)=>{
+    if((e.ctrlKey || e.metaKey) && e.key.toLowerCase()==="s"){
+      e.preventDefault();
+      saveItem();
+    }
+  });
+}
+
+/* =======================
+   UI helpers
+======================= */
+function toggle(node, force){
+  const show = (force===undefined) ? (node.style.display==="none" || node.style.display==="") : force;
+  node.style.display = show ? "block" : "none";
+}
+
+function focusBarcode(){ el("barcode").focus(); el("barcode").select?.(); }
+
+function toast(title, desc="", type="ok"){
+  const box = el("toast");
+  const t = document.createElement("div");
+  t.className = "t " + (type==="err"?"err":type==="warn"?"warn":"");
+  t.innerHTML = `
+    <div class="dot"></div>
+    <div class="msg">
+      ${escapeHtml(title)}
+      ${desc?`<small>${escapeHtml(desc)}</small>`:""}
+    </div>
+  `;
+  box.appendChild(t);
+  setTimeout(()=>t.remove(), 3200);
+}
+
+function confirmModal(title, message, buttons){
+  el("modalTitle").textContent = title;
+  el("modalContent").textContent = message;
+  const f = el("modalFooter");
+  f.innerHTML = "";
+  buttons.forEach(b=>{
+    const btn = document.createElement("button");
+    btn.className = b.cls;
+    btn.textContent = b.text;
+    btn.addEventListener("click", b.onClick);
+    f.appendChild(btn);
+  });
+  el("modalBackdrop").classList.add("show");
+}
+
+function closeModal(){
+  el("modalBackdrop").classList.remove("show");
+  el("modalFooter").innerHTML = "";
+}
+
+/* =======================
+   Categories
+======================= */
+function refreshCategoryUI(){
+  // form select
+  const sel = el("category");
+  const cur = sel.value;
+
+  const catsFromItems = [...new Set(items.map(x=>x.category).filter(Boolean))];
+  const all = [...new Set([...categories, ...catsFromItems])];
+
+  sel.innerHTML = `<option value="">-- Chọn nhóm --</option>` +
+                  all.map(c=>`<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`).join("") +
+                  `<option value="__ADD__">+ Thêm nhóm</option>`;
+
+  // filter select
+  const fsel = el("filterCategory");
+  const fcur = fsel.value;
+  fsel.innerHTML = `<option value="">Tất cả nhóm</option>` +
+                   all.map(c=>`<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`).join("");
+
+  if(cur && all.includes(cur)) sel.value = cur;
+  if(fcur && all.includes(fcur)) fsel.value = fcur;
+}
+
+function onCategoryChange(e){
+  if(e.target.value==="__ADD__"){
+    const name = prompt("Nhập tên nhóm mới:");
+    if(name && name.trim()){
+      const v = name.trim();
+      categories.push(v);
+      categories = [...new Set(categories)];
+      saveLocal();
+      refreshCategoryUI();
+      el("category").value = v;
+      toast("Đã thêm nhóm", v, "ok");
+    }else{
+      el("category").value = "";
+    }
+  }
+}
+
+/* =======================
+   Image
+======================= */
+function onImagePick(e){
+  const file = e.target.files?.[0];
+  if(!file) return;
+  const r = new FileReader();
+  r.onload = ()=>{
+    el("imgPreview").src = r.result;
+    el("imgPreview").style.display = "block";
+  };
+  r.readAsDataURL(file);
+}
+function removeImage(){
+  el("imageFile").value = "";
+  el("imgPreview").src = "";
+  el("imgPreview").style.display = "none";
+}
+
+/* =======================
+   Form validation
+======================= */
+function clearErrors(){
+  ["barcodeError","productNameError","categoryError","quantityError","importPriceError","sellPriceError"]
+    .forEach(id=>{ const n=el(id); if(n) n.classList.remove("show"); });
+}
+function setError(id,msg){
+  const n = el(id);
+  if(!n) return;
+  n.textContent = msg;
+  n.classList.add("show");
+}
+function readForm(){
+  return {
+    barcode: el("barcode").value.trim(),
+    productCode: el("productCode").value.trim(),
+    productName: el("productName").value.trim(),
+    category: el("category").value,
+    quantity: parseFloat(el("quantity").value),
+    importPrice: parseFloat(el("importPrice").value),
+    sellPrice: parseFloat(el("sellPrice").value),
+    image: el("imgPreview").style.display==="block" ? (el("imgPreview").src || "") : ""
+  };
+}
+function validateForm(){
+  clearErrors();
+  const f = readForm();
+  let ok = true;
+
+  if(!f.barcode){ setError("barcodeError","Mã vạch bắt buộc"); ok=false; }
+  if(!f.productName){ setError("productNameError","Tên hàng bắt buộc"); ok=false; }
+  if(!f.category){ setError("categoryError","Nhóm hàng bắt buộc"); ok=false; }
+
+  if(Number.isNaN(f.quantity)){ setError("quantityError","Số lượng không hợp lệ"); ok=false; }
+  if(Number.isNaN(f.importPrice) || f.importPrice<0){ setError("importPriceError","Giá nhập không hợp lệ"); ok=false; }
+  if(Number.isNaN(f.sellPrice) || f.sellPrice<0){ setError("sellPriceError","Giá bán không hợp lệ"); ok=false; }
+
+  return ok;
+}
+function isDirty(){
+  return [
+    el("barcode").value.trim(),
+    el("productCode").value.trim(),
+    el("productName").value.trim(),
+    el("category").value,
+    el("quantity").value,
+    el("importPrice").value,
+    el("sellPrice").value,
+    el("imgPreview").src
+  ].some(v=>String(v||"").trim()!=="");
+}
+function clearForm(){
+  el("barcode").value="";
+  el("productCode").value="";
+  el("productName").value="";
+  el("category").value="";
+  el("quantity").value="";
+  el("importPrice").value="";
+  el("sellPrice").value="";
+  removeImage();
+  clearErrors();
+  selectedIndex = -1;
+  setSelectedRow(-1);
+  focusBarcode();
+  toast("Đã xóa form", "", "ok");
+}
+
+function saveItem(){
+  if(!validateForm()){
+    toast("Thiếu dữ liệu", "Vui lòng nhập đủ trường bắt buộc.", "warn");
+    return;
+  }
+  const f = readForm();
+  const idx = items.findIndex(x=>x.barcode===f.barcode);
+  if(idx>=0){
+    items[idx] = {...items[idx], ...f, updatedAt: new Date().toISOString()};
+    selectedIndex = idx;
+    toast("Đã cập nhật", `${f.productName}`, "ok");
+  }else{
+    items.push({...f, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()});
+    selectedIndex = items.length-1;
+    toast("Đã thêm mới", `${f.productName}`, "ok");
+  }
+
+  // keep categories in sync
+  if(f.category && !categories.includes(f.category)){
+    categories.push(f.category);
+  }
+  categories = [...new Set(categories)];
+
+  saveLocal();
+  refreshCategoryUI();
+  render();
+  focusBarcode();
+}
+
+/* =======================
+   Barcode scan behavior
+======================= */
+function onBarcodeKeydown(e){
+  if(e.key==="Enter"){
+    e.preventDefault();
+    const code = el("barcode").value.trim();
+    if(!code) return;
+
+    const foundIdx = items.findIndex(x=>x.barcode===code);
+    // if form has other dirty data + different barcode -> ask
+    if(isDirty()){
+      const currentBarcode = el("barcode").value.trim();
+      const formHasMeaning = isDirty();
+
+      // Nếu đang nhập 1 món khác mà quét món mới → hỏi lưu không
+      if(formHasMeaning && (selectedIndex===-1 || currentBarcode!==items[selectedIndex]?.barcode)){
+        confirmModal("Quét mã mới", "Form đang có dữ liệu. Sếp muốn làm gì?", [
+          {text:"Bỏ dữ liệu", cls:"btn danger", onClick: ()=>{
+            closeModal();
+            clearErrors();
+            loadByBarcode(code);
+          }},
+          {text:"Lưu rồi mở mã mới", cls:"btn success", onClick: ()=>{
+            closeModal();
+            if(validateForm()){
+              saveItem();
+              loadByBarcode(code);
+            }else{
+              toast("Không thể lưu", "Form chưa hợp lệ. Bỏ dữ liệu hoặc sửa rồi lưu.", "warn");
             }
-        });
-    </script>
+          }},
+          {text:"Hủy", cls:"btn", onClick: closeModal}
+        ]);
+        return;
+      }
+    }
+
+    // normal: load by barcode
+    if(foundIdx>=0){
+      loadToForm(foundIdx);
+      toast("Đã load hàng", items[foundIdx].productName, "ok");
+    }else{
+      // new barcode: keep barcode, clear other fields
+      const keep = code;
+      clearFormSilently();
+      el("barcode").value = keep;
+      el("productName").focus();
+      toast("Mã mới", "Nhập tên hàng rồi lưu.", "warn");
+    }
+  }
+
+  // Suggest nav
+  if(["ArrowDown","ArrowUp"].includes(e.key) && sugState.barcode.open){
+    e.preventDefault();
+    moveSuggest("barcode", e.key==="ArrowDown"?1:-1);
+  }
+  if(e.key==="Enter" && sugState.barcode.open){
+    e.preventDefault();
+    pickSuggest("barcode");
+  }
+  if(e.key==="Escape") hideSuggest("barcode");
+}
+
+function loadByBarcode(code){
+  const idx = items.findIndex(x=>x.barcode===code);
+  if(idx>=0) loadToForm(idx);
+  else{
+    clearFormSilently();
+    el("barcode").value = code;
+    el("productName").focus();
+  }
+}
+
+function clearFormSilently(){
+  el("productCode").value="";
+  el("productName").value="";
+  el("category").value="";
+  el("quantity").value="";
+  el("importPrice").value="";
+  el("sellPrice").value="";
+  removeImage();
+  clearErrors();
+  selectedIndex = -1;
+  setSelectedRow(-1);
+}
+
+/* =======================
+   Suggest dropdown
+======================= */
+function showSuggest(type){
+  const input = type==="barcode" ? el("barcode").value.trim().toLowerCase()
+                                : el("productName").value.trim().toLowerCase();
+
+  const box = type==="barcode" ? el("barcodeSuggest") : el("nameSuggest");
+  if(!input){ hideSuggest(type); return; }
+
+  let list = [];
+  if(type==="barcode"){
+    list = items
+      .filter(x=>String(x.barcode||"").toLowerCase().includes(input))
+      .slice(0, 30)
+      .map(x=>({title: x.barcode, sub: x.productName, idx: items.indexOf(x)}));
+  }else{
+    list = items
+      .filter(x=>String(x.productName||"").toLowerCase().includes(input))
+      .slice(0, 30)
+      .map(x=>({title: x.productName, sub: x.barcode, idx: items.indexOf(x)}));
+  }
+
+  if(list.length===0){ hideSuggest(type); return; }
+
+  sugState[type].open = true;
+  sugState[type].idx = 0;
+  sugState[type].list = list;
+
+  box.innerHTML = list.map((it,i)=>`
+    <div class="item ${i===0?'active':''}" data-i="${i}">
+      <div>${escapeHtml(it.title)}<br><small>${escapeHtml(it.sub||"")}</small></div>
+      <small>#${it.idx+1}</small>
+    </div>
+  `).join("");
+  box.classList.add("show");
+
+  box.querySelectorAll(".item").forEach(node=>{
+    node.addEventListener("click", ()=>{
+      const i = parseInt(node.dataset.i,10);
+      sugState[type].idx = i;
+      pickSuggest(type);
+    });
+  });
+}
+
+function hideSuggest(type){
+  const box = type==="barcode" ? el("barcodeSuggest") : el("nameSuggest");
+  box.classList.remove("show");
+  sugState[type].open = false;
+  sugState[type].idx = -1;
+  sugState[type].list = [];
+}
+
+function moveSuggest(type, delta){
+  const st = sugState[type];
+  const box = type==="barcode" ? el("barcodeSuggest") : el("nameSuggest");
+  if(!st.open) return;
+  st.idx = Math.max(0, Math.min(st.list.length-1, st.idx + delta));
+  box.querySelectorAll(".item").forEach((n,i)=>n.classList.toggle("active", i===st.idx));
+  const active = box.querySelector(".item.active");
+  active?.scrollIntoView({block:"nearest"});
+}
+
+function pickSuggest(type){
+  const st = sugState[type];
+  if(!st.open || st.idx<0) return;
+  const target = st.list[st.idx];
+  hideSuggest(type);
+  loadToForm(target.idx);
+  toast("Đã chọn", items[target.idx].productName, "ok");
+}
+
+function onNameKeydown(e){
+  if(e.key==="Enter"){
+    // if suggest open => pick, else focus save
+    if(sugState.name.open){ e.preventDefault(); pickSuggest("name"); return; }
+    // convenient: Enter on name moves to category
+    e.preventDefault();
+    el("category").focus();
+  }
+  if(["ArrowDown","ArrowUp"].includes(e.key) && sugState.name.open){
+    e.preventDefault();
+    moveSuggest("name", e.key==="ArrowDown"?1:-1);
+  }
+  if(e.key==="Escape") hideSuggest("name");
+}
+el("pickNameBtn").addEventListener("click", ()=>{
+  if(sugState.name.open) pickSuggest("name");
+  else { el("productName").focus(); showSuggest("name"); }
+});
+
+/* =======================
+   Load item to form
+======================= */
+function loadToForm(idx){
+  const it = items[idx];
+  if(!it) return;
+
+  el("barcode").value = it.barcode || "";
+  el("productCode").value = it.productCode || "";
+  el("productName").value = it.productName || "";
+  el("category").value = it.category || "";
+  el("quantity").value = (it.quantity ?? "");
+  el("importPrice").value = (it.importPrice ?? "");
+  el("sellPrice").value = (it.sellPrice ?? "");
+
+  if(it.image){
+    el("imgPreview").src = it.image;
+    el("imgPreview").style.display = "block";
+  }else{
+    removeImage();
+  }
+
+  selectedIndex = idx;
+  setSelectedRow(idx);
+  clearErrors();
+}
+
+/* =======================
+   Table render
+======================= */
+function render(){
+  const filter = el("tableFilter").value.trim().toLowerCase();
+  const cat = el("filterCategory").value;
+
+  let view = items.map((x,i)=>({...x, __i:i}));
+
+  if(filter){
+    view = view.filter(x =>
+      String(x.barcode||"").toLowerCase().includes(filter) ||
+      String(x.productName||"").toLowerCase().includes(filter) ||
+      String(x.category||"").toLowerCase().includes(filter)
+    );
+  }
+  if(cat){
+    view = view.filter(x => x.category===cat);
+  }
+
+  // sort
+  view.sort((a,b)=>{
+    const av = a[sortCol];
+    const bv = b[sortCol];
+
+    // numbers
+    if(["quantity","importPrice","sellPrice"].includes(sortCol)){
+      const an = Number(av||0), bn = Number(bv||0);
+      return sortAsc ? (an-bn) : (bn-an);
+    }
+
+    const as = String(av||"").toLowerCase();
+    const bs = String(bv||"").toLowerCase();
+    if(as===bs) return 0;
+    return sortAsc ? (as>bs?1:-1) : (as<bs?1:-1);
+  });
+
+  // table body
+  const tb = el("tbody");
+  tb.innerHTML = "";
+
+  view.forEach((it, idx)=>{
+    const i = it.__i;
+    const tr = document.createElement("tr");
+    if(i===selectedIndex) tr.classList.add("selected");
+
+    tr.addEventListener("click", ()=>{
+      loadToForm(i);
+    });
+
+    tr.innerHTML = `
+      <td>${idx+1}</td>
+
+      <td class="mono">${directEdit
+        ? `<input class="cell-input wide mono" value="${escapeAttr(it.barcode||"")}" data-i="${i}" data-f="barcode" />`
+        : escapeHtml(it.barcode||"")}</td>
+
+      <td>${directEdit
+        ? `<input class="cell-input wide" value="${escapeAttr(it.productName||"")}" data-i="${i}" data-f="productName" />`
+        : escapeHtml(it.productName||"")}</td>
+
+      <td>${directEdit
+        ? `<input class="cell-input small" value="${escapeAttr(it.category||"")}" data-i="${i}" data-f="category" />`
+        : `<span class="chip"><b>${escapeHtml(it.category||"-")}</b></span>`}</td>
+
+      <td>${directEdit
+        ? `<input class="cell-input small" type="number" step="0.01" value="${Number(it.quantity||0)}" data-i="${i}" data-f="quantity" />`
+        : formatNumber(it.quantity||0)}</td>
+
+      <td>${directEdit
+        ? `<input class="cell-input small" type="number" step="0.01" value="${Number(it.importPrice||0)}" data-i="${i}" data-f="importPrice" />`
+        : formatMoney(it.importPrice||0)}</td>
+
+      <td>${directEdit
+        ? `<input class="cell-input small" type="number" step="0.01" value="${Number(it.sellPrice||0)}" data-i="${i}" data-f="sellPrice" />`
+        : formatMoney(it.sellPrice||0)}</td>
+
+      <td>${it.image
+        ? `<img class="thumb" src="${it.image}" data-img="1" />`
+        : `<span style="color:var(--muted)">-</span>`}</td>
+
+      <td>
+        <div class="td-actions">
+          <button class="btn small" data-act="edit" data-i="${i}">Sửa</button>
+          <button class="btn small danger" data-act="del" data-i="${i}">Xóa</button>
+        </div>
+      </td>
+    `;
+
+    tb.appendChild(tr);
+  });
+
+  // attach row action listeners
+  tb.querySelectorAll("button[data-act='edit']").forEach(btn=>{
+    btn.addEventListener("click",(e)=>{
+      e.stopPropagation();
+      const i = parseInt(btn.dataset.i,10);
+      loadToForm(i);
+      el("productName").focus();
+    });
+  });
+  tb.querySelectorAll("button[data-act='del']").forEach(btn=>{
+    btn.addEventListener("click",(e)=>{
+      e.stopPropagation();
+      const i = parseInt(btn.dataset.i,10);
+      confirmModal("Xóa hàng", `Xóa: ${items[i]?.productName || ""}?`, [
+        {text:"Hủy", cls:"btn", onClick: closeModal},
+        {text:"Xóa", cls:"btn danger", onClick: ()=>{ deleteItem(i); closeModal(); }}
+      ]);
+    });
+  });
+
+  // image click zoom
+  tb.querySelectorAll("img[data-img='1']").forEach(img=>{
+    img.addEventListener("click",(e)=>{
+      e.stopPropagation();
+      showImage(img.src);
+    });
+  });
+
+  // direct edit input change
+  if(directEdit){
+    tb.querySelectorAll("input[data-f]").forEach(inp=>{
+      inp.addEventListener("change", ()=>{
+        const i = parseInt(inp.dataset.i,10);
+        const f = inp.dataset.f;
+        let v = inp.value;
+
+        if(["quantity","importPrice","sellPrice"].includes(f)){
+          v = Number(v||0);
+        }
+        items[i][f] = v;
+        items[i].updatedAt = new Date().toISOString();
+
+        // keep category list
+        if(f==="category" && v && !categories.includes(v)){
+          categories.push(v);
+          categories = [...new Set(categories)];
+        }
+
+        saveLocal();
+        refreshCategoryUI();
+        refreshStats();
+      });
+    });
+  }
+
+  // stats + shown count
+  el("statShown").textContent = String(view.length);
+  refreshStats();
+}
+
+function setSelectedRow(idx){
+  // simple re-render style by just re-rendering; kept minimal
+  // (render already applies selected class)
+  // nothing here, kept for readability
+}
+
+function updateSortHead(){
+  $$("thead th[data-sort]").forEach(th=>{
+    th.classList.remove("asc","desc");
+    if(th.dataset.sort===sortCol){
+      th.classList.add(sortAsc?"asc":"desc");
+    }
+  });
+}
+
+function deleteItem(i){
+  const it = items[i];
+  if(!it) return;
+  items.splice(i,1);
+  selectedIndex = -1;
+  saveLocal();
+  refreshCategoryUI();
+  render();
+  toast("Đã xóa", it.productName || "", "ok");
+}
+
+/* =======================
+   Direct edit mode
+======================= */
+function toggleDirectEdit(){
+  directEdit = !directEdit;
+  el("toggleEditBtn").textContent = directEdit ? "✏️ Sửa trực tiếp: ON" : "✏️ Sửa trực tiếp: OFF";
+  el("modeLabel").textContent = directEdit ? "Direct Edit" : "Form";
+  toast(directEdit ? "Bật sửa trực tiếp" : "Tắt sửa trực tiếp", "Sửa ngay trên bảng (ô input).", "ok");
+  render();
+}
+
+/* =======================
+   Import / Export
+======================= */
+function importDialog(){
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".json,.csv";
+  input.onchange = async ()=>{
+    const file = input.files?.[0];
+    if(!file) return;
+    const text = await file.text();
+
+    let parsed;
+    try{
+      if(file.name.toLowerCase().endsWith(".csv")){
+        parsed = parseCSV(text);
+      }else{
+        const j = JSON.parse(text);
+        parsed = j.items || j;
+      }
+      if(!Array.isArray(parsed)) throw new Error("Dữ liệu không phải mảng.");
+    }catch(err){
+      toast("Import lỗi", err.message, "err");
+      return;
+    }
+
+    confirmModal("Import dữ liệu", "Sếp muốn Thay thế hay Gộp vào dữ liệu hiện tại?", [
+      {text:"Hủy", cls:"btn", onClick: closeModal},
+      {text:"Gộp", cls:"btn primary", onClick: ()=>{
+        closeModal();
+        items = mergeItems(items, parsed);
+        postImport();
+        toast("Đã import (Gộp)", `+${parsed.length} dòng`, "ok");
+      }},
+      {text:"Thay thế", cls:"btn danger", onClick: ()=>{
+        closeModal();
+        items = normalizeItems(parsed);
+        postImport();
+        toast("Đã import (Thay thế)", `${items.length} dòng`, "ok");
+      }},
+    ]);
+  };
+  input.click();
+}
+
+function postImport(){
+  // update categories
+  const catsFromItems = items.map(x=>x.category).filter(Boolean);
+  categories = [...new Set([...categories, ...catsFromItems])];
+  saveLocal();
+  refreshCategoryUI();
+  render();
+  clearFormSilently();
+  focusBarcode();
+}
+
+function exportDialog(){
+  confirmModal("Export", "Chọn định dạng export:", [
+    {text:"Đóng", cls:"btn", onClick: closeModal},
+    {text:"Export JSON", cls:"btn primary", onClick: ()=>{ closeModal(); exportJSON(); }},
+    {text:"Export CSV", cls:"btn success", onClick: ()=>{ closeModal(); exportCSV(); }},
+  ]);
+}
+
+function exportJSON(){
+  const data = {
+    version: "2.0",
+    exportDate: new Date().toISOString(),
+    categories,
+    items
+  };
+  const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
+  download(blob, `inventory_${Date.now()}.json`);
+  toast("Đã export JSON", "", "ok");
+}
+
+function exportCSV(){
+  const csv = toCSV(items);
+  const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
+  download(blob, `inventory_${Date.now()}.csv`);
+  toast("Đã export CSV", "Mở bằng Excel được luôn.", "ok");
+}
+
+function download(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href=url;
+  a.download=filename;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+
+/* =======================
+   CSV helpers
+======================= */
+function parseCSV(text){
+  // supports comma or semicolon, quoted fields
+  const rows = [];
+  let cur = "", inQ = false;
+  const out = [];
+  const pushCell = ()=>{ out.push(cur); cur=""; };
+  const pushRow = ()=>{ rows.push(out.splice(0)); };
+
+  // normalize newlines
+  const s = text.replace(/\r\n/g,"\n").replace(/\r/g,"\n");
+
+  for(let i=0;i<s.length;i++){
+    const ch = s[i];
+    if(ch === '"'){
+      if(inQ && s[i+1]==='"'){ cur += '"'; i++; }
+      else inQ = !inQ;
+      continue;
+    }
+    if(!inQ && (ch === "," || ch === ";")){
+      pushCell(); continue;
+    }
+    if(!inQ && ch === "\n"){
+      pushCell(); pushRow(); continue;
+    }
+    cur += ch;
+  }
+  pushCell(); pushRow();
+
+  // remove empty tail rows
+  const clean = rows.filter(r => r.some(c => String(c||"").trim()!==""));
+  if(clean.length===0) return [];
+
+  // header
+  const header = clean[0].map(h=>String(h||"").trim().toLowerCase());
+  const dataRows = clean.slice(1);
+
+  // map known columns
+  const col = (names)=> header.findIndex(h=>names.includes(h));
+  const cBarcode = col(["barcode","mã vạch","ma vach","ean","jan"]);
+  const cName    = col(["productname","tên hàng","ten hang","name"]);
+  const cCode    = col(["productcode","mã hàng","ma hang","code","sku"]);
+  const cCat     = col(["category","nhóm","nhom","group"]);
+  const cQty     = col(["quantity","sl","số lượng","so luong"]);
+  const cIn      = col(["importprice","giá nhập","gia nhap","cost"]);
+  const cOut     = col(["sellprice","giá bán","gia ban","price"]);
+  const cImg     = col(["image","ảnh","anh","img"]);
+
+  const arr = dataRows.map(r=>{
+    const get = (idx)=> idx>=0 ? String(r[idx]||"").trim() : "";
+    return {
+      barcode: get(cBarcode),
+      productName: get(cName),
+      productCode: get(cCode),
+      category: get(cCat),
+      quantity: Number(get(cQty) || 0),
+      importPrice: Number(get(cIn) || 0),
+      sellPrice: Number(get(cOut) || 0),
+      image: get(cImg) // base64 or url
+    };
+  });
+
+  return normalizeItems(arr);
+}
+
+function toCSV(arr){
+  const header = ["barcode","productCode","productName","category","quantity","importPrice","sellPrice","image"];
+  const esc = (v)=>{
+    const s = String(v ?? "");
+    if(/[",\n;]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
+    return s;
+  };
+  const lines = [];
+  lines.push(header.join(","));
+  arr.forEach(it=>{
+    lines.push([
+      esc(it.barcode),
+      esc(it.productCode),
+      esc(it.productName),
+      esc(it.category),
+      esc(it.quantity),
+      esc(it.importPrice),
+      esc(it.sellPrice),
+      esc(it.image)
+    ].join(","));
+  });
+  return lines.join("\n");
+}
+
+function normalizeItems(arr){
+  return arr
+    .filter(x=>x && (x.barcode || x.productName))
+    .map(x=>({
+      barcode: String(x.barcode||"").trim(),
+      productCode: String(x.productCode||"").trim(),
+      productName: String(x.productName||"").trim(),
+      category: String(x.category||"").trim(),
+      quantity: Number(x.quantity||0),
+      importPrice: Number(x.importPrice||0),
+      sellPrice: Number(x.sellPrice||0),
+      image: String(x.image||"").trim(),
+      createdAt: x.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }))
+    // drop invalid barcode duplicates by keeping last
+    .reduce((acc,it)=>{
+      const k = it.barcode || ("__NO_BARCODE__:"+it.productName);
+      acc.map.set(k, it);
+      return acc;
+    }, {map:new Map()}).map;
+}
+
+function mergeItems(oldArr, newArr){
+  const base = normalizeItems(oldArr);
+  const add  = normalizeItems(newArr);
+  const map = new Map();
+  base.forEach(it=>{
+    const k = it.barcode || ("__NO_BARCODE__:"+it.productName);
+    map.set(k, it);
+  });
+  add.forEach(it=>{
+    const k = it.barcode || ("__NO_BARCODE__:"+it.productName);
+    map.set(k, it); // overwrite
+  });
+  return [...map.values()];
+}
+
+/* =======================
+   GitHub Sync
+======================= */
+function saveGhCfg(){
+  const cfg = {
+    token: el("ghToken").value.trim(),
+    owner: el("ghOwner").value.trim(),
+    repo: el("ghRepo").value.trim(),
+    branch: (el("ghBranch").value.trim() || "main"),
+    path: (el("ghPath").value.trim() || "data/inventory.json")
+  };
+  localStorage.setItem(LS_CFG, JSON.stringify(cfg));
+  toast("Đã lưu GitHub config", "", "ok");
+}
+function clearGhCfg(){
+  localStorage.removeItem(LS_CFG);
+  el("ghToken").value="";
+  el("ghOwner").value="";
+  el("ghRepo").value="";
+  el("ghBranch").value="main";
+  el("ghPath").value="data/inventory.json";
+  toast("Đã xóa GitHub config", "", "warn");
+}
+
+function readGhCfg(){
+  const token = el("ghToken").value.trim();
+  const owner = el("ghOwner").value.trim();
+  const repo  = el("ghRepo").value.trim();
+  const branch= el("ghBranch").value.trim() || "main";
+  const path  = el("ghPath").value.trim();
+  if(!token || !owner || !repo || !path){
+    toast("Thiếu GitHub config", "Nhập token/owner/repo/path trước.", "warn");
+    return null;
+  }
+  return {token, owner, repo, branch, path};
+}
+
+async function githubLoad(){
+  const cfg = readGhCfg(); if(!cfg) return;
+  try{
+    const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path}?ref=${encodeURIComponent(cfg.branch)}`;
+    const r = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${cfg.token}`,
+        "Accept": "application/vnd.github+json"
+      }
+    });
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    if(!data.content) throw new Error("File không có content.");
+    const decoded = atob(data.content.replace(/\n/g,""));
+    const j = JSON.parse(decoded);
+    const loaded = j.items || j;
+    if(!Array.isArray(loaded)) throw new Error("JSON không phải mảng items.");
+
+    confirmModal("Load từ GitHub", `Đã tải ${loaded.length} dòng. Thay thế hay Gộp?`, [
+      {text:"Hủy", cls:"btn", onClick: closeModal},
+      {text:"Gộp", cls:"btn primary", onClick: ()=>{
+        closeModal();
+        items = mergeItems(items, loaded);
+        postImport();
+        toast("Load GitHub (Gộp)", `${loaded.length} dòng`, "ok");
+      }},
+      {text:"Thay thế", cls:"btn danger", onClick: ()=>{
+        closeModal();
+        items = normalizeItems(loaded);
+        postImport();
+        toast("Load GitHub (Thay thế)", `${items.length} dòng`, "ok");
+      }},
+    ]);
+  }catch(err){
+    toast("Load GitHub lỗi", err.message, "err");
+  }
+}
+
+async function githubUpload(){
+  const cfg = readGhCfg(); if(!cfg) return;
+  try{
+    const payload = {
+      version:"2.0",
+      uploadDate: new Date().toISOString(),
+      categories,
+      items
+    };
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
+
+    // get sha (if exists)
+    let sha = null;
+    const getUrl = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path}?ref=${encodeURIComponent(cfg.branch)}`;
+    const g = await fetch(getUrl, { headers:{ "Authorization":`Bearer ${cfg.token}`, "Accept":"application/vnd.github+json" }});
+    if(g.ok){
+      const gd = await g.json();
+      sha = gd.sha || null;
+    }
+
+    const putUrl = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path}`;
+    const body = {
+      message: `${sha ? "Update" : "Create"} inventory ${new Date().toISOString()}`,
+      content,
+      branch: cfg.branch
+    };
+    if(sha) body.sha = sha;
+
+    const r = await fetch(putUrl, {
+      method:"PUT",
+      headers:{
+        "Authorization":`Bearer ${cfg.token}`,
+        "Accept":"application/vnd.github+json",
+        "Content-Type":"application/json"
+      },
+      body: JSON.stringify(body)
+    });
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    toast("Upload GitHub thành công", cfg.path, "ok");
+  }catch(err){
+    toast("Upload GitHub lỗi", err.message, "err");
+  }
+}
+
+/* =======================
+   Stats
+======================= */
+function refreshStats(){
+  const totalItems = items.length;
+  const totalQty = items.reduce((s,x)=> s + Number(x.quantity||0), 0);
+  const totalIn = items.reduce((s,x)=> s + Number(x.quantity||0)*Number(x.importPrice||0), 0);
+  const totalOut = items.reduce((s,x)=> s + Number(x.quantity||0)*Number(x.sellPrice||0), 0);
+
+  el("statItems").textContent = String(totalItems);
+  el("statQty").textContent = formatNumber(totalQty);
+  el("statIn").textContent = formatMoney(totalIn);
+  el("statOut").textContent = formatMoney(totalOut);
+}
+
+/* =======================
+   Print label
+======================= */
+el("printLabelBtn").addEventListener("click", ()=>{
+  const name = el("productName").value.trim();
+  const code = el("barcode").value.trim();
+  if(!name || !code){
+    toast("Thiếu dữ liệu", "Cần Tên hàng + Mã vạch để in tem.", "warn");
+    return;
+  }
+  const w = window.open("", "_blank");
+  w.document.write(`
+    <html><head><title>In Tem</title>
+      <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+      <style>
+        body{font-family:Arial; padding:14px}
+        .label{border:2px solid #000; border-radius:12px; padding:14px; width:340px; margin:0 auto}
+        .name{font-size:18px; font-weight:700; margin-bottom:10px}
+        .code{font-size:30px; letter-spacing:2px; font-weight:800}
+        .hint{margin-top:10px; font-size:12px; color:#555}
+        button{margin:12px auto 0; display:block; padding:10px 14px; font-weight:700}
+      </style>
+    </head><body>
+      <div class="label">
+        <div class="name">${escapeHtml(name)}</div>
+        <div class="code">${escapeHtml(code)}</div>
+        <div class="hint">Nếu dùng máy in tem, cần chỉnh khổ giấy/scale phù hợp.</div>
+      </div>
+      <button onclick="window.print()">In</button>
+    </body></html>
+  `);
+  w.document.close();
+});
+
+/* =======================
+   Utilities
+======================= */
+function escapeHtml(s){
+  return String(s??"").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+}
+function escapeAttr(s){
+  return escapeHtml(s).replace(/"/g,'&quot;');
+}
+function formatMoney(v){
+  // sếp muốn VND hay JPY thì nói em đổi ngay.
+  return new Intl.NumberFormat('vi-VN', {style:'currency', currency:'VND'}).format(Number(v||0));
+}
+function formatNumber(v){
+  return new Intl.NumberFormat('vi-VN').format(Number(v||0));
+}
+function showImage(src){
+  const b = document.createElement("div");
+  b.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:999;cursor:pointer;padding:16px";
+  const img = document.createElement("img");
+  img.src = src;
+  img.style.cssText = "max-width:92vw;max-height:92vh;border-radius:18px;box-shadow:0 10px 35px rgba(0,0,0,.4)";
+  b.appendChild(img);
+  b.addEventListener("click", ()=>b.remove());
+  document.body.appendChild(b);
+}
+
+/* =======================
+   Start
+======================= */
+window.addEventListener("DOMContentLoaded", init);
+</script>
 </body>
 </html>
