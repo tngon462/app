@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Management Application</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        #inventoryTable { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        #inventoryTable th, #inventoryTable td { border: 1px solid #ddd; padding: 8px; }
+        #inventoryTable th { background-color: #f2f2f2; }
+        .button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Inventory Management</h1>
+    <input type="text" id="barcodeInput" placeholder="Scan Barcode" />
+    <input type="text" id="itemNameInput" placeholder="Item Name" />
+    <input type="number" id="quantityInput" placeholder="Quantity" />
+    <button class="button" id="addItemButton">Add Item</button>
+    <button class="button" id="importButton">Import</button>
+    <button class="button" id="exportButton">Export</button>
+    <button class="button" id="syncButton">Sync with GitHub</button>
+
+    <table id="inventoryTable">
+        <thead>
+            <tr>
+                <th>Barcode</th>
+                <th>Item Name</th>
+                <th>Quantity</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="inventoryBody">
+        </tbody>
+    </table>
+
+    <script>
+        const inventory = [];
+        document.getElementById('addItemButton').onclick = function () {
+            const barcode = document.getElementById('barcodeInput').value;
+            const itemName = document.getElementById('itemNameInput').value;
+            const quantity = parseInt(document.getElementById('quantityInput').value);
+            inventory.push({ barcode, itemName, quantity });
+            displayInventory();
+            clearInputs();
+        };
+
+        function displayInventory() {
+            const inventoryBody = document.getElementById('inventoryBody');
+            inventoryBody.innerHTML = '';
+            inventory.forEach((item, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td>${item.barcode}</td><td>${item.itemName}</td><td>${item.quantity}</td><td><button onclick="editItem(${index})">Edit</button> <button onclick="deleteItem(${index})">Delete</button></td>`;
+                inventoryBody.appendChild(row);
+            });
+        }
+
+        function clearInputs() {
+            document.getElementById('barcodeInput').value = '';
+            document.getElementById('itemNameInput').value = '';
+            document.getElementById('quantityInput').value = '';
+        }
+
+        function editItem(index) {
+            // Logic for direct edit mode
+            const item = inventory[index];
+            document.getElementById('barcodeInput').value = item.barcode;
+            document.getElementById('itemNameInput').value = item.itemName;
+            document.getElementById('quantityInput').value = item.quantity;
+            deleteItem(index);
+        }
+
+        function deleteItem(index) {
+            inventory.splice(index, 1);
+            displayInventory();
+        }
+
+        document.getElementById('importButton').onclick = function () {
+            // Logic for import functionality
+            alert('Import functionality is not implemented yet.');
+        };
+
+        document.getElementById('exportButton').onclick = function () {
+            // Logic for export functionality
+            alert('Export functionality is not implemented yet.');
+        };
+
+        document.getElementById('syncButton').onclick = function () {
+            // Logic for GitHub sync
+            alert('GitHub sync functionality is not implemented yet.');
+        };
+
+        document.getElementById('barcodeInput').addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+                document.getElementById('addItemButton').click();
+            }
+        });
+    </script>
+</body>
+</html>
