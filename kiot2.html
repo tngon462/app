@@ -1,0 +1,131 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>T-NGON Phone Display</title>
+
+<style>
+body{font-family:system-ui;background:#111;color:#fff;margin:0;padding:10px}
+.main{display:grid;grid-template-columns:1fr 1fr;gap:10px;height:calc(100vh - 20px)}
+.left{background:#181818;border:1px solid #2b2b2b;border-radius:12px;padding:10px;display:flex;flex-direction:column;overflow:hidden}
+.items{flex:1;overflow:auto}
+.hdr{display:flex;gap:6px;font-weight:800;opacity:.85;padding-bottom:5px;border-bottom:1px solid #2b2b2b;font-size:13px}
+.col-name{flex:1}
+.col-qty{width:45px;text-align:right}
+.col-unit{width:80px;text-align:right}
+.col-total{width:90px;text-align:right}
+.row{display:flex;gap:6px;padding:7px 0;border-bottom:1px solid #2b2b2b;font-size:18px}
+.name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:900}
+.qty{width:45px;text-align:right;font-weight:900}
+.unit{width:80px;text-align:right}
+.total{width:90px;text-align:right;font-weight:900}
+.row.last{background:rgba(255,255,255,.08);border-radius:8px;padding-left:6px;padding-right:6px}
+
+.right{display:flex;flex-direction:column;gap:10px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.card{background:#181818;border:1px solid #2b2b2b;border-radius:12px;padding:10px}
+.k{opacity:.75;font-size:13px}
+.v{font-size:24px;font-weight:900;margin-top:4px}
+.bigWrap{background:#181818;border:1px solid #2b2b2b;border-radius:12px;padding:14px;flex:1;display:flex;flex-direction:column;justify-content:center}
+.big{font-size:64px;font-weight:900;line-height:1.05}
+.sub{opacity:.75;margin-bottom:8px;font-size:16px}
+.status{position:fixed;right:8px;bottom:4px;font-size:11px;opacity:.45}
+</style>
+</head>
+
+<body>
+<div class="main">
+
+  <div class="left">
+    <div style="opacity:.85;margin-bottom:6px">Danh sách món</div>
+    <div class="hdr">
+      <div class="col-name">Món</div>
+      <div class="col-qty">SL</div>
+      <div class="col-unit">Đơn giá</div>
+      <div class="col-total">Thành tiền</div>
+    </div>
+    <div class="items" id="items"></div>
+  </div>
+
+  <div class="right">
+    <div class="grid">
+      <div class="card"><div class="k">Tổng tiền hàng</div><div class="v" id="totalGoods">—</div></div>
+      <div class="card"><div class="k">Giảm giá</div><div class="v" id="discount">—</div></div>
+      <div class="card"><div class="k">Khách đưa</div><div class="v" id="paid">—</div></div>
+      <div class="card"><div class="k">Tiền thừa</div><div class="v" id="change">—</div></div>
+    </div>
+
+    <div class="bigWrap">
+      <div class="sub">Khách cần trả</div>
+      <div class="big" id="needPay">¥0</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="status" id="status">waiting...</div>
+
+<script type="module">
+const DATABASE_URL = "https://tngon-b37d6-default-rtdb.asia-southeast1.firebasedatabase.app";
+const CHANNEL_ID   = "tngon_phone_02";
+const TOKEN_SECRET = "6868-PHONE-2026";
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
+
+const app = initializeApp({ databaseURL: DATABASE_URL });
+const db  = getDatabase(app);
+const $ = id=>document.getElementById(id);
+
+const esc = s=>(s??"").toString()
+.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+.replaceAll('"',"&quot;").replaceAll("'","&#039;");
+
+function parseMoney(m){ return Number((m||"").toString().replace(/[^\d]/g,"")||0); }
+function fmt(n){ return "¥"+Number(n||0).toLocaleString("en-US"); }
+
+function render(d){
+  const t = d?.totals || {};
+  const items = Array.isArray(d?.items) ? d.items : [];
+
+  const needPay = t.needPay || "¥0";
+  const paid    = t.paid || "¥0";
+  const changeN = Math.max(0, parseMoney(paid) - parseMoney(needPay));
+
+  $("needPay").textContent    = needPay;
+  $("totalGoods").textContent = t.totalGoods || "—";
+  $("discount").textContent   = t.discount || "—";
+  $("paid").textContent       = paid || "—";
+  $("change").textContent     = t.change || fmt(changeN);
+
+  const show = items.slice(-120);
+
+  $("items").innerHTML = show.map((x,i)=>`
+    <div class="row ${i===show.length-1?"last":""}">
+      <div class="name" title="${esc(x.name)}">${esc(x.name)}</div>
+      <div class="qty">x${esc(x.qty??0)}</div>
+      <div class="unit">${esc(x.unitPrice||"")}</div>
+      <div class="total">${esc(x.lineTotal||"")}</div>
+    </div>
+  `).join("");
+
+  const wrap = document.querySelector(".items");
+  if(wrap) wrap.scrollTop = wrap.scrollHeight;
+
+  $("status").textContent = "online " + new Date().toLocaleTimeString();
+}
+
+const node = ref(db, `posDisplay/${CHANNEL_ID}`);
+
+onValue(node, snap=>{
+  const d = snap.val();
+  if(!d || d.token !== TOKEN_SECRET) {
+    $("status").textContent = "no data";
+    return;
+  }
+  render(d);
+});
+</script>
+</body>
+</html>
