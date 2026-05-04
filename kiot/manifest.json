@@ -4,6 +4,7 @@
   "start_url": "/app/kiot/kiot2.html",
   "scope": "/app/kiot/",
   "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
   "background_color": "#111111",
   "theme_color": "#111111",
   "orientation": "landscape",
