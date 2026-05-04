@@ -1,11 +1,22 @@
-
 {
   "name": "T-NGON Customer Display",
   "short_name": "T-NGON",
-  "start_url": "./kiot2.html",
-  "scope": "./",
+  "start_url": "/app/kiot/kiot2.html",
+  "scope": "/app/kiot/",
   "display": "fullscreen",
   "background_color": "#111111",
   "theme_color": "#111111",
-  "orientation": "landscape"
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "/app/kiot/tngon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/app/kiot/tngon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
 }
