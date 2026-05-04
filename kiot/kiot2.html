@@ -324,5 +324,10 @@ db.ref(`posDisplay/${CHANNEL_ID}`).on("value", snap => {
   console.error(err);
 });
 </script>
+  <script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/app/kiot/sw.js");
+}
+</script>
 </body>
 </html>
