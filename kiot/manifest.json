@@ -1,0 +1,11 @@
+
+{
+  "name": "T-NGON Customer Display",
+  "short_name": "T-NGON",
+  "start_url": "./kiot2.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "background_color": "#111111",
+  "theme_color": "#111111",
+  "orientation": "landscape"
+}
