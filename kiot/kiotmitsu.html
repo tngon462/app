@@ -1,0 +1,336 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<meta name="theme-color" content="#111111">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="T-NGON Mitsu Display">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+ 
+
+<title>T-NGON Mitsu Phone Display</title>
+
+<style>
+*{box-sizing:border-box}
+html,body{width:100%;height:100%;margin:0;overflow:hidden}
+body{font-family:system-ui;background:#0f0f0f;color:#fff;padding:10px}
+
+.main{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  height:100%;
+  min-height:0;
+}
+
+.left{
+  background:#181818;
+  border:1px solid #2b2b2b;
+  border-radius:12px;
+  padding:10px;
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+  overflow:hidden;
+}
+
+.title{
+  font-size:18px;
+  opacity:.9;
+  margin-bottom:8px;
+}
+
+.hdr,.row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 45px 85px 95px;
+  gap:6px;
+  align-items:center;
+}
+
+.hdr{
+  font-size:14px;
+  font-weight:800;
+  opacity:.85;
+  padding-bottom:6px;
+  border-bottom:1px solid #2b2b2b;
+}
+
+.items{
+  flex:1;
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  padding-right:4px;
+}
+
+.row{
+  font-size:20px;
+  padding:8px 0;
+  border-bottom:1px solid #2b2b2b;
+}
+
+.name{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-weight:900;
+}
+
+.qty,.unit,.total{
+  text-align:right;
+  white-space:nowrap;
+}
+
+.qty{font-weight:900}
+.total{font-weight:900}
+
+.row.last{
+  background:rgba(255,255,255,.08);
+  border-radius:8px;
+  padding-left:6px;
+  padding-right:6px;
+}
+
+.right{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  min-height:0;
+  overflow:hidden;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  flex:0 0 auto;
+}
+
+.card{
+  background:#181818;
+  border:1px solid #2b2b2b;
+  border-radius:12px;
+  padding:12px;
+  min-height:92px;
+}
+
+.k{
+  opacity:.75;
+  font-size:15px;
+}
+
+.v{
+  font-size:34px;
+  font-weight:900;
+  margin-top:6px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.bigWrap{
+  background:#181818;
+  border:1px solid #2b2b2b;
+  border-radius:12px;
+  padding:14px;
+  flex:1;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  overflow:hidden;
+}
+
+.sub{
+  opacity:.75;
+  font-size:18px;
+  margin-bottom:8px;
+}
+
+.big{
+  font-size:72px;
+  font-weight:900;
+  line-height:1.05;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.status{
+  position:fixed;
+  right:8px;
+  bottom:4px;
+  font-size:11px;
+  opacity:.45;
+}
+
+@media (max-width:900px){
+  body{padding:8px}
+  .main{gap:8px}
+  .row{font-size:17px}
+  .hdr{font-size:13px}
+  .v{font-size:26px}
+  .big{font-size:58px}
+  .card{min-height:78px;padding:10px}
+  .hdr,.row{
+    grid-template-columns:minmax(0,1fr) 40px 75px 85px;
+  }
+}
+</style>
+  <link rel="manifest" href="/app/kiot/manifest.json">
+<link rel="icon" href="/app/kiot/tngon-192.jpeg">
+</head>
+
+<body>
+<div class="main">
+  <div class="left">
+    <div class="title">Danh sách món</div>
+
+    <div class="hdr">
+      <div>Món</div>
+      <div style="text-align:right">SL</div>
+      <div style="text-align:right">Đơn giá</div>
+      <div style="text-align:right">Thành tiền</div>
+    </div>
+
+    <div class="items" id="items"></div>
+  </div>
+
+  <div class="right">
+    <div class="grid">
+      <div class="card">
+        <div class="k">Tổng tiền hàng</div>
+        <div class="v" id="totalGoods">¥0</div>
+      </div>
+
+      <div class="card">
+        <div class="k">Giảm giá</div>
+        <div class="v" id="discount">¥0</div>
+      </div>
+
+      <div class="card">
+        <div class="k">Khách đưa</div>
+        <div class="v" id="paid">¥0</div>
+      </div>
+
+      <div class="card">
+        <div class="k">Tiền thừa</div>
+        <div class="v" id="change">¥0</div>
+      </div>
+    </div>
+
+    <div class="bigWrap">
+      <div class="sub">Khách cần trả</div>
+      <div class="big" id="needPay">¥0</div>
+    </div>
+  </div>
+</div>
+
+<div class="status" id="status">waiting...</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+<script>
+const DATABASE_URL = "https://tngon-b37d6-default-rtdb.asia-southeast1.firebasedatabase.app";
+const CHANNEL_ID   = "tngon_phone_mitsu";
+const TOKEN_SECRET = "6868-PHONE-2026";
+
+firebase.initializeApp({ databaseURL: DATABASE_URL });
+const db = firebase.database();
+
+const $ = id => document.getElementById(id);
+
+function esc(s){
+  return String(s ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+
+function parseMoney(m){
+  return Number(String(m || "").replace(/[^\d]/g,"") || 0);
+}
+
+function fmt(n){
+  return "¥" + Number(n || 0).toLocaleString("en-US");
+}
+
+function render(d){
+  const t = d?.totals || {};
+  const items = Array.isArray(d?.items) ? d.items : [];
+
+  const totalGoods = t.totalGoods || "¥0";
+  const discount   = t.discount   || "¥0";
+  const needPay    = t.needPay    || totalGoods || "¥0";
+  const paid       = t.paid       || "¥0";
+
+  const changeN = Math.max(0, parseMoney(paid) - parseMoney(needPay));
+  const change = t.change || fmt(changeN);
+
+  $("totalGoods").textContent = totalGoods;
+  $("discount").textContent   = discount;
+  $("needPay").textContent    = needPay;
+  $("paid").textContent       = paid;
+  $("change").textContent     = change;
+
+  const clean = [];
+  const seen = new Set();
+
+  for(const x of items){
+    if(!x || !x.name) continue;
+    if(/^\d{6,}$/.test(String(x.name).trim())) continue;
+
+    const key = `${x.name}|${x.qty}|${x.unitPrice}|${x.lineTotal}`;
+    if(seen.has(key)) continue;
+
+    seen.add(key);
+    clean.push(x);
+  }
+
+  $("items").innerHTML = clean.slice(-80).map((x,i,arr)=>`
+    <div class="row ${i === arr.length - 1 ? "last" : ""}">
+      <div class="name" title="${esc(x.name)}">${esc(x.name)}</div>
+      <div class="qty">x${esc(x.qty || 1)}</div>
+      <div class="unit">${esc(x.unitPrice || "")}</div>
+      <div class="total">${esc(x.lineTotal || "")}</div>
+    </div>
+  `).join("");
+
+  const wrap = $("items");
+  wrap.scrollTop = wrap.scrollHeight;
+
+  $("status").textContent = "online " + new Date().toLocaleTimeString();
+}
+
+db.ref(`posDisplay/${CHANNEL_ID}`).on("value", snap => {
+  const d = snap.val();
+
+  if(!d){
+    $("status").textContent = "no data";
+    return;
+  }
+
+  if(d.token !== TOKEN_SECRET){
+    $("status").textContent = "token sai";
+    return;
+  }
+
+  render(d);
+}, err => {
+  $("status").textContent = "firebase error";
+  console.error(err);
+});
+</script>
+  <script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/app/kiot/sw.js");
+}
+</script>
+</body>
+</html>
