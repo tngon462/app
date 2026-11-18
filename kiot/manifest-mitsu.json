@@ -1,0 +1,24 @@
+{
+  "id": "/app/kiot/kiotmitsu.html",
+  "name": "T-NGON Mitsu Customer Display",
+  "short_name": "T-NGON Mitsu",
+  "start_url": "/app/kiot/kiotmitsu.html",
+  "scope": "/app/kiot/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "background_color": "#111111",
+  "theme_color": "#111111",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "/app/kiot/tngon-192.jpeg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "/app/kiot/tngon-512.jpeg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
