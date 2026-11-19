@@ -265,34 +265,34 @@ function render(d){
   const t = d?.totals || {};
   const items = Array.isArray(d?.items) ? d.items : [];
 
-  const totalGoods = t.totalGoods || "¥0";
-  const discount   = t.discount   || "¥0";
-  const needPay    = t.needPay    || totalGoods || "¥0";
-  const paid       = t.paid       || "¥0";
-
-  const changeN = Math.max(0, parseMoney(paid) - parseMoney(needPay));
-  const change = t.change || fmt(changeN);
-
-  $("totalGoods").textContent = totalGoods;
-  $("discount").textContent   = discount;
-  $("needPay").textContent    = needPay;
-  $("paid").textContent       = paid;
-  $("change").textContent     = change;
-
   const clean = [];
   const seen = new Set();
 
   for(const x of items){
     if(!x || !x.name) continue;
-    if(/^\d{6,}$/.test(String(x.name).trim())) continue;
+    if(/^\\d{6,}$/.test(String(x.name).trim())) continue;
 
-    const key = `${x.name}|${x.qty}|${x.unitPrice}|${x.lineTotal}`;
+    const key = String(x.name) + '|' + x.qty + '|' + x.unitPrice + '|' + x.lineTotal;
     if(seen.has(key)) continue;
 
     seen.add(key);
     clean.push(x);
   }
 
+  // Recalculate from item lines because the synchronized aggregate can be malformed.
+  const goodsN = clean.reduce((sum, x) => sum + parseMoney(x.lineTotal), 0);
+  const totalGoods = fmt(goodsN);
+  const discountN = parseMoney(t.discount);
+  const discount = t.discount || '¥0';
+  const needPay = fmt(Math.max(0, goodsN - discountN));
+  const paid = t.paid || '¥0';
+  const change = fmt(Math.max(0, parseMoney(paid) - parseMoney(needPay)));
+
+  $('totalGoods').textContent = totalGoods;
+  $('discount').textContent = discount;
+  $('needPay').textContent = needPay;
+  $('paid').textContent = paid;
+  $('change').textContent = change;
   $("items").innerHTML = clean.slice(-80).map((x,i,arr)=>`
     <div class="row ${i === arr.length - 1 ? "last" : ""}">
       <div class="name" title="${esc(x.name)}">${esc(x.name)}</div>
