@@ -270,7 +270,7 @@ function render(d){
 
   for(const x of items){
     if(!x || !x.name) continue;
-    if(/^\\d{6,}$/.test(String(x.name).trim())) continue;
+    if(/^\d{6,}$/.test(String(x.name).trim())) continue;
 
     const key = String(x.name) + '|' + x.qty + '|' + x.unitPrice + '|' + x.lineTotal;
     if(seen.has(key)) continue;
